@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,10 @@ import { ChevronLeft, ChevronRight, Check, Globe, Ruler, User, Utensils, Target,
 import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/input';
 import i18n from '@/lib/i18n';
+import { useAuth } from '@/hooks/useAuth';
+import { useUserData } from '@/hooks/useUserData';
+import { toast } from 'sonner';
+
 const STEPS = [
   { id: 'locale', icon: Globe, titleKey: 'onboarding.settings.title' },
   { id: 'profile', icon: User, titleKey: 'onboarding.profile.title' },
@@ -19,8 +23,17 @@ const STEPS = [
 
 const Onboarding = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useTranslation();
-  const [currentStep, setCurrentStep] = useState(0);
+  const { user, isAuthenticated } = useAuth();
+  const { profile, preferences, saveProfile, savePreferences, loading } = useUserData();
+  
+  // Get edit mode and step from navigation state
+  const editMode = location.state?.editMode || false;
+  const startStep = location.state?.startStep ?? 0;
+  
+  const [currentStep, setCurrentStep] = useState(startStep);
+  const [isSaving, setIsSaving] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState(() => ({
@@ -46,24 +59,107 @@ const Onboarding = () => {
     maxCookTime: 45,
   }));
 
+  // Load existing data when available
+  useEffect(() => {
+    if (profile || preferences) {
+      setFormData(prev => ({
+        ...prev,
+        units: profile?.units || 'imperial',
+        language: profile?.locale?.split('-')[0] || i18n.language || 'en',
+        displayName: profile?.display_name || '',
+        age: profile?.age?.toString() || '',
+        dietType: preferences?.diet_type || 'none',
+        allergies: preferences?.allergies || [],
+        dislikes: preferences?.dislikes || [],
+        calorieTarget: preferences?.calorie_target?.toString() || '',
+        proteinTarget: preferences?.protein_target?.toString() || '',
+        carbsTarget: preferences?.carbs_target?.toString() || '',
+        fatTarget: preferences?.fat_target?.toString() || '',
+        mealsPerDay: preferences?.meals_per_day || 3,
+        medicalDisclaimer: preferences?.medical_disclaimer_accepted || false,
+        diabetesFriendly: preferences?.medical_diabetes_friendly || false,
+        kidneyFriendly: preferences?.medical_kidney_friendly || false,
+        heartHealthy: preferences?.medical_heart_healthy || false,
+        lowSodium: preferences?.medical_low_sodium || false,
+        cuisines: preferences?.cuisines_preferred || [],
+        budgetLevel: preferences?.budget_level || 'medium',
+        maxCookTime: preferences?.max_cook_time || 45,
+      }));
+    }
+  }, [profile, preferences]);
+
   // Custom input state
   const [customAllergy, setCustomAllergy] = useState('');
   const [customDislike, setCustomDislike] = useState('');
 
   const progress = ((currentStep + 1) / STEPS.length) * 100;
 
-  const handleNext = () => {
+  const handleSave = async () => {
+    if (!isAuthenticated) {
+      // Navigate to discover without saving if not authenticated
+      navigate('/discover');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // Save profile data
+      await saveProfile({
+        display_name: formData.displayName || null,
+        age: formData.age ? parseInt(formData.age) : null,
+        units: formData.units,
+        locale: formData.language,
+        onboarding_completed: true,
+      });
+
+      // Save preferences
+      await savePreferences({
+        diet_type: formData.dietType as any,
+        allergies: formData.allergies,
+        dislikes: formData.dislikes,
+        calorie_target: formData.calorieTarget ? parseInt(formData.calorieTarget) : null,
+        protein_target: formData.proteinTarget ? parseInt(formData.proteinTarget) : null,
+        carbs_target: formData.carbsTarget ? parseInt(formData.carbsTarget) : null,
+        fat_target: formData.fatTarget ? parseInt(formData.fatTarget) : null,
+        meals_per_day: formData.mealsPerDay,
+        medical_disclaimer_accepted: formData.medicalDisclaimer,
+        medical_diabetes_friendly: formData.diabetesFriendly,
+        medical_kidney_friendly: formData.kidneyFriendly,
+        medical_heart_healthy: formData.heartHealthy,
+        medical_low_sodium: formData.lowSodium,
+        cuisines_preferred: formData.cuisines,
+        budget_level: formData.budgetLevel,
+        max_cook_time: formData.maxCookTime,
+      });
+
+      toast.success(t('common.saved', 'Settings saved!'));
+    } catch (error) {
+      console.error('Error saving:', error);
+      toast.error(t('common.error', 'Failed to save'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleNext = async () => {
     if (currentStep < STEPS.length - 1) {
       setCurrentStep(currentStep + 1);
     } else {
       // Complete onboarding
-      navigate('/discover');
+      await handleSave();
+      if (editMode) {
+        navigate('/settings');
+      } else {
+        navigate('/discover');
+      }
     }
   };
 
   const handleBack = () => {
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
+    } else if (editMode) {
+      navigate('/settings');
     }
   };
 
@@ -156,22 +252,22 @@ const Onboarding = () => {
         return (
           <div className="space-y-6">
             <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">Your Name</label>
+              <label className="text-sm font-medium text-foreground mb-2 block">{t('onboarding.profile.name', 'Your Name')}</label>
               <input
                 type="text"
                 value={formData.displayName}
                 onChange={(e) => setFormData(prev => ({ ...prev, displayName: e.target.value }))}
-                placeholder="Enter your name"
+                placeholder={t('onboarding.profile.namePlaceholder', 'Enter your name')}
                 className="w-full h-14 px-4 rounded-xl border border-border bg-card text-foreground text-lg focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">Age (optional)</label>
+              <label className="text-sm font-medium text-foreground mb-2 block">{t('onboarding.profile.age', 'Age')} ({t('common.optional', 'optional')})</label>
               <input
                 type="number"
                 value={formData.age}
                 onChange={(e) => setFormData(prev => ({ ...prev, age: e.target.value }))}
-                placeholder="Your age"
+                placeholder={t('onboarding.profile.agePlaceholder', 'Your age')}
                 className="w-full h-14 px-4 rounded-xl border border-border bg-card text-foreground text-lg focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -182,7 +278,7 @@ const Onboarding = () => {
         return (
           <div className="space-y-6">
             <div>
-              <label className="text-sm font-medium text-foreground mb-3 block">Diet Type</label>
+              <label className="text-sm font-medium text-foreground mb-3 block">{t('onboarding.diet.dietType', 'Diet Type')}</label>
               <div className="grid grid-cols-2 gap-2">
                 {['none', 'vegetarian', 'vegan', 'pescatarian', 'keto', 'paleo', 'mediterranean'].map(diet => (
                   <button
@@ -194,13 +290,13 @@ const Onboarding = () => {
                         : 'border-border bg-card'
                     }`}
                   >
-                    {diet === 'none' ? 'No restrictions' : diet}
+                    {diet === 'none' ? t('onboarding.diet.noRestrictions', 'No restrictions') : t(`diet.${diet}`, diet)}
                   </button>
                 ))}
               </div>
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground mb-3 block">Allergies</label>
+              <label className="text-sm font-medium text-foreground mb-3 block">{t('onboarding.diet.allergies', 'Allergies')}</label>
               <div className="flex flex-wrap gap-2 mb-3">
                 {['Dairy', 'Eggs', 'Gluten', 'Nuts', 'Peanuts', 'Shellfish', 'Soy', 'Fish', 'Beef', 'Chicken', 'Veal', 'Pork', 'Seafood'].map(allergy => (
                   <Chip
@@ -208,7 +304,7 @@ const Onboarding = () => {
                     selected={formData.allergies.includes(allergy)}
                     onClick={() => toggleArrayItem('allergies', allergy)}
                   >
-                    {allergy}
+                    {t(`allergies.${allergy.toLowerCase()}`, allergy)}
                   </Chip>
                 ))}
                 {formData.allergies
@@ -234,7 +330,7 @@ const Onboarding = () => {
                       addCustomItem('allergies', customAllergy, setCustomAllergy);
                     }
                   }}
-                  placeholder="Add custom allergy..."
+                  placeholder={t('onboarding.diet.addCustomAllergy', 'Add custom allergy...')}
                   className="flex-1 h-11"
                 />
                 <Button
@@ -249,7 +345,7 @@ const Onboarding = () => {
               </div>
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground mb-3 block">Dislikes</label>
+              <label className="text-sm font-medium text-foreground mb-3 block">{t('onboarding.diet.dislikes', 'Dislikes')}</label>
               <div className="flex flex-wrap gap-2 mb-3">
                 {['Spicy', 'Cilantro', 'Mushrooms', 'Onions', 'Olives', 'Tomatoes', 'Beef', 'Chicken', 'Veal', 'Pork', 'Seafood', 'Eggs', 'Dairy'].map(dislike => (
                   <Chip
@@ -257,7 +353,7 @@ const Onboarding = () => {
                     selected={formData.dislikes.includes(dislike)}
                     onClick={() => toggleArrayItem('dislikes', dislike)}
                   >
-                    {dislike}
+                    {t(`dislikes.${dislike.toLowerCase()}`, dislike)}
                   </Chip>
                 ))}
                 {formData.dislikes
@@ -283,7 +379,7 @@ const Onboarding = () => {
                       addCustomItem('dislikes', customDislike, setCustomDislike);
                     }
                   }}
-                  placeholder="Add custom dislike..."
+                  placeholder={t('onboarding.diet.addCustomDislike', 'Add custom dislike...')}
                   className="flex-1 h-11"
                 />
                 <Button
@@ -304,11 +400,11 @@ const Onboarding = () => {
         return (
           <div className="space-y-6">
             <p className="text-sm text-muted-foreground">
-              Optional: Set daily macro targets. Leave blank for balanced recommendations.
+              {t('onboarding.macros.hint', 'Optional: Set daily macro targets. Leave blank for balanced recommendations.')}
             </p>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">Calories</label>
+                <label className="text-sm font-medium text-foreground mb-2 block">{t('onboarding.macros.calories', 'Calories')}</label>
                 <input
                   type="number"
                   value={formData.calorieTarget}
@@ -318,7 +414,7 @@ const Onboarding = () => {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">Protein (g)</label>
+                <label className="text-sm font-medium text-foreground mb-2 block">{t('onboarding.macros.protein', 'Protein')} (g)</label>
                 <input
                   type="number"
                   value={formData.proteinTarget}
@@ -328,7 +424,7 @@ const Onboarding = () => {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">Carbs (g)</label>
+                <label className="text-sm font-medium text-foreground mb-2 block">{t('onboarding.macros.carbs', 'Carbs')} (g)</label>
                 <input
                   type="number"
                   value={formData.carbsTarget}
@@ -338,7 +434,7 @@ const Onboarding = () => {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">Fat (g)</label>
+                <label className="text-sm font-medium text-foreground mb-2 block">{t('onboarding.macros.fat', 'Fat')} (g)</label>
                 <input
                   type="number"
                   value={formData.fatTarget}
@@ -349,7 +445,7 @@ const Onboarding = () => {
               </div>
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground mb-3 block">Meals per Day</label>
+              <label className="text-sm font-medium text-foreground mb-3 block">{t('onboarding.macros.mealsPerDay', 'Meals per Day')}</label>
               <div className="flex gap-2">
                 {[1, 2, 3, 4, 5, 6].map(num => (
                   <button
@@ -374,7 +470,7 @@ const Onboarding = () => {
           <div className="space-y-6">
             <div className="p-4 rounded-xl bg-warning/10 border border-warning/20">
               <p className="text-sm text-warning-foreground">
-                ⚠️ This is general nutrition planning, not medical advice. Always consult your healthcare provider.
+                ⚠️ {t('onboarding.medical.disclaimer', 'This is general nutrition planning, not medical advice. Always consult your healthcare provider.')}
               </p>
             </div>
             <div>
@@ -385,7 +481,7 @@ const Onboarding = () => {
                   onChange={(e) => setFormData(prev => ({ ...prev, medicalDisclaimer: e.target.checked }))}
                   className="w-5 h-5 rounded border-border text-primary focus:ring-primary"
                 />
-                <span className="text-sm">I understand this is not medical advice</span>
+                <span className="text-sm">{t('onboarding.medical.understand', 'I understand this is not medical advice')}</span>
               </label>
             </div>
             {formData.medicalDisclaimer && (
@@ -394,12 +490,12 @@ const Onboarding = () => {
                 animate={{ opacity: 1, height: 'auto' }}
                 className="space-y-3"
               >
-                <p className="text-sm font-medium text-foreground">Health-conscious options:</p>
+                <p className="text-sm font-medium text-foreground">{t('onboarding.medical.options', 'Health-conscious options')}:</p>
                 {[
-                  { key: 'diabetesFriendly', label: 'Diabetes-friendly', desc: 'Lower sugar, higher fiber' },
-                  { key: 'kidneyFriendly', label: 'Kidney-friendly', desc: 'Conservative sodium' },
-                  { key: 'heartHealthy', label: 'Heart-healthy', desc: 'Unsaturated fats, high fiber' },
-                  { key: 'lowSodium', label: 'Low sodium', desc: 'Reduced salt intake' },
+                  { key: 'diabetesFriendly', labelKey: 'onboarding.medical.diabetes', descKey: 'onboarding.medical.diabetesDesc' },
+                  { key: 'kidneyFriendly', labelKey: 'onboarding.medical.kidney', descKey: 'onboarding.medical.kidneyDesc' },
+                  { key: 'heartHealthy', labelKey: 'onboarding.medical.heart', descKey: 'onboarding.medical.heartDesc' },
+                  { key: 'lowSodium', labelKey: 'onboarding.medical.sodium', descKey: 'onboarding.medical.sodiumDesc' },
                 ].map(option => (
                   <label
                     key={option.key}
@@ -412,8 +508,8 @@ const Onboarding = () => {
                       className="w-5 h-5 rounded border-border text-primary focus:ring-primary"
                     />
                     <div>
-                      <p className="font-medium">{option.label}</p>
-                      <p className="text-xs text-muted-foreground">{option.desc}</p>
+                      <p className="font-medium">{t(option.labelKey, option.key)}</p>
+                      <p className="text-xs text-muted-foreground">{t(option.descKey, '')}</p>
                     </div>
                   </label>
                 ))}
@@ -426,7 +522,7 @@ const Onboarding = () => {
         return (
           <div className="space-y-6">
             <div>
-              <label className="text-sm font-medium text-foreground mb-3 block">Preferred Cuisines</label>
+              <label className="text-sm font-medium text-foreground mb-3 block">{t('onboarding.cuisine.preferred', 'Preferred Cuisines')}</label>
               <div className="flex flex-wrap gap-2">
                 {['American', 'Italian', 'Mexican', 'Asian', 'Mediterranean', 'Indian', 'Japanese', 'Thai', 'French', 'Greek'].map(cuisine => (
                   <Chip
@@ -434,18 +530,18 @@ const Onboarding = () => {
                     selected={formData.cuisines.includes(cuisine)}
                     onClick={() => toggleArrayItem('cuisines', cuisine)}
                   >
-                    {cuisine}
+                    {t(`cuisines.${cuisine.toLowerCase()}`, cuisine)}
                   </Chip>
                 ))}
               </div>
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground mb-3 block">Budget Level</label>
+              <label className="text-sm font-medium text-foreground mb-3 block">{t('onboarding.cuisine.budget', 'Budget Level')}</label>
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { value: 'budget', label: 'Budget', icon: '$' },
-                  { value: 'medium', label: 'Medium', icon: '$$' },
-                  { value: 'premium', label: 'Premium', icon: '$$$' },
+                  { value: 'budget', labelKey: 'onboarding.cuisine.budgetLow', icon: '$' },
+                  { value: 'medium', labelKey: 'onboarding.cuisine.budgetMedium', icon: '$$' },
+                  { value: 'premium', labelKey: 'onboarding.cuisine.budgetHigh', icon: '$$$' },
                 ].map(budget => (
                   <button
                     key={budget.value}
@@ -457,14 +553,14 @@ const Onboarding = () => {
                     }`}
                   >
                     <span className="text-lg font-bold block">{budget.icon}</span>
-                    <span className="text-sm">{budget.label}</span>
+                    <span className="text-sm">{t(budget.labelKey, budget.value)}</span>
                   </button>
                 ))}
               </div>
             </div>
             <div>
               <label className="text-sm font-medium text-foreground mb-3 block">
-                Max Cook Time: {formData.maxCookTime} min
+                {t('onboarding.cuisine.maxCookTime', 'Max Cook Time')}: {formData.maxCookTime} {t('common.min', 'min')}
               </label>
               <input
                 type="range"
@@ -476,8 +572,8 @@ const Onboarding = () => {
                 className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
               />
               <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                <span>15 min</span>
-                <span>2 hours</span>
+                <span>15 {t('common.min', 'min')}</span>
+                <span>2 {t('common.hours', 'hours')}</span>
               </div>
             </div>
           </div>
@@ -488,6 +584,14 @@ const Onboarding = () => {
     }
   };
 
+  if (loading && isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -496,26 +600,26 @@ const Onboarding = () => {
           <div className="flex items-center justify-between mb-2">
             <button
               onClick={handleBack}
-              disabled={currentStep === 0}
+              disabled={currentStep === 0 && !editMode}
               className="p-2 -ml-2 text-muted-foreground disabled:opacity-30"
             >
               <ChevronLeft className="w-6 h-6" />
             </button>
             <span className="text-sm text-muted-foreground">
-              {t('onboarding.step', {
+              {editMode ? t('settings.editing', 'Editing') : t('onboarding.step', {
                 current: currentStep + 1,
                 total: STEPS.length,
                 defaultValue: `Step ${currentStep + 1} of ${STEPS.length}`,
               })}
             </span>
             <button
-              onClick={() => navigate('/discover')}
+              onClick={() => editMode ? navigate('/settings') : navigate('/discover')}
               className="text-sm text-muted-foreground"
             >
-              {t('common.skip', 'Skip')}
+              {editMode ? t('common.cancel', 'Cancel') : t('common.skip', 'Skip')}
             </button>
           </div>
-          <Progress value={progress} className="h-1" />
+          {!editMode && <Progress value={progress} className="h-1" />}
         </div>
       </div>
 
@@ -551,10 +655,21 @@ const Onboarding = () => {
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 backdrop-blur-sm border-t border-border">
         <Button
           onClick={handleNext}
+          disabled={isSaving}
           className="w-full h-14 text-lg font-semibold gradient-primary"
           size="lg"
         >
-          {currentStep === STEPS.length - 1 ? (
+          {isSaving ? (
+            <span className="flex items-center gap-2">
+              <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+              {t('common.saving', 'Saving...')}
+            </span>
+          ) : editMode ? (
+            <>
+              <Check className="w-5 h-5 mr-2" />
+              {t('common.save', 'Save')}
+            </>
+          ) : currentStep === STEPS.length - 1 ? (
             <>
               <Check className="w-5 h-5 mr-2" />
               {t('onboarding.complete.startPlanning', 'Complete Setup')}
