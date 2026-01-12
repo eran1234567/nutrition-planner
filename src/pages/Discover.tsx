@@ -35,6 +35,10 @@ export default function Discover() {
 
   const filteredRecipes = useMemo(() => {
     return seedRecipes.filter(recipe => {
+      // Filter out recipes without valid images
+      if (!recipe.image_url || recipe.image_url.includes('undefined') || !recipe.image_url.startsWith('http')) {
+        return false;
+      }
       // Search filter
       if (searchQuery && !recipe.title.toLowerCase().includes(searchQuery.toLowerCase())) {
         return false;
