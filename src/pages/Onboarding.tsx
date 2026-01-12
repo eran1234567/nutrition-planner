@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -7,7 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { ChevronLeft, ChevronRight, Check, Globe, Ruler, User, Utensils, Target, Heart, ChefHat, Plus } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/input';
-
+import i18n from '@/lib/i18n';
 const STEPS = [
   { id: 'locale', icon: Globe, title: 'Language & Units' },
   { id: 'profile', icon: User, title: 'Your Profile' },
@@ -132,7 +132,10 @@ const Onboarding = () => {
                 ].map(lang => (
                   <button
                     key={lang.code}
-                    onClick={() => setFormData(prev => ({ ...prev, language: lang.code }))}
+                    onClick={() => {
+                      setFormData(prev => ({ ...prev, language: lang.code }));
+                      i18n.changeLanguage(lang.code);
+                    }}
                     className={`p-4 rounded-xl border-2 transition-all ${
                       formData.language === lang.code
                         ? 'border-primary bg-primary/10'
