@@ -104,6 +104,8 @@ const Onboarding = () => {
                 {[
                   { code: 'en', label: 'English', flag: '🇺🇸' },
                   { code: 'es', label: 'Español', flag: '🇪🇸' },
+                  { code: 'he', label: 'עברית', flag: '🇮🇱' },
+                  { code: 'pt', label: 'Português', flag: '🇧🇷' },
                 ].map(lang => (
                   <button
                     key={lang.code}
