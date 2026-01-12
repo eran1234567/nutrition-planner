@@ -4,8 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { ChevronLeft, ChevronRight, Check, Globe, Ruler, User, Utensils, Target, Heart, ChefHat } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Globe, Ruler, User, Utensils, Target, Heart, ChefHat, Plus } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
+import { Input } from '@/components/ui/input';
 
 const STEPS = [
   { id: 'locale', icon: Globe, title: 'Language & Units' },
@@ -45,6 +46,10 @@ const Onboarding = () => {
     maxCookTime: 45,
   });
 
+  // Custom input state
+  const [customAllergy, setCustomAllergy] = useState('');
+  const [customDislike, setCustomDislike] = useState('');
+
   const progress = ((currentStep + 1) / STEPS.length) * 100;
 
   const handleNext = () => {
@@ -68,6 +73,24 @@ const Onboarding = () => {
       [key]: prev[key].includes(item)
         ? prev[key].filter(i => i !== item)
         : [...prev[key], item]
+    }));
+  };
+
+  const addCustomItem = (key: 'allergies' | 'dislikes', value: string, setValue: (v: string) => void) => {
+    const trimmed = value.trim();
+    if (trimmed && !formData[key].includes(trimmed)) {
+      setFormData(prev => ({
+        ...prev,
+        [key]: [...prev[key], trimmed]
+      }));
+    }
+    setValue('');
+  };
+
+  const removeCustomItem = (key: 'allergies' | 'dislikes', item: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [key]: prev[key].filter(i => i !== item)
     }));
   };
 
@@ -174,7 +197,7 @@ const Onboarding = () => {
             </div>
             <div>
               <label className="text-sm font-medium text-foreground mb-3 block">Allergies</label>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 mb-3">
                 {['Dairy', 'Eggs', 'Gluten', 'Nuts', 'Peanuts', 'Shellfish', 'Soy', 'Fish', 'Beef', 'Chicken', 'Veal', 'Pork', 'Seafood'].map(allergy => (
                   <Chip
                     key={allergy}
@@ -184,11 +207,46 @@ const Onboarding = () => {
                     {allergy}
                   </Chip>
                 ))}
+                {formData.allergies
+                  .filter(a => !['Dairy', 'Eggs', 'Gluten', 'Nuts', 'Peanuts', 'Shellfish', 'Soy', 'Fish', 'Beef', 'Chicken', 'Veal', 'Pork', 'Seafood'].includes(a))
+                  .map(custom => (
+                    <Chip
+                      key={custom}
+                      selected
+                      onRemove={() => removeCustomItem('allergies', custom)}
+                    >
+                      {custom}
+                    </Chip>
+                  ))}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  value={customAllergy}
+                  onChange={(e) => setCustomAllergy(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addCustomItem('allergies', customAllergy, setCustomAllergy);
+                    }
+                  }}
+                  placeholder="Add custom allergy..."
+                  className="flex-1 h-11"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11"
+                  onClick={() => addCustomItem('allergies', customAllergy, setCustomAllergy)}
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
               </div>
             </div>
             <div>
               <label className="text-sm font-medium text-foreground mb-3 block">Dislikes</label>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 mb-3">
                 {['Spicy', 'Cilantro', 'Mushrooms', 'Onions', 'Olives', 'Tomatoes', 'Beef', 'Chicken', 'Veal', 'Pork', 'Seafood', 'Eggs', 'Dairy'].map(dislike => (
                   <Chip
                     key={dislike}
@@ -198,6 +256,41 @@ const Onboarding = () => {
                     {dislike}
                   </Chip>
                 ))}
+                {formData.dislikes
+                  .filter(d => !['Spicy', 'Cilantro', 'Mushrooms', 'Onions', 'Olives', 'Tomatoes', 'Beef', 'Chicken', 'Veal', 'Pork', 'Seafood', 'Eggs', 'Dairy'].includes(d))
+                  .map(custom => (
+                    <Chip
+                      key={custom}
+                      selected
+                      onRemove={() => removeCustomItem('dislikes', custom)}
+                    >
+                      {custom}
+                    </Chip>
+                  ))}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  value={customDislike}
+                  onChange={(e) => setCustomDislike(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addCustomItem('dislikes', customDislike, setCustomDislike);
+                    }
+                  }}
+                  placeholder="Add custom dislike..."
+                  className="flex-1 h-11"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11"
+                  onClick={() => addCustomItem('dislikes', customDislike, setCustomDislike)}
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
               </div>
             </div>
           </div>
