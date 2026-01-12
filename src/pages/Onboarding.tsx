@@ -347,7 +347,7 @@ const Onboarding = () => {
             <div>
               <label className="text-sm font-medium text-foreground mb-3 block">Meals per Day</label>
               <div className="flex gap-2">
-                {[2, 3, 4, 5].map(num => (
+                {[1, 2, 3, 4, 5, 6].map(num => (
                   <button
                     key={num}
                     onClick={() => setFormData(prev => ({ ...prev, mealsPerDay: num }))}
