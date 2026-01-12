@@ -142,16 +142,19 @@ const Onboarding = () => {
   };
 
   const handleNext = async () => {
+    // In edit mode, save immediately and return to settings
+    if (editMode) {
+      await handleSave();
+      navigate('/settings');
+      return;
+    }
+    
     if (currentStep < STEPS.length - 1) {
       setCurrentStep(currentStep + 1);
     } else {
       // Complete onboarding
       await handleSave();
-      if (editMode) {
-        navigate('/settings');
-      } else {
-        navigate('/discover');
-      }
+      navigate('/discover');
     }
   };
 
