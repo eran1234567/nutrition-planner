@@ -2,95 +2,150 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
+/* Weekly Nutrition Planner Design System
+   Fresh, appetizing, mobile-first design inspired by modern food apps
+   Colors: Sage green primary, terracotta accent, warm creamy backgrounds
 */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Core backgrounds - warm cream tones */
+    --background: 45 30% 98%;
+    --foreground: 20 25% 15%;
 
+    /* Card surfaces */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 20 25% 15%;
 
+    /* Popover/dropdown surfaces */
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 20 25% 15%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Primary - Fresh sage green */
+    --primary: 142 35% 42%;
+    --primary-foreground: 0 0% 100%;
+    --primary-soft: 142 35% 92%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Secondary - Soft sage */
+    --secondary: 142 20% 94%;
+    --secondary-foreground: 142 35% 25%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Muted - Warm gray */
+    --muted: 40 15% 94%;
+    --muted-foreground: 30 10% 45%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Accent - Warm terracotta */
+    --accent: 18 70% 55%;
+    --accent-foreground: 0 0% 100%;
+    --accent-soft: 18 60% 94%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* Destructive - Coral red */
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    /* Success - Fresh green */
+    --success: 142 60% 45%;
+    --success-foreground: 0 0% 100%;
 
-    --radius: 0.5rem;
+    /* Warning - Golden amber */
+    --warning: 38 92% 50%;
+    --warning-foreground: 38 92% 15%;
 
-    --sidebar-background: 0 0% 98%;
+    /* Info - Sky blue */
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    /* Borders and inputs */
+    --border: 40 20% 88%;
+    --input: 40 20% 88%;
+    --ring: 142 35% 42%;
 
-    --sidebar-primary: 240 5.9% 10%;
+    /* Radius - Rounded for friendliness */
+    --radius: 0.75rem;
 
-    --sidebar-primary-foreground: 0 0% 98%;
+    /* Sidebar - Slightly deeper cream */
+    --sidebar-background: 45 25% 96%;
+    --sidebar-foreground: 20 25% 25%;
+    --sidebar-primary: 142 35% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 142 20% 90%;
+    --sidebar-accent-foreground: 142 35% 25%;
+    --sidebar-border: 40 20% 88%;
+    --sidebar-ring: 142 35% 42%;
 
-    --sidebar-accent: 240 4.8% 95.9%;
+    /* Nutrition color coding */
+    --calories: 18 70% 55%;
+    --protein: 142 60% 45%;
+    --carbs: 38 92% 50%;
+    --fat: 280 60% 55%;
+    --fiber: 142 45% 35%;
 
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Meal type colors */
+    --breakfast: 38 92% 50%;
+    --lunch: 142 60% 45%;
+    --dinner: 18 70% 55%;
+    --snack: 280 50% 60%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 20 20% 8%;
+    --foreground: 45 20% 95%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 20 20% 12%;
+    --card-foreground: 45 20% 95%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 20 20% 12%;
+    --popover-foreground: 45 20% 95%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 142 40% 50%;
+    --primary-foreground: 0 0% 100%;
+    --primary-soft: 142 30% 18%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 142 20% 18%;
+    --secondary-foreground: 142 30% 85%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 20 15% 18%;
+    --muted-foreground: 30 10% 60%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 18 65% 50%;
+    --accent-foreground: 0 0% 100%;
+    --accent-soft: 18 40% 18%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 65% 45%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --success: 142 55% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 85% 45%;
+    --warning-foreground: 0 0% 100%;
+
+    --info: 199 80% 45%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 20 15% 22%;
+    --input: 20 15% 22%;
+    --ring: 142 40% 50%;
+
+    --sidebar-background: 20 20% 10%;
+    --sidebar-foreground: 45 15% 90%;
+    --sidebar-primary: 142 40% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 142 20% 16%;
+    --sidebar-accent-foreground: 142 30% 85%;
+    --sidebar-border: 20 15% 22%;
+    --sidebar-ring: 142 40% 50%;
+
+    --calories: 18 65% 50%;
+    --protein: 142 55% 45%;
+    --carbs: 38 85% 50%;
+    --fat: 280 55% 55%;
+    --fiber: 142 40% 40%;
+
+    --breakfast: 38 85% 50%;
+    --lunch: 142 55% 45%;
+    --dinner: 18 65% 50%;
+    --snack: 280 45% 55%;
   }
 }
 
@@ -100,6 +155,191 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Mobile-first: ensure touch-friendly sizing */
+  button, 
+  [role="button"],
+  input,
+  select,
+  textarea {
+    @apply touch-manipulation;
+  }
+
+  /* Prevent text size adjustment on orientation change */
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* Safe area insets for mobile notches */
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
+@layer components {
+  /* Large tap targets for mobile */
+  .tap-target {
+    @apply min-h-[44px] min-w-[44px] flex items-center justify-center;
+  }
+
+  /* Bottom navigation styling */
+  .bottom-nav {
+    @apply fixed bottom-0 left-0 right-0 bg-card border-t border-border z-50;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Sticky action bar */
+  .sticky-actions {
+    @apply fixed bottom-[calc(64px+env(safe-area-inset-bottom))] left-0 right-0 bg-card/95 backdrop-blur-sm border-t border-border p-4 z-40;
+  }
+
+  /* Recipe card styling */
+  .recipe-card {
+    @apply bg-card rounded-xl overflow-hidden shadow-sm border border-border transition-all duration-200 hover:shadow-md active:scale-[0.98];
+  }
+
+  /* Macro badge styling */
+  .macro-badge {
+    @apply inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium;
+  }
+
+  .macro-calories {
+    @apply bg-[hsl(var(--calories)/0.1)] text-[hsl(var(--calories))];
+  }
+
+  .macro-protein {
+    @apply bg-[hsl(var(--protein)/0.1)] text-[hsl(var(--protein))];
+  }
+
+  .macro-carbs {
+    @apply bg-[hsl(var(--carbs)/0.1)] text-[hsl(var(--carbs))];
+  }
+
+  .macro-fat {
+    @apply bg-[hsl(var(--fat)/0.1)] text-[hsl(var(--fat))];
+  }
+
+  /* Meal type badges */
+  .meal-breakfast {
+    @apply bg-[hsl(var(--breakfast)/0.15)] text-[hsl(var(--breakfast))] border-[hsl(var(--breakfast)/0.3)];
+  }
+
+  .meal-lunch {
+    @apply bg-[hsl(var(--lunch)/0.15)] text-[hsl(var(--lunch))] border-[hsl(var(--lunch)/0.3)];
+  }
+
+  .meal-dinner {
+    @apply bg-[hsl(var(--dinner)/0.15)] text-[hsl(var(--dinner))] border-[hsl(var(--dinner)/0.3)];
+  }
+
+  .meal-snack {
+    @apply bg-[hsl(var(--snack)/0.15)] text-[hsl(var(--snack))] border-[hsl(var(--snack)/0.3)];
+  }
+
+  /* Chip/tag styling */
+  .chip {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-secondary text-secondary-foreground transition-colors;
+  }
+
+  .chip-selected {
+    @apply bg-primary text-primary-foreground;
+  }
+
+  /* Progress ring for macro tracking */
+  .progress-ring {
+    @apply relative inline-flex items-center justify-center;
+  }
+
+  /* Skeleton loading */
+  .skeleton-shimmer {
+    @apply relative overflow-hidden bg-muted;
+  }
+
+  .skeleton-shimmer::after {
+    @apply absolute inset-0;
+    content: '';
+    background: linear-gradient(90deg, transparent, hsl(var(--background) / 0.4), transparent);
+    animation: shimmer 1.5s infinite;
+  }
+
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  /* Page container with proper mobile spacing */
+  .page-container {
+    @apply min-h-screen pb-20 px-4 pt-4 max-w-3xl mx-auto;
+  }
+
+  /* Section header */
+  .section-header {
+    @apply text-lg font-semibold text-foreground mb-3;
+  }
+
+  /* Floating action button */
+  .fab {
+    @apply fixed right-4 bottom-[calc(80px+env(safe-area-inset-bottom))] w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center z-50 active:scale-95 transition-transform;
+  }
+}
+
+@layer utilities {
+  /* Gradient backgrounds */
+  .gradient-primary {
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(142 40% 35%) 100%);
+  }
+
+  .gradient-accent {
+    background: linear-gradient(135deg, hsl(var(--accent)) 0%, hsl(18 75% 45%) 100%);
+  }
+
+  .gradient-hero {
+    background: linear-gradient(180deg, hsl(var(--primary-soft)) 0%, hsl(var(--background)) 100%);
+  }
+
+  /* Text gradients */
+  .text-gradient-primary {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-[hsl(var(--primary))] to-[hsl(142_50%_35%)];
+  }
+
+  /* Shadows */
+  .shadow-soft {
+    box-shadow: 0 4px 20px -4px hsl(var(--foreground) / 0.08);
+  }
+
+  .shadow-glow-primary {
+    box-shadow: 0 4px 20px -4px hsl(var(--primary) / 0.3);
+  }
+
+  .shadow-glow-accent {
+    box-shadow: 0 4px 20px -4px hsl(var(--accent) / 0.3);
+  }
+
+  /* Glass effect */
+  .glass {
+    @apply bg-card/80 backdrop-blur-lg;
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Thumb zone optimization - elements in bottom 2/3 of screen */
+  .thumb-zone {
+    @apply mt-auto;
   }
 }
