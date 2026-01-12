@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,7 +14,11 @@ import {
   X,
   Youtube,
   Globe,
-  Loader2
+  Loader2,
+  ArrowLeft,
+  CheckCircle,
+  XCircle,
+  Clock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +35,7 @@ interface UploadedItem {
   fileType?: string;
   status: 'pending' | 'parsing' | 'parsed' | 'failed';
   createdAt: Date;
+  recipeCount?: number;
 }
 
 const MyRecipes = () => {
@@ -45,6 +50,90 @@ const MyRecipes = () => {
   const [linkUrl, setLinkUrl] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
+  // Load existing uploads from database
+  useEffect(() => {
+    if (!user) return;
+
+    const loadUploads = async () => {
+      const { data, error } = await supabase
+        .from('uploads')
+        .select(`
+          id,
+          file_name,
+          file_type,
+          source_url,
+          status,
+          created_at,
+          upload_recipe_links(count)
+        `)
+        .eq('owner_user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading uploads:', error);
+        return;
+      }
+
+      if (data) {
+        setUploads(data.map(u => ({
+          id: u.id,
+          type: u.source_url ? 'link' : 'file',
+          name: u.file_name || new URL(u.source_url || 'https://unknown').hostname,
+          url: u.source_url || undefined,
+          fileType: u.file_type || undefined,
+          status: u.status as UploadedItem['status'],
+          createdAt: new Date(u.created_at || Date.now()),
+          recipeCount: (u.upload_recipe_links as any)?.[0]?.count || 0,
+        })));
+      }
+    };
+
+    loadUploads();
+  }, [user]);
+
+  const triggerParsing = async (uploadId: string, content?: string, sourceUrl?: string) => {
+    try {
+      // Update local state to show parsing
+      setUploads(prev => prev.map(u => 
+        u.id === uploadId ? { ...u, status: 'parsing' as const } : u
+      ));
+
+      const { data, error } = await supabase.functions.invoke('parse-recipe', {
+        body: { 
+          uploadId, 
+          content: content || sourceUrl,
+          sourceUrl 
+        },
+      });
+
+      if (error) {
+        console.error('Parsing error:', error);
+        setUploads(prev => prev.map(u => 
+          u.id === uploadId ? { ...u, status: 'failed' as const } : u
+        ));
+        toast.error(t('myRecipes.parseError', 'Failed to parse recipe'));
+        return;
+      }
+
+      if (data?.success) {
+        setUploads(prev => prev.map(u => 
+          u.id === uploadId ? { ...u, status: 'parsed' as const, recipeCount: data.count } : u
+        ));
+        toast.success(t('myRecipes.parseSuccess', `Found ${data.count} recipe(s)!`));
+      } else {
+        setUploads(prev => prev.map(u => 
+          u.id === uploadId ? { ...u, status: 'failed' as const } : u
+        ));
+        toast.error(data?.error || t('myRecipes.parseError', 'Failed to parse recipe'));
+      }
+    } catch (error) {
+      console.error('Parse error:', error);
+      setUploads(prev => prev.map(u => 
+        u.id === uploadId ? { ...u, status: 'failed' as const } : u
+      ));
+    }
+  };
+
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -52,28 +141,47 @@ const MyRecipes = () => {
     setIsUploading(true);
     
     for (const file of Array.from(files)) {
-      const newUpload: UploadedItem = {
-        id: crypto.randomUUID(),
-        type: 'file',
-        name: file.name,
-        fileType: file.type,
-        status: 'pending',
-        createdAt: new Date(),
-      };
+      // Read file content for text-based files
+      let fileContent = '';
+      if (file.type.startsWith('text/') || file.type === 'application/json') {
+        fileContent = await file.text();
+      }
       
-      setUploads(prev => [newUpload, ...prev]);
+      // For images, we'll pass along that it's an image (AI can handle base64 in future)
+      const isImage = file.type.startsWith('image/');
       
       // Save to database
       if (user) {
         try {
-          await supabase.from('uploads').insert({
+          const { data: uploadData, error } = await supabase.from('uploads').insert({
             owner_user_id: user.id,
             file_name: file.name,
             file_type: file.type,
             status: 'pending',
             scope: 'private'
-          });
+          }).select().single();
+
+          if (error) throw error;
+
+          const newUpload: UploadedItem = {
+            id: uploadData.id,
+            type: 'file',
+            name: file.name,
+            fileType: file.type,
+            status: 'pending',
+            createdAt: new Date(),
+          };
+          
+          setUploads(prev => [newUpload, ...prev]);
           toast.success(t('myRecipes.uploadSuccess', 'File added successfully'));
+
+          // Trigger parsing for text files immediately
+          if (fileContent || isImage) {
+            const content = isImage 
+              ? `[Image file: ${file.name}] - This is a photo/screenshot of a recipe. Please extract the recipe information.`
+              : fileContent;
+            await triggerParsing(uploadData.id, content);
+          }
         } catch (error) {
           toast.error(t('myRecipes.uploadError', 'Failed to save file'));
         }
@@ -81,7 +189,6 @@ const MyRecipes = () => {
     }
     
     setIsUploading(false);
-    // Reset input
     if (event.target) {
       event.target.value = '';
     }
@@ -90,28 +197,41 @@ const MyRecipes = () => {
   const handleAddLink = async () => {
     if (!linkUrl.trim()) return;
     
-    const newUpload: UploadedItem = {
-      id: crypto.randomUUID(),
-      type: 'link',
-      name: new URL(linkUrl).hostname,
-      url: linkUrl,
-      status: 'pending',
-      createdAt: new Date(),
-    };
-    
-    setUploads(prev => [newUpload, ...prev]);
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(linkUrl);
+    } catch {
+      toast.error(t('myRecipes.invalidUrl', 'Please enter a valid URL'));
+      return;
+    }
     
     // Save to database
     if (user) {
       try {
-        await supabase.from('uploads').insert({
+        const { data: uploadData, error } = await supabase.from('uploads').insert({
           owner_user_id: user.id,
           source_url: linkUrl,
-          file_name: new URL(linkUrl).hostname,
+          file_name: parsedUrl.hostname,
           status: 'pending',
           scope: 'private'
-        });
+        }).select().single();
+
+        if (error) throw error;
+
+        const newUpload: UploadedItem = {
+          id: uploadData.id,
+          type: 'link',
+          name: parsedUrl.hostname,
+          url: linkUrl,
+          status: 'pending',
+          createdAt: new Date(),
+        };
+        
+        setUploads(prev => [newUpload, ...prev]);
         toast.success(t('myRecipes.linkAdded', 'Link added successfully'));
+
+        // Trigger parsing immediately
+        await triggerParsing(uploadData.id, undefined, linkUrl);
       } catch (error) {
         toast.error(t('myRecipes.linkError', 'Failed to save link'));
       }
@@ -122,8 +242,17 @@ const MyRecipes = () => {
   };
 
   const handleRemoveUpload = async (id: string) => {
-    setUploads(prev => prev.filter(u => u.id !== id));
-    toast.success(t('myRecipes.removed', 'Item removed'));
+    try {
+      await supabase.from('uploads').delete().eq('id', id);
+      setUploads(prev => prev.filter(u => u.id !== id));
+      toast.success(t('myRecipes.removed', 'Item removed'));
+    } catch (error) {
+      toast.error(t('myRecipes.removeError', 'Failed to remove item'));
+    }
+  };
+
+  const handleRetryParsing = async (upload: UploadedItem) => {
+    await triggerParsing(upload.id, undefined, upload.url);
   };
 
   const getFileIcon = (fileType?: string) => {
@@ -140,28 +269,41 @@ const MyRecipes = () => {
     return <Globe className="w-5 h-5" />;
   };
 
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'parsed':
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'failed':
+        return <XCircle className="w-4 h-4 text-destructive" />;
+      case 'parsing':
+        return <Loader2 className="w-4 h-4 text-primary animate-spin" />;
+      default:
+        return <Clock className="w-4 h-4 text-muted-foreground" />;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="px-4 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">
-                {t('myRecipes.title', 'My Recipes')}
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                {t('myRecipes.subtitle', 'Upload your own recipes and sources')}
-              </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate(-1)}
+                className="w-10 h-10 rounded-full bg-card flex items-center justify-center"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div>
+                <h1 className="text-xl font-bold text-foreground">
+                  {t('myRecipes.title', 'My Recipes')}
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  {t('myRecipes.subtitle', 'Upload your own recipes')}
+                </p>
+              </div>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate('/discover')}
-            >
-              {t('common.skip', 'Skip')}
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
           </div>
         </div>
       </div>
@@ -261,7 +403,7 @@ const MyRecipes = () => {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*,.pdf,.doc,.docx"
+          accept="image/*,.pdf,.doc,.docx,.txt"
           multiple
           className="hidden"
           onChange={handleFileSelect}
@@ -300,13 +442,25 @@ const MyRecipes = () => {
                     <p className="text-sm font-medium text-foreground truncate">
                       {upload.name}
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      {upload.status === 'pending' && t('myRecipes.statusPending', 'Pending')}
-                      {upload.status === 'parsing' && t('myRecipes.statusParsing', 'Processing...')}
-                      {upload.status === 'parsed' && t('myRecipes.statusParsed', 'Ready')}
-                      {upload.status === 'failed' && t('myRecipes.statusFailed', 'Failed')}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      {getStatusIcon(upload.status)}
+                      <p className="text-xs text-muted-foreground">
+                        {upload.status === 'pending' && t('myRecipes.statusPending', 'Pending')}
+                        {upload.status === 'parsing' && t('myRecipes.statusParsing', 'Processing...')}
+                        {upload.status === 'parsed' && t('myRecipes.statusParsed', `${upload.recipeCount || 0} recipe(s) found`)}
+                        {upload.status === 'failed' && t('myRecipes.statusFailed', 'Failed')}
+                      </p>
+                    </div>
                   </div>
+                  {upload.status === 'failed' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRetryParsing(upload)}
+                    >
+                      {t('common.retry', 'Retry')}
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"
@@ -346,9 +500,6 @@ const MyRecipes = () => {
             {t('myRecipes.continue', 'Continue to Discover')}
             <ChevronRight className="w-4 h-4 ml-2" />
           </Button>
-          <p className="text-xs text-center text-muted-foreground mt-3">
-            {t('myRecipes.laterHint', 'You can always add more recipes later in Settings')}
-          </p>
         </div>
       </div>
 
