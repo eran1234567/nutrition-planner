@@ -102,7 +102,7 @@ const Index = () => {
           className="w-full max-w-sm space-y-3"
         >
           <Button
-            onClick={() => navigate(isAuthenticated ? '/onboarding' : '/auth')}
+            onClick={() => navigate('/onboarding')}
             className="w-full h-14 text-lg font-semibold gradient-primary hover:opacity-90 transition-opacity"
             size="lg"
           >
@@ -111,7 +111,7 @@ const Index = () => {
           </Button>
           <Button
             variant="ghost"
-            onClick={() => navigate(isAuthenticated ? '/discover' : '/auth')}
+            onClick={() => navigate('/discover')}
             className="w-full"
           >
             Browse recipes first
