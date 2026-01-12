@@ -120,6 +120,7 @@ export default function Discover() {
               recipe={recipe as any}
               isSelected={isSelected(recipe.id)}
               onSelect={() => handleSelect(recipe)}
+              onClick={() => navigate(`/recipe/${recipe.id}`)}
               compact
             />
           ))}
