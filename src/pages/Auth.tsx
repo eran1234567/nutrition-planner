@@ -77,8 +77,8 @@ const Auth = () => {
             setError(error.message);
           }
         } else {
-          // Navigate after successful signup
-          navigate(from, { replace: true });
+          // Navigate to onboarding after successful signup
+          navigate('/onboarding', { replace: true });
         }
       } else {
         const { error } = await signIn(email, password);

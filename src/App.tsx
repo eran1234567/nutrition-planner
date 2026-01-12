@@ -29,17 +29,11 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
           
+          {/* Semi-public routes */}
+          <Route path="/onboarding" element={<Onboarding />} />
+          
           {/* Protected routes */}
-          <Route path="/onboarding" element={
-            <ProtectedRoute>
-              <Onboarding />
-            </ProtectedRoute>
-          } />
-          <Route path="/discover" element={
-            <ProtectedRoute>
-              <Discover />
-            </ProtectedRoute>
-          } />
+          <Route path="/discover" element={<Discover />} />
           <Route path="/recipes" element={
             <ProtectedRoute>
               <Recipes />
