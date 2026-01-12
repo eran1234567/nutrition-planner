@@ -10,6 +10,8 @@ import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
 import Discover from "./pages/Discover";
 import Recipes from "./pages/Recipes";
+import RecipeDetail from "./pages/RecipeDetail";
+import Settings from "./pages/Settings";
 import Plan from "./pages/Plan";
 import Grocery from "./pages/Grocery";
 import NotFound from "./pages/NotFound";
@@ -41,6 +43,16 @@ const App = () => (
           <Route path="/recipes" element={
             <ProtectedRoute>
               <Recipes />
+            </ProtectedRoute>
+          } />
+          <Route path="/recipe/:id" element={
+            <ProtectedRoute>
+              <RecipeDetail />
+            </ProtectedRoute>
+          } />
+          <Route path="/settings" element={
+            <ProtectedRoute>
+              <Settings />
             </ProtectedRoute>
           } />
           <Route path="/plan" element={

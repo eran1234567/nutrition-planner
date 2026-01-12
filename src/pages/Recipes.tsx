@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Plus, Upload, Link, Camera, PenLine, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,6 +11,7 @@ import { motion } from 'framer-motion';
 
 export default function Recipes() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [showAddMenu, setShowAddMenu] = useState(false);
 
   const addOptions = [
@@ -77,7 +79,12 @@ export default function Recipes() {
         ) : (
           <div className="grid grid-cols-2 gap-3">
             {userRecipes.map((recipe) => (
-              <RecipeCard key={recipe.id} recipe={recipe as any} compact />
+              <RecipeCard 
+                key={recipe.id} 
+                recipe={recipe as any} 
+                onClick={() => navigate(`/recipe/${recipe.id}`)}
+                compact 
+              />
             ))}
           </div>
         )}
