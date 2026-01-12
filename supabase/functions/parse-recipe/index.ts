@@ -40,39 +40,60 @@ serve(async (req) => {
     await supabase.from('uploads').update({ status: 'parsing' }).eq('id', uploadId);
 
     // Build the prompt based on content type
-    const systemPrompt = 'You are a recipe extraction AI. Always respond with valid JSON only, no markdown or explanation.';
+    const systemPrompt = `You are an expert recipe extraction and nutrition calculation AI. Your job is to:
+1. Extract EVERY ingredient with exact quantities and units from the recipe
+2. Calculate accurate nutrition per serving based on the ingredients
+3. Always respond with valid JSON only, no markdown code blocks or explanation.
+
+CRITICAL: You MUST extract ALL ingredients visible in the recipe. Each ingredient needs:
+- name: the ingredient name (e.g., "eggs", "mayonnaise", "green onions")
+- quantity: numeric amount (e.g., 4, 0.5, 2)
+- unit: measurement unit (e.g., "large", "tablespoons", "cups", "pieces", or null if just a count)
+
+For nutrition calculation:
+- Calculate based on the actual ingredients and quantities
+- Divide by servings to get per-serving values
+- Use standard nutrition databases knowledge for common ingredients`;
     
-    const jsonFormat = `The JSON should have this structure:
+    const jsonFormat = `REQUIRED JSON structure (respond with ONLY this JSON, no markdown):
 {
   "recipes": [
     {
       "title": "Recipe title",
-      "description": "Brief description",
+      "description": "Brief description of the dish",
       "prep_time": 15,
       "cook_time": 30,
       "total_time": 45,
       "servings": 4,
       "difficulty": "easy|medium|hard",
-      "cuisine": "Italian|Mexican|Asian|etc",
+      "cuisine": "American|Italian|Mexican|Asian|etc",
       "ingredients": [
-        { "name": "ingredient name", "quantity": 2, "unit": "cups" }
+        { "name": "hard boiled eggs", "quantity": 4, "unit": "large" },
+        { "name": "mayonnaise", "quantity": 2, "unit": "tablespoons" },
+        { "name": "green onions", "quantity": 2, "unit": "stalks" }
       ],
       "steps": [
         "Step 1 instruction",
         "Step 2 instruction"
       ],
       "nutrition": {
-        "calories": 350,
-        "protein_g": 25,
-        "carbs_g": 30,
-        "fat_g": 15
+        "calories": 250,
+        "protein_g": 12,
+        "carbs_g": 3,
+        "fat_g": 20,
+        "fiber_g": 0,
+        "sodium_mg": 180
       },
-      "tags": ["dinner", "quick", "healthy"]
+      "tags": ["lunch", "quick", "high-protein"]
     }
   ]
 }
 
-If you cannot find recipe information, return: { "recipes": [], "error": "Could not extract recipe information" }`;
+IMPORTANT: 
+- Extract EVERY single ingredient mentioned, even if quantity is not explicitly stated (estimate reasonable amounts)
+- Calculate realistic nutrition values based on the actual ingredients
+- If servings not specified, estimate based on recipe size (typically 2-4)
+- If you cannot find recipe information, return: { "recipes": [], "error": "Could not extract recipe information" }`;
 
     // Build messages based on whether we have an image or text
     let messages: any[] = [];
@@ -92,7 +113,15 @@ If you cannot find recipe information, return: { "recipes": [], "error": "Could 
             },
             {
               type: 'text',
-              text: `Extract all recipe information from this image. Look for the recipe title, ingredients list, cooking instructions, and any other details. ${jsonFormat}`
+              text: `CAREFULLY extract ALL recipe information from this image.
+
+CRITICAL TASKS:
+1. Read EVERY ingredient listed - include the exact quantity and unit for each
+2. Read ALL cooking instructions/steps
+3. Calculate accurate nutrition per serving based on the ingredients you extract
+4. Identify the recipe title, servings count, and cooking times if visible
+
+${jsonFormat}`
             }
           ]
         }
@@ -202,7 +231,13 @@ ${content || sourceUrl || 'No content provided'}`;
           unit: ing.unit,
           order_index: idx,
         }));
-        await supabase.from('recipe_ingredients').insert(ingredients);
+        console.log(`Inserting ${ingredients.length} ingredients for recipe ${newRecipe.id}:`, JSON.stringify(ingredients));
+        const { error: ingError } = await supabase.from('recipe_ingredients').insert(ingredients);
+        if (ingError) {
+          console.error('Error inserting ingredients:', ingError);
+        }
+      } else {
+        console.warn(`No ingredients found for recipe ${newRecipe.title}`);
       }
 
       // Insert steps
@@ -215,15 +250,22 @@ ${content || sourceUrl || 'No content provided'}`;
         await supabase.from('recipe_steps').insert(steps);
       }
 
-      // Insert nutrition
-      if (recipe.nutrition) {
-        await supabase.from('recipe_nutrition').insert({
-          recipe_id: newRecipe.id,
-          calories: recipe.nutrition.calories,
-          protein_g: recipe.nutrition.protein_g,
-          carbs_g: recipe.nutrition.carbs_g,
-          fat_g: recipe.nutrition.fat_g,
-        });
+      // Insert nutrition - always create a record even if values are partial
+      const nutritionData = {
+        recipe_id: newRecipe.id,
+        calories: recipe.nutrition?.calories || null,
+        protein_g: recipe.nutrition?.protein_g || null,
+        carbs_g: recipe.nutrition?.carbs_g || null,
+        fat_g: recipe.nutrition?.fat_g || null,
+        fiber_g: recipe.nutrition?.fiber_g || null,
+        sodium_mg: recipe.nutrition?.sodium_mg || null,
+      };
+      
+      const { error: nutritionError } = await supabase.from('recipe_nutrition').insert(nutritionData);
+      if (nutritionError) {
+        console.error('Error inserting nutrition:', nutritionError);
+      } else {
+        console.log('Nutrition inserted:', nutritionData);
       }
 
       // Insert tags
