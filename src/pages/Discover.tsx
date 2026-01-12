@@ -1,9 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { Search, Clock, Sparkles, User as UserIcon } from 'lucide-react';
+import { Search, Clock, Sparkles, BookOpen } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
@@ -55,7 +57,7 @@ export default function Discover() {
   const [selectedTime, setSelectedTime] = useState<number | null>(null);
   const [selectedMealType, setSelectedMealType] = useState<string | null>(null);
   const [userRecipes, setUserRecipes] = useState<UserRecipe[]>([]);
-  const [showUserRecipes, setShowUserRecipes] = useState(false);
+  const [includeMyRecipes, setIncludeMyRecipes] = useState(true);
 
   // Load user's recipes from database
   useEffect(() => {
@@ -116,17 +118,17 @@ export default function Discover() {
       isUserRecipe: false,
     }));
 
-    // Combine user recipes with seed recipes
-    return [...userRecipes, ...formattedSeedRecipes];
-  }, [userRecipes]);
+    // If including user recipes, combine them
+    if (includeMyRecipes) {
+      return [...userRecipes, ...formattedSeedRecipes];
+    }
+    
+    // Otherwise only app recipes
+    return formattedSeedRecipes;
+  }, [userRecipes, includeMyRecipes]);
 
   const filteredRecipes = useMemo(() => {
     return allRecipes.filter(recipe => {
-      // Filter by source
-      if (showUserRecipes && !recipe.isUserRecipe) {
-        return false;
-      }
-
       // Filter out recipes without valid images (only for seed recipes)
       if (!recipe.isUserRecipe && (!recipe.image_url || recipe.image_url.includes('undefined') || !recipe.image_url.startsWith('http'))) {
         return false;
@@ -149,7 +151,7 @@ export default function Discover() {
 
       return true;
     });
-  }, [allRecipes, searchQuery, selectedTime, selectedMealType, showUserRecipes]);
+  }, [allRecipes, searchQuery, selectedTime, selectedMealType]);
 
   const isSelected = (recipeId: string) => selectedMeals.some(r => r.id === recipeId);
 
@@ -180,24 +182,27 @@ export default function Discover() {
           />
         </div>
 
-        {/* Source filter (if user has recipes) */}
+        {/* Include My Recipes Toggle */}
         {userRecipes.length > 0 && (
-          <div className="flex gap-2 mb-2">
-            <Chip
-              selected={!showUserRecipes}
-              onClick={() => setShowUserRecipes(false)}
-              variant="outline"
-            >
-              {t('discover.allRecipes', 'All Recipes')}
-            </Chip>
-            <Chip
-              selected={showUserRecipes}
-              onClick={() => setShowUserRecipes(true)}
-              variant="outline"
-              icon={<UserIcon className="w-3 h-3" />}
-            >
-              {t('discover.myRecipes', 'My Recipes')} ({userRecipes.length})
-            </Chip>
+          <div className="flex items-center justify-between p-3 rounded-xl bg-card border border-border mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <BookOpen className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <Label htmlFor="include-my-recipes" className="text-sm font-medium cursor-pointer">
+                  {t('discover.includeMyRecipes', 'Include My Recipes')}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {t('discover.myRecipesCount', '{{count}} recipes uploaded', { count: userRecipes.length })}
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="include-my-recipes"
+              checked={includeMyRecipes}
+              onCheckedChange={setIncludeMyRecipes}
+            />
           </div>
         )}
 
@@ -247,15 +252,22 @@ export default function Discover() {
         {filteredRecipes.length === 0 && (
           <div className="text-center py-12">
             <p className="text-muted-foreground">{t('discover.noRecipes', 'No recipes found')}</p>
-            {showUserRecipes && (
+            {!includeMyRecipes && userRecipes.length > 0 && (
               <Button
                 variant="link"
-                onClick={() => navigate('/my-recipes')}
+                onClick={() => setIncludeMyRecipes(true)}
                 className="mt-2"
               >
-                {t('discover.addRecipes', 'Add your own recipes')}
+                {t('discover.enableMyRecipes', 'Enable "Include My Recipes" to see more')}
               </Button>
             )}
+            <Button
+              variant="link"
+              onClick={() => navigate('/my-recipes')}
+              className="mt-2"
+            >
+              {t('discover.addRecipes', 'Add your own recipes')}
+            </Button>
           </div>
         )}
       </div>

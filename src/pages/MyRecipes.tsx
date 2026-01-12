@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -51,45 +52,103 @@ const MyRecipes = () => {
   const [isUploading, setIsUploading] = useState(false);
 
   // Load existing uploads from database
+  const loadUploads = useCallback(async () => {
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from('uploads')
+      .select(`
+        id,
+        file_name,
+        file_type,
+        source_url,
+        status,
+        created_at,
+        upload_recipe_links(count)
+      `)
+      .eq('owner_user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error loading uploads:', error);
+      return;
+    }
+
+    if (data) {
+      setUploads(data.map(u => ({
+        id: u.id,
+        type: u.source_url ? 'link' : 'file',
+        name: u.file_name || new URL(u.source_url || 'https://unknown').hostname,
+        url: u.source_url || undefined,
+        fileType: u.file_type || undefined,
+        status: u.status as UploadedItem['status'],
+        createdAt: new Date(u.created_at || Date.now()),
+        recipeCount: (u.upload_recipe_links as any)?.[0]?.count || 0,
+      })));
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadUploads();
+  }, [loadUploads]);
+
+  // Subscribe to realtime updates for uploads
   useEffect(() => {
     if (!user) return;
 
-    const loadUploads = async () => {
-      const { data, error } = await supabase
-        .from('uploads')
-        .select(`
-          id,
-          file_name,
-          file_type,
-          source_url,
-          status,
-          created_at,
-          upload_recipe_links(count)
-        `)
-        .eq('owner_user_id', user.id)
-        .order('created_at', { ascending: false });
+    const channel = supabase
+      .channel('upload-status-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'uploads',
+          filter: `owner_user_id=eq.${user.id}`,
+        },
+        async (payload) => {
+          const updatedUpload = payload.new as any;
+          
+          // Get recipe count if parsed
+          let recipeCount = 0;
+          if (updatedUpload.status === 'parsed') {
+            const { data } = await supabase
+              .from('upload_recipe_links')
+              .select('count')
+              .eq('upload_id', updatedUpload.id);
+            recipeCount = (data as any)?.[0]?.count || 0;
+          }
 
-      if (error) {
-        console.error('Error loading uploads:', error);
-        return;
-      }
+          setUploads(prev => prev.map(u => 
+            u.id === updatedUpload.id 
+              ? { 
+                  ...u, 
+                  status: updatedUpload.status as UploadedItem['status'],
+                  recipeCount 
+                } 
+              : u
+          ));
 
-      if (data) {
-        setUploads(data.map(u => ({
-          id: u.id,
-          type: u.source_url ? 'link' : 'file',
-          name: u.file_name || new URL(u.source_url || 'https://unknown').hostname,
-          url: u.source_url || undefined,
-          fileType: u.file_type || undefined,
-          status: u.status as UploadedItem['status'],
-          createdAt: new Date(u.created_at || Date.now()),
-          recipeCount: (u.upload_recipe_links as any)?.[0]?.count || 0,
-        })));
-      }
+          // Show toast notification on status change
+          if (updatedUpload.status === 'parsed') {
+            toast.success(
+              t('myRecipes.recipeReady', `"${updatedUpload.file_name || 'Recipe'}" is ready to use!`),
+              { duration: 5000 }
+            );
+          } else if (updatedUpload.status === 'failed') {
+            toast.error(
+              t('myRecipes.parseFailed', `Failed to parse "${updatedUpload.file_name || 'file'}"`),
+              { duration: 5000 }
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
     };
-
-    loadUploads();
-  }, [user]);
+  }, [user, t]);
 
   const triggerParsing = async (uploadId: string, content?: string, sourceUrl?: string) => {
     try {
@@ -282,6 +341,11 @@ const MyRecipes = () => {
     }
   };
 
+  // Count items currently parsing
+  const parsingCount = uploads.filter(u => u.status === 'parsing').length;
+  const pendingCount = uploads.filter(u => u.status === 'pending').length;
+  const totalProcessing = parsingCount + pendingCount;
+
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
@@ -416,6 +480,26 @@ const MyRecipes = () => {
           className="hidden"
           onChange={handleFileSelect}
         />
+
+        {/* Processing Banner */}
+        {totalProcessing > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-4 rounded-xl bg-primary/10 border border-primary/20"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <Loader2 className="w-5 h-5 text-primary animate-spin" />
+              <p className="text-sm font-medium text-foreground">
+                {t('myRecipes.processing', 'Processing {{count}} item(s)...', { count: totalProcessing })}
+              </p>
+            </div>
+            <Progress value={parsingCount > 0 ? 50 : 10} className="h-2" />
+            <p className="text-xs text-muted-foreground mt-2">
+              {t('myRecipes.processingHint', "We'll notify you when your recipes are ready")}
+            </p>
+          </motion.div>
+        )}
 
         {/* Uploads List */}
         {uploads.length > 0 && (
