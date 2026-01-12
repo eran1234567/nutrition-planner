@@ -312,9 +312,13 @@ const resources = {
   },
 };
 
+const savedLng = typeof window !== 'undefined'
+  ? window.localStorage.getItem('i18nextLng')
+  : null;
+
 i18n.use(initReactI18next).init({
   resources,
-  lng: 'en',
+  lng: savedLng || 'en',
   fallbackLng: 'en',
   interpolation: {
     escapeValue: false,
