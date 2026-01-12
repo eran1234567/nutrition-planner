@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, Lock, Eye, EyeOff, Loader2, ChefHat, AlertCircle } from 'lucide-react';
@@ -16,9 +16,12 @@ const Auth = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { signIn, signUp, isAuthenticated, isLoading: authLoading } = useAuth();
   
-  const [isSignUp, setIsSignUp] = useState(false);
+  // Check URL param for mode
+  const modeParam = searchParams.get('mode');
+  const [isSignUp, setIsSignUp] = useState(modeParam === 'signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -77,8 +80,8 @@ const Auth = () => {
             setError(error.message);
           }
         } else {
-          // Navigate to onboarding after successful signup
-          navigate('/onboarding', { replace: true });
+          // Navigate to recipe upload page after successful signup
+          navigate('/my-recipes', { replace: true });
         }
       } else {
         const { error } = await signIn(email, password);

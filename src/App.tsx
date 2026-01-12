@@ -14,6 +14,7 @@ import RecipeDetail from "./pages/RecipeDetail";
 import Settings from "./pages/Settings";
 import Plan from "./pages/Plan";
 import Grocery from "./pages/Grocery";
+import MyRecipes from "./pages/MyRecipes";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +35,11 @@ const App = () => (
           
           {/* Protected routes */}
           <Route path="/discover" element={<Discover />} />
+          <Route path="/my-recipes" element={
+            <ProtectedRoute>
+              <MyRecipes />
+            </ProtectedRoute>
+          } />
           <Route path="/recipes" element={
             <ProtectedRoute>
               <Recipes />
