@@ -1,12 +1,15 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Check } from 'lucide-react';
+import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { seedRecipes } from '@/data/seedRecipes';
 import { useAppStore } from '@/stores/appStore';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
+import type { Recipe } from '@/types';
 
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -14,7 +17,51 @@ export default function RecipeDetail() {
   const { t } = useTranslation();
   const { selectedMeals, addSelectedMeal, removeSelectedMeal } = useAppStore();
 
-  const recipe = seedRecipes.find(r => r.id === id);
+  // First try to find in seed recipes
+  const seedRecipe = seedRecipes.find(r => r.id === id);
+
+  // If not in seed recipes, fetch from database
+  const { data: dbRecipe, isLoading } = useQuery({
+    queryKey: ['recipe', id],
+    queryFn: async () => {
+      if (!id) return null;
+      
+      const { data: recipeData, error: recipeError } = await supabase
+        .from('recipes')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (recipeError || !recipeData) return null;
+
+      // Fetch related data
+      const [ingredientsRes, stepsRes, nutritionRes, tagsRes] = await Promise.all([
+        supabase.from('recipe_ingredients').select('*').eq('recipe_id', id).order('order_index'),
+        supabase.from('recipe_steps').select('*').eq('recipe_id', id).order('step_number'),
+        supabase.from('recipe_nutrition').select('*').eq('recipe_id', id).single(),
+        supabase.from('recipe_tags').select('*').eq('recipe_id', id),
+      ]);
+
+      return {
+        ...recipeData,
+        ingredients: ingredientsRes.data || [],
+        steps: stepsRes.data || [],
+        nutrition: nutritionRes.data,
+        tags: tagsRes.data || [],
+      } as Recipe;
+    },
+    enabled: !seedRecipe && !!id,
+  });
+
+  const recipe = seedRecipe || dbRecipe;
+
+  if (isLoading && !seedRecipe) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (!recipe) {
     return (
