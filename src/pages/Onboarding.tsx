@@ -175,7 +175,7 @@ const Onboarding = () => {
             <div>
               <label className="text-sm font-medium text-foreground mb-3 block">Allergies</label>
               <div className="flex flex-wrap gap-2">
-                {['Dairy', 'Eggs', 'Gluten', 'Nuts', 'Peanuts', 'Shellfish', 'Soy', 'Fish'].map(allergy => (
+                {['Dairy', 'Eggs', 'Gluten', 'Nuts', 'Peanuts', 'Shellfish', 'Soy', 'Fish', 'Beef', 'Chicken', 'Veal', 'Pork', 'Seafood'].map(allergy => (
                   <Chip
                     key={allergy}
                     selected={formData.allergies.includes(allergy)}
@@ -189,7 +189,7 @@ const Onboarding = () => {
             <div>
               <label className="text-sm font-medium text-foreground mb-3 block">Dislikes</label>
               <div className="flex flex-wrap gap-2">
-                {['Spicy', 'Cilantro', 'Mushrooms', 'Onions', 'Olives', 'Tomatoes', 'Seafood'].map(dislike => (
+                {['Spicy', 'Cilantro', 'Mushrooms', 'Onions', 'Olives', 'Tomatoes', 'Beef', 'Chicken', 'Veal', 'Pork', 'Seafood', 'Eggs', 'Dairy'].map(dislike => (
                   <Chip
                     key={dislike}
                     selected={formData.dislikes.includes(dislike)}
