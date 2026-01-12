@@ -11,13 +11,21 @@ import {
   Heart,
   ChefHat,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  Upload
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
 
 const settingsItems = [
+  {
+    id: 'myRecipes',
+    icon: Upload,
+    labelKey: 'settings.myRecipes',
+    descKey: 'settings.myRecipesDesc',
+    path: '/my-recipes',
+  },
   {
     id: 'profile',
     icon: User,
@@ -74,8 +82,12 @@ export default function Settings() {
   const { t } = useTranslation();
   const { signOut, user } = useAuth();
 
-  const handleEditSection = (step: number) => {
-    navigate('/onboarding', { state: { editMode: true, startStep: step } });
+  const handleEditSection = (item: typeof settingsItems[0]) => {
+    if (item.path) {
+      navigate(item.path);
+    } else if (item.step !== undefined) {
+      navigate('/onboarding', { state: { editMode: true, startStep: item.step } });
+    }
   };
 
   const handleSignOut = async () => {
@@ -120,7 +132,7 @@ export default function Settings() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
-              onClick={() => handleEditSection(item.step)}
+              onClick={() => handleEditSection(item)}
               className="w-full flex items-center gap-4 p-4 bg-card rounded-xl hover:bg-card/80 transition-colors text-left"
             >
               <div className="w-10 h-10 rounded-lg bg-primary-soft flex items-center justify-center">

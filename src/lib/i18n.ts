@@ -36,6 +36,8 @@ const resources = {
         medicalDesc: 'Medical dietary needs',
         cuisine: 'Cuisine & Cooking',
         cuisineDesc: 'Preferred cuisines and budget',
+        myRecipes: 'My Recipe Sources',
+        myRecipesDesc: 'Upload photos, files, and links',
         signOut: 'Sign Out',
         manageAccount: 'Manage your account',
       },
