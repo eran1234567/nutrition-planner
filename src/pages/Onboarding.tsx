@@ -9,12 +9,12 @@ import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/input';
 import i18n from '@/lib/i18n';
 const STEPS = [
-  { id: 'locale', icon: Globe, title: 'Language & Units' },
-  { id: 'profile', icon: User, title: 'Your Profile' },
-  { id: 'diet', icon: Utensils, title: 'Diet Preferences' },
-  { id: 'goals', icon: Target, title: 'Your Goals' },
-  { id: 'medical', icon: Heart, title: 'Health Considerations' },
-  { id: 'cuisine', icon: ChefHat, title: 'Cuisine & Budget' },
+  { id: 'locale', icon: Globe, titleKey: 'onboarding.settings.title' },
+  { id: 'profile', icon: User, titleKey: 'onboarding.profile.title' },
+  { id: 'diet', icon: Utensils, titleKey: 'onboarding.diet.title' },
+  { id: 'goals', icon: Target, titleKey: 'onboarding.macros.title' },
+  { id: 'medical', icon: Heart, titleKey: 'onboarding.medical.title' },
+  { id: 'cuisine', icon: ChefHat, titleKey: 'onboarding.cuisine.title' },
 ];
 
 const Onboarding = () => {
@@ -23,9 +23,9 @@ const Onboarding = () => {
   const [currentStep, setCurrentStep] = useState(0);
   
   // Form state
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(() => ({
     units: 'imperial' as 'imperial' | 'metric',
-    language: 'en',
+    language: i18n.language || 'en',
     displayName: '',
     age: '',
     dietType: 'none',
@@ -44,7 +44,7 @@ const Onboarding = () => {
     cuisines: [] as string[],
     budgetLevel: 'medium',
     maxCookTime: 45,
-  });
+  }));
 
   // Custom input state
   const [customAllergy, setCustomAllergy] = useState('');
@@ -100,7 +100,7 @@ const Onboarding = () => {
         return (
           <div className="space-y-6">
             <div>
-              <label className="text-sm font-medium text-foreground mb-3 block">Units</label>
+              <label className="text-sm font-medium text-foreground mb-3 block">{t('onboarding.settings.units', 'Units')}</label>
               <div className="grid grid-cols-2 gap-3">
                 {(['imperial', 'metric'] as const).map(unit => (
                   <button
@@ -122,7 +122,7 @@ const Onboarding = () => {
               </div>
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground mb-3 block">Language</label>
+              <label className="text-sm font-medium text-foreground mb-3 block">{t('onboarding.settings.language', 'Language')}</label>
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { code: 'en', label: 'English', flag: '🇺🇸' },
@@ -134,6 +134,7 @@ const Onboarding = () => {
                     key={lang.code}
                     onClick={() => {
                       setFormData(prev => ({ ...prev, language: lang.code }));
+                      window.localStorage.setItem('i18nextLng', lang.code);
                       i18n.changeLanguage(lang.code);
                     }}
                     className={`p-4 rounded-xl border-2 transition-all ${
@@ -501,13 +502,17 @@ const Onboarding = () => {
               <ChevronLeft className="w-6 h-6" />
             </button>
             <span className="text-sm text-muted-foreground">
-              Step {currentStep + 1} of {STEPS.length}
+              {t('onboarding.step', {
+                current: currentStep + 1,
+                total: STEPS.length,
+                defaultValue: `Step ${currentStep + 1} of ${STEPS.length}`,
+              })}
             </span>
             <button
               onClick={() => navigate('/discover')}
               className="text-sm text-muted-foreground"
             >
-              Skip
+              {t('common.skip', 'Skip')}
             </button>
           </div>
           <Progress value={progress} className="h-1" />
@@ -515,7 +520,7 @@ const Onboarding = () => {
       </div>
 
       {/* Content */}
-      <div className="px-6 py-6">
+      <div className="px-6 py-6 pb-28">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentStep}
@@ -533,9 +538,9 @@ const Onboarding = () => {
                   </div>
                 );
               })()}
-              <h1 className="text-2xl font-bold text-foreground">
-                {STEPS[currentStep].title}
-              </h1>
+               <h1 className="text-2xl font-bold text-foreground">
+                 {t(STEPS[currentStep].titleKey)}
+               </h1>
             </div>
             {renderStep()}
           </motion.div>
@@ -552,11 +557,11 @@ const Onboarding = () => {
           {currentStep === STEPS.length - 1 ? (
             <>
               <Check className="w-5 h-5 mr-2" />
-              Complete Setup
+              {t('onboarding.complete.startPlanning', 'Complete Setup')}
             </>
           ) : (
             <>
-              Continue
+              {t('common.continue', 'Continue')}
               <ChevronRight className="w-5 h-5 ml-2" />
             </>
           )}
