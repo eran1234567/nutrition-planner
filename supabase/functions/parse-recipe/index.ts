@@ -25,7 +25,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { uploadId, content, sourceUrl, fileType } = await req.json();
+    const { uploadId, content, sourceUrl, fileType, isImage } = await req.json();
 
     if (!uploadId) {
       return new Response(
@@ -34,15 +34,15 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Processing upload ${uploadId}, type: ${fileType}`);
+    console.log(`Processing upload ${uploadId}, type: ${fileType}, isImage: ${isImage}`);
 
     // Update status to parsing
     await supabase.from('uploads').update({ status: 'parsing' }).eq('id', uploadId);
 
     // Build the prompt based on content type
-    let prompt = `You are a recipe extraction expert. Extract recipe information from the following content and return it as JSON.
-
-The JSON should have this structure:
+    const systemPrompt = 'You are a recipe extraction AI. Always respond with valid JSON only, no markdown or explanation.';
+    
+    const jsonFormat = `The JSON should have this structure:
 {
   "recipes": [
     {
@@ -72,12 +72,49 @@ The JSON should have this structure:
   ]
 }
 
-If you cannot find recipe information, return: { "recipes": [], "error": "Could not extract recipe information" }
+If you cannot find recipe information, return: { "recipes": [], "error": "Could not extract recipe information" }`;
+
+    // Build messages based on whether we have an image or text
+    let messages: any[] = [];
+    
+    if (isImage && content && content.startsWith('data:image/')) {
+      // For images, use vision capabilities with multimodal message
+      messages = [
+        { role: 'system', content: systemPrompt },
+        { 
+          role: 'user', 
+          content: [
+            {
+              type: 'image_url',
+              image_url: {
+                url: content
+              }
+            },
+            {
+              type: 'text',
+              text: `Extract all recipe information from this image. Look for the recipe title, ingredients list, cooking instructions, and any other details. ${jsonFormat}`
+            }
+          ]
+        }
+      ];
+    } else {
+      // For text content
+      const prompt = `Extract recipe information from the following content and return it as JSON.
+
+${jsonFormat}
 
 Content to analyze:
 ${content || sourceUrl || 'No content provided'}`;
+      
+      messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt }
+      ];
+    }
 
-    // Call Lovable AI
+    // Call Lovable AI - use gemini-2.5-pro for images (better vision) or flash for text
+    const model = isImage ? 'google/gemini-2.5-pro' : 'google/gemini-2.5-flash';
+    
     const aiResponse = await fetch(LOVABLE_API_URL, {
       method: 'POST',
       headers: {
@@ -85,11 +122,8 @@ ${content || sourceUrl || 'No content provided'}`;
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: 'You are a recipe extraction AI. Always respond with valid JSON only, no markdown or explanation.' },
-          { role: 'user', content: prompt }
-        ],
+        model,
+        messages,
         temperature: 0.3,
       }),
     });

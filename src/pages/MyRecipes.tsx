@@ -150,7 +150,7 @@ const MyRecipes = () => {
     };
   }, [user, t]);
 
-  const triggerParsing = async (uploadId: string, content?: string, sourceUrl?: string) => {
+  const triggerParsing = async (uploadId: string, content?: string, sourceUrl?: string, isImage?: boolean) => {
     try {
       // Update local state to show parsing
       setUploads(prev => prev.map(u => 
@@ -161,7 +161,8 @@ const MyRecipes = () => {
         body: { 
           uploadId, 
           content: content || sourceUrl,
-          sourceUrl 
+          sourceUrl,
+          isImage: isImage || false
         },
       });
 
@@ -200,14 +201,24 @@ const MyRecipes = () => {
     setIsUploading(true);
     
     for (const file of Array.from(files)) {
-      // Read file content for text-based files
+      // Read file content
       let fileContent = '';
-      if (file.type.startsWith('text/') || file.type === 'application/json') {
+      const isImage = file.type.startsWith('image/');
+      
+      if (isImage) {
+        // Convert image to base64 for AI processing
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result as string;
+            resolve(result);
+          };
+          reader.readAsDataURL(file);
+        });
+        fileContent = base64;
+      } else if (file.type.startsWith('text/') || file.type === 'application/json') {
         fileContent = await file.text();
       }
-      
-      // For images, we'll pass along that it's an image (AI can handle base64 in future)
-      const isImage = file.type.startsWith('image/');
       
       // Save to database
       if (user) {
@@ -234,12 +245,9 @@ const MyRecipes = () => {
           setUploads(prev => [newUpload, ...prev]);
           toast.success(t('myRecipes.uploadSuccess', 'File added successfully'));
 
-          // Trigger parsing for text files immediately
-          if (fileContent || isImage) {
-            const content = isImage 
-              ? `[Image file: ${file.name}] - This is a photo/screenshot of a recipe. Please extract the recipe information.`
-              : fileContent;
-            await triggerParsing(uploadData.id, content);
+          // Trigger parsing immediately with actual content
+          if (fileContent) {
+            await triggerParsing(uploadData.id, fileContent, undefined, isImage);
           }
         } catch (error) {
           toast.error(t('myRecipes.uploadError', 'Failed to save file'));
