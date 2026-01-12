@@ -2,11 +2,13 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { ChefHat, Salad, Calendar, ShoppingCart, Sparkles } from 'lucide-react';
+import { ChefHat, Salad, Calendar, ShoppingCart, Sparkles, LogIn, LogOut } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
 const Index = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { isAuthenticated, signOut, isLoading } = useAuth();
 
   const features = [
     { icon: Salad, label: 'Smart Recommendations', desc: 'Personalized meal suggestions' },
@@ -14,8 +16,39 @@ const Index = () => {
     { icon: ShoppingCart, label: 'Grocery Lists', desc: 'Auto-generated shopping' },
   ];
 
+  const handleSignOut = async () => {
+    await signOut();
+  };
+
   return (
     <div className="min-h-screen gradient-hero">
+      {/* Top auth button */}
+      <div className="absolute top-4 right-4">
+        {!isLoading && (
+          isAuthenticated ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSignOut}
+              className="gap-2"
+            >
+              <LogOut className="w-4 h-4" />
+              {t('auth.signOut', 'Sign Out')}
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/auth')}
+              className="gap-2"
+            >
+              <LogIn className="w-4 h-4" />
+              {t('auth.signIn', 'Sign In')}
+            </Button>
+          )
+        )}
+      </div>
+
       <div className="page-container flex flex-col items-center justify-center min-h-screen text-center px-6">
         {/* Hero */}
         <motion.div
@@ -69,7 +102,7 @@ const Index = () => {
           className="w-full max-w-sm space-y-3"
         >
           <Button
-            onClick={() => navigate('/onboarding')}
+            onClick={() => navigate(isAuthenticated ? '/onboarding' : '/auth')}
             className="w-full h-14 text-lg font-semibold gradient-primary hover:opacity-90 transition-opacity"
             size="lg"
           >
@@ -78,7 +111,7 @@ const Index = () => {
           </Button>
           <Button
             variant="ghost"
-            onClick={() => navigate('/discover')}
+            onClick={() => navigate(isAuthenticated ? '/discover' : '/auth')}
             className="w-full"
           >
             Browse recipes first
