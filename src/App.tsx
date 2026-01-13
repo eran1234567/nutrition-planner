@@ -34,7 +34,11 @@ const App = () => (
           <Route path="/onboarding" element={<Onboarding />} />
           
           {/* Protected routes */}
+          {/* Public recipe browsing */}
           <Route path="/discover" element={<Discover />} />
+          <Route path="/recipe/:id" element={<RecipeDetail />} />
+          
+          {/* Protected routes */}
           <Route path="/my-recipes" element={
             <ProtectedRoute>
               <MyRecipes />
@@ -43,11 +47,6 @@ const App = () => (
           <Route path="/recipes" element={
             <ProtectedRoute>
               <Recipes />
-            </ProtectedRoute>
-          } />
-          <Route path="/recipe/:id" element={
-            <ProtectedRoute>
-              <RecipeDetail />
             </ProtectedRoute>
           } />
           <Route path="/settings" element={

@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, ShoppingCart, ListChecks } from 'lucide-react';
+import { Plus, ShoppingCart, ListChecks, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { StickyActions } from '@/components/ui/StickyActions';
+import { NutritionGoalsModal } from '@/components/plan/NutritionGoalsModal';
 import { useAppStore } from '@/stores/appStore';
 import { useUserData } from '@/hooks/useUserData';
 import { useNavigate } from 'react-router-dom';
@@ -126,6 +127,7 @@ export default function Plan() {
   const { selectedMeals, onboardingState } = useAppStore();
   const { preferences } = useUserData();
   const [selectedDay, setSelectedDay] = useState(0);
+  const [showGoalsModal, setShowGoalsModal] = useState(false);
 
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -177,7 +179,14 @@ export default function Plan() {
   return (
     <div className="min-h-screen bg-background pb-40">
       <div className="page-container">
-        <PageHeader title={t('plan.weeklyPlan')} />
+        <PageHeader 
+          title={t('plan.weeklyPlan')} 
+          rightAction={
+            <Button variant="ghost" size="icon" onClick={() => setShowGoalsModal(true)}>
+              <Settings className="w-5 h-5" />
+            </Button>
+          }
+        />
 
         {/* Day Selector */}
         <div className="flex gap-1 overflow-x-auto scrollbar-hide pb-4 -mx-1 px-1">
@@ -296,6 +305,11 @@ export default function Plan() {
       </StickyActions>
 
       <BottomNav />
+      
+      <NutritionGoalsModal 
+        open={showGoalsModal} 
+        onOpenChange={setShowGoalsModal} 
+      />
     </div>
   );
 }

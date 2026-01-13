@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { ChevronLeft, ChevronRight, Check, User, Utensils, Target, Heart, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, User, Utensils, Heart, Plus } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/input';
 import i18n from '@/lib/i18n';
@@ -16,7 +16,6 @@ import { toast } from 'sonner';
 const STEPS = [
   { id: 'profile', icon: User, titleKey: 'onboarding.profile.title' },
   { id: 'diet', icon: Utensils, titleKey: 'onboarding.diet.title' },
-  { id: 'goals', icon: Target, titleKey: 'onboarding.macros.title' },
   { id: 'medical', icon: Heart, titleKey: 'onboarding.medical.title' },
 ];
 
@@ -373,76 +372,6 @@ const Onboarding = () => {
             </div>
           </div>
         );
-
-      case 'goals':
-        return (
-          <div className="space-y-6">
-            <p className="text-sm text-muted-foreground">
-              {t('onboarding.macros.hint', 'Optional: Set daily macro targets. Leave blank for balanced recommendations.')}
-            </p>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">{t('onboarding.macros.calories', 'Calories')}</label>
-                <input
-                  type="number"
-                  value={formData.calorieTarget}
-                  onChange={(e) => setFormData(prev => ({ ...prev, calorieTarget: e.target.value }))}
-                  placeholder="e.g. 2000"
-                  className="w-full h-12 px-3 rounded-xl border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">{t('onboarding.macros.protein', 'Protein')} (g)</label>
-                <input
-                  type="number"
-                  value={formData.proteinTarget}
-                  onChange={(e) => setFormData(prev => ({ ...prev, proteinTarget: e.target.value }))}
-                  placeholder="e.g. 120"
-                  className="w-full h-12 px-3 rounded-xl border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">{t('onboarding.macros.carbs', 'Carbs')} (g)</label>
-                <input
-                  type="number"
-                  value={formData.carbsTarget}
-                  onChange={(e) => setFormData(prev => ({ ...prev, carbsTarget: e.target.value }))}
-                  placeholder="e.g. 250"
-                  className="w-full h-12 px-3 rounded-xl border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">{t('onboarding.macros.fat', 'Fat')} (g)</label>
-                <input
-                  type="number"
-                  value={formData.fatTarget}
-                  onChange={(e) => setFormData(prev => ({ ...prev, fatTarget: e.target.value }))}
-                  placeholder="e.g. 65"
-                  className="w-full h-12 px-3 rounded-xl border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-foreground mb-3 block">{t('onboarding.macros.mealsPerDay', 'Meals per Day')}</label>
-              <div className="flex gap-2">
-                {[1, 2, 3, 4, 5, 6].map(num => (
-                  <button
-                    key={num}
-                    onClick={() => setFormData(prev => ({ ...prev, mealsPerDay: num }))}
-                    className={`flex-1 h-12 rounded-xl border-2 font-semibold transition-all ${
-                      formData.mealsPerDay === num
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-border bg-card'
-                    }`}
-                  >
-                    {num}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
-
       case 'medical':
         return (
           <div className="space-y-6">
