@@ -14,6 +14,7 @@ import { useGlobalRecipes } from '@/hooks/useGlobalRecipes';
 import { useAppStore } from '@/stores/appStore';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserData } from '@/hooks/useUserData';
 import { supabase } from '@/integrations/supabase/client';
 
 const timeFilters = [
@@ -42,6 +43,10 @@ interface UserRecipe {
     carbs_g: number | null;
     fat_g: number | null;
   };
+  ingredients: Array<{
+    name: string;
+    normalized_name: string | null;
+  }>;
   tags: { tag_type: string; tag_value: string }[];
   isUserRecipe: boolean;
 }
@@ -50,6 +55,7 @@ export default function Discover() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
+  const { preferences } = useUserData();
   const { selectedMeals, addSelectedMeal, removeSelectedMeal } = useAppStore();
   
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,6 +63,16 @@ export default function Discover() {
   const [selectedMealType, setSelectedMealType] = useState<string | null>(null);
   const [userRecipes, setUserRecipes] = useState<UserRecipe[]>([]);
   const [recipeSource, setRecipeSource] = useState<'all' | 'my' | 'app'>('all');
+
+  // Get user allergies and dislikes for filtering
+  const userAllergies = useMemo(() => 
+    (preferences?.allergies || []).map(a => a.toLowerCase()),
+    [preferences?.allergies]
+  );
+  const userDislikes = useMemo(() => 
+    (preferences?.dislikes || []).map(d => d.toLowerCase()),
+    [preferences?.dislikes]
+  );
 
   // Fetch global recipes from database
   const { data: globalRecipes = [], isLoading: isLoadingGlobal } = useGlobalRecipes();
@@ -80,6 +96,7 @@ export default function Discover() {
           difficulty,
           cuisine,
           recipe_nutrition(calories, protein_g, carbs_g, fat_g),
+          recipe_ingredients(name, normalized_name),
           recipe_tags(tag_type, tag_value)
         `)
         .eq('owner_user_id', user.id)
@@ -104,6 +121,7 @@ export default function Discover() {
           difficulty: r.difficulty,
           cuisine: r.cuisine,
           nutrition: r.recipe_nutrition?.[0] || undefined,
+          ingredients: r.recipe_ingredients || [],
           tags: r.recipe_tags || [],
           isUserRecipe: true,
         })));
@@ -147,9 +165,31 @@ export default function Discover() {
         return false;
       }
 
+      // Filter based on user allergies and dislikes (only for global/app recipes, not user's own)
+      if (!recipe.isUserRecipe && (userAllergies.length > 0 || userDislikes.length > 0)) {
+        const titleLower = recipe.title.toLowerCase();
+        
+        // Get all ingredient names (use normalized_name if available, fallback to name)
+        const ingredientNames = (recipe.ingredients || []).map(ing => 
+          (ing.normalized_name || ing.name || '').toLowerCase()
+        );
+
+        // Check if recipe contains any allergens
+        for (const allergen of userAllergies) {
+          if (titleLower.includes(allergen)) return false;
+          if (ingredientNames.some(name => name.includes(allergen))) return false;
+        }
+
+        // Check if recipe contains any disliked ingredients
+        for (const dislike of userDislikes) {
+          if (titleLower.includes(dislike)) return false;
+          if (ingredientNames.some(name => name.includes(dislike))) return false;
+        }
+      }
+
       return true;
     });
-  }, [allRecipes, searchQuery, selectedTime, selectedMealType]);
+  }, [allRecipes, searchQuery, selectedTime, selectedMealType, userAllergies, userDislikes]);
 
   const isSelected = (recipeId: string) => selectedMeals.some(r => r.id === recipeId);
 
