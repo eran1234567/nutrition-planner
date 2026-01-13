@@ -1054,11 +1054,10 @@ serve(async (req) => {
     
     for (const recipe of seedRecipes) {
       try {
-        // Insert recipe (use the seed-X id to make it deterministic)
+        // Insert recipe (let database generate UUID)
         const { data: recipeData, error: recipeError } = await supabase
           .from('recipes')
           .insert({
-            id: recipe.id,
             title: recipe.title,
             description: recipe.description,
             servings: recipe.servings,

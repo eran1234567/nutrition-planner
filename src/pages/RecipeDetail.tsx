@@ -7,10 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { RecipeEditor } from '@/components/recipe/RecipeEditor';
-import { seedRecipes } from '@/data/seedRecipes';
+import { useRecipeById } from '@/hooks/useGlobalRecipes';
 import { useAppStore } from '@/stores/appStore';
-import { supabase } from '@/integrations/supabase/client';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/hooks/useAuth';
 import type { Recipe } from '@/types';
 
 export default function RecipeDetail() {
@@ -18,49 +18,17 @@ export default function RecipeDetail() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { selectedMeals, addSelectedMeal, removeSelectedMeal } = useAppStore();
   const [isEditing, setIsEditing] = useState(false);
 
-  // First try to find in seed recipes
-  const seedRecipe = seedRecipes.find(r => r.id === id);
+  // Fetch recipe from database (works for both global and user recipes)
+  const { data: recipe, isLoading } = useRecipeById(id);
 
-  // If not in seed recipes, fetch from database
-  const { data: dbRecipe, isLoading } = useQuery({
-    queryKey: ['recipe', id],
-    queryFn: async () => {
-      if (!id) return null;
-      
-      const { data: recipeData, error: recipeError } = await supabase
-        .from('recipes')
-        .select('*')
-        .eq('id', id)
-        .single();
-      
-      if (recipeError || !recipeData) return null;
+  // Determine if this is the user's own recipe (editable)
+  const isUserRecipe = recipe?.owner_user_id === user?.id;
 
-      // Fetch related data
-      const [ingredientsRes, stepsRes, nutritionRes, tagsRes] = await Promise.all([
-        supabase.from('recipe_ingredients').select('*').eq('recipe_id', id).order('order_index'),
-        supabase.from('recipe_steps').select('*').eq('recipe_id', id).order('step_number'),
-        supabase.from('recipe_nutrition').select('*').eq('recipe_id', id).single(),
-        supabase.from('recipe_tags').select('*').eq('recipe_id', id),
-      ]);
-
-      return {
-        ...recipeData,
-        ingredients: ingredientsRes.data || [],
-        steps: stepsRes.data || [],
-        nutrition: nutritionRes.data,
-        tags: tagsRes.data || [],
-      } as Recipe;
-    },
-    enabled: !seedRecipe && !!id,
-  });
-
-  const recipe = seedRecipe || dbRecipe;
-  const isUserRecipe = !seedRecipe && !!dbRecipe;
-
-  if (isLoading && !seedRecipe) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -101,7 +69,7 @@ export default function RecipeDetail() {
       {/* Hero Image */}
       <div className="relative h-72 overflow-hidden">
         <img
-          src={recipe.image_url}
+          src={recipe.image_url || '/placeholder.svg'}
           alt={recipe.title}
           className="w-full h-full object-cover"
         />
@@ -223,9 +191,9 @@ export default function RecipeDetail() {
           )}
 
           {/* Editable content or read-only */}
-          {isEditing && dbRecipe ? (
+          {isEditing && recipe ? (
             <RecipeEditor
-              recipe={dbRecipe}
+              recipe={recipe as Recipe}
               onSave={handleSaveEdit}
               onCancel={() => setIsEditing(false)}
             />
