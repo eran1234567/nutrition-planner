@@ -473,7 +473,7 @@ const Onboarding = () => {
                   { key: 'diabetesFriendly', labelKey: 'onboarding.medical.diabetes', descKey: 'onboarding.medical.diabetesDesc' },
                   { key: 'kidneyFriendly', labelKey: 'onboarding.medical.kidney', descKey: 'onboarding.medical.kidneyDesc' },
                   { key: 'heartHealthy', labelKey: 'onboarding.medical.heart', descKey: 'onboarding.medical.heartDesc' },
-                  { key: 'lowSodium', labelKey: 'onboarding.medical.sodium', descKey: 'onboarding.medical.sodiumDesc' },
+                  { key: 'lowSodium', labelKey: 'onboarding.medical.lowSodium', descKey: 'onboarding.medical.lowSodiumDesc' },
                 ].map(option => (
                   <label
                     key={option.key}
