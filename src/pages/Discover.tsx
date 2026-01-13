@@ -64,19 +64,37 @@ export default function Discover() {
   const [userRecipes, setUserRecipes] = useState<UserRecipe[]>([]);
   const [recipeSource, setRecipeSource] = useState<'all' | 'my' | 'app'>('all');
 
-  // Get user allergies and dislikes for filtering
-  const userAllergies = useMemo(() => 
-    (preferences?.allergies || []).map(a => a.toLowerCase()),
-    [preferences?.allergies]
-  );
-  const userDislikes = useMemo(() => 
-    (preferences?.dislikes || []).map(d => d.toLowerCase()),
-    [preferences?.dislikes]
-  );
+  // Get user allergies + dislikes for filtering
+  // Note: we expand simple singular/plural variants (e.g., "eggs" -> "egg") to catch common cases.
+  const blockedTerms = useMemo(() => {
+    const normalize = (v: string) => v.trim().toLowerCase();
+
+    const base = [...(preferences?.allergies ?? []), ...(preferences?.dislikes ?? [])]
+      .filter(Boolean)
+      .map(normalize)
+      .filter(Boolean);
+
+    const expanded = base.flatMap((term) => {
+      const variants = new Set<string>();
+      variants.add(term);
+
+      // naive singular/plural handling
+      if (term.endsWith('s') && term.length > 1) variants.add(term.slice(0, -1));
+      else variants.add(`${term}s`);
+
+      return Array.from(variants);
+    });
+
+    return Array.from(new Set(expanded)).filter(Boolean);
+  }, [preferences?.allergies, preferences?.dislikes]);
+
+  // Debug: confirm preferences are present and the terms we're filtering
+  useEffect(() => {
+    console.log('[Discover] blockedTerms:', blockedTerms);
+  }, [blockedTerms]);
 
   // Fetch global recipes from database
   const { data: globalRecipes = [], isLoading: isLoadingGlobal } = useGlobalRecipes();
-
   // Load user's recipes from database
   useEffect(() => {
     if (!user) return;
@@ -166,30 +184,25 @@ export default function Discover() {
       }
 
       // Filter based on user allergies and dislikes (only for global/app recipes, not user's own)
-      if (!recipe.isUserRecipe && (userAllergies.length > 0 || userDislikes.length > 0)) {
+      if (!recipe.isUserRecipe && blockedTerms.length > 0) {
         const titleLower = recipe.title.toLowerCase();
-        
+
         // Get all ingredient names (use normalized_name if available, fallback to name)
-        const ingredientNames = (recipe.ingredients || []).map(ing => 
+        const ingredientNames = (recipe.ingredients || []).map((ing) =>
           (ing.normalized_name || ing.name || '').toLowerCase()
         );
 
-        // Check if recipe contains any allergens
-        for (const allergen of userAllergies) {
-          if (titleLower.includes(allergen)) return false;
-          if (ingredientNames.some(name => name.includes(allergen))) return false;
-        }
+        const matchesBlocked = (text: string) => blockedTerms.some((term) => text.includes(term));
+        const matchesBlockedIngredients = () =>
+          blockedTerms.some((term) => ingredientNames.some((name) => name.includes(term)));
 
-        // Check if recipe contains any disliked ingredients
-        for (const dislike of userDislikes) {
-          if (titleLower.includes(dislike)) return false;
-          if (ingredientNames.some(name => name.includes(dislike))) return false;
-        }
+        if (matchesBlocked(titleLower)) return false;
+        if (matchesBlockedIngredients()) return false;
       }
 
       return true;
     });
-  }, [allRecipes, searchQuery, selectedTime, selectedMealType, userAllergies, userDislikes]);
+  }, [allRecipes, searchQuery, selectedTime, selectedMealType, blockedTerms]);
 
   const isSelected = (recipeId: string) => selectedMeals.some(r => r.id === recipeId);
 
