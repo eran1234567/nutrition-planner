@@ -1,21 +1,25 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Check, Loader2 } from 'lucide-react';
+import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Check, Loader2, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BottomNav } from '@/components/layout/BottomNav';
+import { RecipeEditor } from '@/components/recipe/RecipeEditor';
 import { seedRecipes } from '@/data/seedRecipes';
 import { useAppStore } from '@/stores/appStore';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Recipe } from '@/types';
 
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const { selectedMeals, addSelectedMeal, removeSelectedMeal } = useAppStore();
+  const [isEditing, setIsEditing] = useState(false);
 
   // First try to find in seed recipes
   const seedRecipe = seedRecipes.find(r => r.id === id);
@@ -54,6 +58,7 @@ export default function RecipeDetail() {
   });
 
   const recipe = seedRecipe || dbRecipe;
+  const isUserRecipe = !seedRecipe && !!dbRecipe;
 
   if (isLoading && !seedRecipe) {
     return (
@@ -84,6 +89,11 @@ export default function RecipeDetail() {
     }
   };
 
+  const handleSaveEdit = (updatedRecipe: Recipe) => {
+    queryClient.setQueryData(['recipe', id], updatedRecipe);
+    setIsEditing(false);
+  };
+
   const nutrition = recipe.nutrition;
 
   return (
@@ -105,17 +115,27 @@ export default function RecipeDetail() {
           <ArrowLeft className="w-5 h-5" />
         </button>
 
-        {/* Add to plan button */}
-        <button
-          onClick={handleToggleSelect}
-          className={`absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-            isSelected
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-card/90 backdrop-blur text-foreground'
-          }`}
-        >
-          {isSelected ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-        </button>
+        {/* Edit and Add buttons */}
+        <div className="absolute top-4 right-4 flex gap-2">
+          {isUserRecipe && !isEditing && (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="w-10 h-10 rounded-full bg-card/90 backdrop-blur flex items-center justify-center"
+            >
+              <Pencil className="w-5 h-5" />
+            </button>
+          )}
+          <button
+            onClick={handleToggleSelect}
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+              isSelected
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-card/90 backdrop-blur text-foreground'
+            }`}
+          >
+            {isSelected ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+          </button>
+        </div>
       </div>
 
       <div className="page-container -mt-8 relative z-10">
@@ -202,59 +222,70 @@ export default function RecipeDetail() {
             </div>
           )}
 
-          {/* Ingredients */}
-          <div className="mb-6">
-            <h3 className="text-sm font-semibold mb-3">{t('recipes.ingredients')}</h3>
-            <ul className="space-y-2">
-              {recipe.ingredients.map((ing, index) => (
-                <li key={index} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
-                  <div className="w-2 h-2 rounded-full bg-primary" />
-                  <span className="flex-1 text-foreground">
-                    {ing.quantity && `${ing.quantity} `}
-                    {ing.unit && `${ing.unit} `}
-                    {ing.name}
-                  </span>
-                  {ing.aisle && (
-                    <span className="text-xs text-muted-foreground">{ing.aisle}</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
+          {/* Editable content or read-only */}
+          {isEditing && dbRecipe ? (
+            <RecipeEditor
+              recipe={dbRecipe}
+              onSave={handleSaveEdit}
+              onCancel={() => setIsEditing(false)}
+            />
+          ) : (
+            <>
+              {/* Ingredients */}
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold mb-3">{t('recipes.ingredients')}</h3>
+                <ul className="space-y-2">
+                  {recipe.ingredients?.map((ing, index) => (
+                    <li key={index} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
+                      <div className="w-2 h-2 rounded-full bg-primary" />
+                      <span className="flex-1 text-foreground">
+                        {ing.quantity && `${ing.quantity} `}
+                        {ing.unit && `${ing.unit} `}
+                        {ing.name}
+                      </span>
+                      {ing.aisle && (
+                        <span className="text-xs text-muted-foreground">{ing.aisle}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
 
-          {/* Steps */}
-          <div className="mb-6">
-            <h3 className="text-sm font-semibold mb-3">{t('recipes.instructions')}</h3>
-            <ol className="space-y-4">
-              {recipe.steps.map((step) => (
-                <li key={step.step_number} className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
-                    {step.step_number}
-                  </div>
-                  <p className="text-foreground pt-1">{step.instruction}</p>
-                </li>
-              ))}
-            </ol>
-          </div>
+              {/* Steps */}
+              <div className="mb-6">
+                <h3 className="text-sm font-semibold mb-3">{t('recipes.instructions')}</h3>
+                <ol className="space-y-4">
+                  {recipe.steps?.map((step) => (
+                    <li key={step.step_number} className="flex gap-4">
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
+                        {step.step_number}
+                      </div>
+                      <p className="text-foreground pt-1">{step.instruction}</p>
+                    </li>
+                  ))}
+                </ol>
+              </div>
 
-          {/* Add to plan button */}
-          <Button
-            onClick={handleToggleSelect}
-            className={`w-full h-12 ${isSelected ? 'bg-muted text-foreground hover:bg-muted/80' : 'gradient-primary'}`}
-            size="lg"
-          >
-            {isSelected ? (
-              <>
-                <Check className="w-5 h-5 mr-2" />
-                Added to Plan
-              </>
-            ) : (
-              <>
-                <Plus className="w-5 h-5 mr-2" />
-                Add to Plan
-              </>
-            )}
-          </Button>
+              {/* Add to plan button */}
+              <Button
+                onClick={handleToggleSelect}
+                className={`w-full h-12 ${isSelected ? 'bg-muted text-foreground hover:bg-muted/80' : 'gradient-primary'}`}
+                size="lg"
+              >
+                {isSelected ? (
+                  <>
+                    <Check className="w-5 h-5 mr-2" />
+                    Added to Plan
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-5 h-5 mr-2" />
+                    Add to Plan
+                  </>
+                )}
+              </Button>
+            </>
+          )}
         </motion.div>
       </div>
 
