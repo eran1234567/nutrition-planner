@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import i18n from '@/lib/i18n';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserData } from '@/hooks/useUserData';
+import { useAuthStore } from '@/stores/authStore';
 import { toast } from 'sonner';
 
 const STEPS = [
@@ -26,7 +27,8 @@ const Onboarding = () => {
   const location = useLocation();
   const { t } = useTranslation();
   const { user, isAuthenticated } = useAuth();
-  const { profile, preferences, saveProfile, savePreferences, loading } = useUserData();
+  const { profile, preferences, saveProfile, savePreferences, loading, refetch } = useUserData();
+  const setAuthProfile = useAuthStore(state => state.setProfile);
   
   // Get edit mode and step from navigation state
   const editMode = location.state?.editMode || false;
@@ -59,34 +61,38 @@ const Onboarding = () => {
     maxCookTime: 45,
   }));
 
-  // Load existing data when available
+  // Track if initial data has been loaded
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+
+  // Load existing data when available - only once on initial load
   useEffect(() => {
-    if (profile || preferences) {
+    if (!initialDataLoaded && !loading && (profile || preferences)) {
       setFormData(prev => ({
         ...prev,
-        units: profile?.units || 'imperial',
-        language: profile?.locale?.split('-')[0] || i18n.language || 'en',
-        displayName: profile?.display_name || '',
-        age: profile?.age?.toString() || '',
-        dietType: preferences?.diet_type || 'none',
-        allergies: preferences?.allergies || [],
-        dislikes: preferences?.dislikes || [],
-        calorieTarget: preferences?.calorie_target?.toString() || '',
-        proteinTarget: preferences?.protein_target?.toString() || '',
-        carbsTarget: preferences?.carbs_target?.toString() || '',
-        fatTarget: preferences?.fat_target?.toString() || '',
-        mealsPerDay: preferences?.meals_per_day || 3,
-        medicalDisclaimer: preferences?.medical_disclaimer_accepted || false,
-        diabetesFriendly: preferences?.medical_diabetes_friendly || false,
-        kidneyFriendly: preferences?.medical_kidney_friendly || false,
-        heartHealthy: preferences?.medical_heart_healthy || false,
-        lowSodium: preferences?.medical_low_sodium || false,
-        cuisines: preferences?.cuisines_preferred || [],
-        budgetLevel: preferences?.budget_level || 'medium',
-        maxCookTime: preferences?.max_cook_time || 45,
+        units: profile?.units || prev.units,
+        language: profile?.locale?.split('-')[0] || prev.language,
+        displayName: profile?.display_name || prev.displayName,
+        age: profile?.age?.toString() || prev.age,
+        dietType: preferences?.diet_type || prev.dietType,
+        allergies: preferences?.allergies || prev.allergies,
+        dislikes: preferences?.dislikes || prev.dislikes,
+        calorieTarget: preferences?.calorie_target?.toString() || prev.calorieTarget,
+        proteinTarget: preferences?.protein_target?.toString() || prev.proteinTarget,
+        carbsTarget: preferences?.carbs_target?.toString() || prev.carbsTarget,
+        fatTarget: preferences?.fat_target?.toString() || prev.fatTarget,
+        mealsPerDay: preferences?.meals_per_day || prev.mealsPerDay,
+        medicalDisclaimer: preferences?.medical_disclaimer_accepted || prev.medicalDisclaimer,
+        diabetesFriendly: preferences?.medical_diabetes_friendly || prev.diabetesFriendly,
+        kidneyFriendly: preferences?.medical_kidney_friendly || prev.kidneyFriendly,
+        heartHealthy: preferences?.medical_heart_healthy || prev.heartHealthy,
+        lowSodium: preferences?.medical_low_sodium || prev.lowSodium,
+        cuisines: preferences?.cuisines_preferred || prev.cuisines,
+        budgetLevel: preferences?.budget_level || prev.budgetLevel,
+        maxCookTime: preferences?.max_cook_time || prev.maxCookTime,
       }));
+      setInitialDataLoaded(true);
     }
-  }, [profile, preferences]);
+  }, [profile, preferences, loading, initialDataLoaded]);
 
   // Custom input state
   const [customAllergy, setCustomAllergy] = useState('');
@@ -104,13 +110,18 @@ const Onboarding = () => {
     setIsSaving(true);
     try {
       // Save profile data
-      await saveProfile({
+      const savedProfile = await saveProfile({
         display_name: formData.displayName || null,
         age: formData.age ? parseInt(formData.age) : null,
         units: formData.units,
         locale: formData.language,
         onboarding_completed: true,
       });
+
+      // Update auth store profile so Settings page shows correct data
+      if (savedProfile) {
+        setAuthProfile(savedProfile as any);
+      }
 
       // Save preferences
       await savePreferences({
@@ -131,6 +142,9 @@ const Onboarding = () => {
         budget_level: formData.budgetLevel,
         max_cook_time: formData.maxCookTime,
       });
+
+      // Refetch to ensure local state is up to date
+      await refetch();
 
       toast.success(t('common.saved', 'Settings saved!'));
     } catch (error) {

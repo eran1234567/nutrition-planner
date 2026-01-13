@@ -17,6 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserData } from '@/hooks/useUserData';
 
 const settingsItems = [
   {
@@ -81,6 +82,7 @@ export default function Settings() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { signOut, user } = useAuth();
+  const { profile } = useUserData();
 
   const handleEditSection = (item: typeof settingsItems[0]) => {
     if (item.path) {
@@ -119,8 +121,8 @@ export default function Settings() {
             <User className="w-7 h-7 text-primary" />
           </div>
           <div className="flex-1">
-            <p className="font-semibold">{user?.email || 'User'}</p>
-            <p className="text-sm text-muted-foreground">{t('settings.manageAccount')}</p>
+            <p className="font-semibold">{profile?.display_name || user?.email || 'User'}</p>
+            <p className="text-sm text-muted-foreground">{user?.email}</p>
           </div>
         </motion.div>
 
