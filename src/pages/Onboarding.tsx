@@ -67,32 +67,40 @@ const Onboarding = () => {
   // Load existing data when available - only once on initial load
   useEffect(() => {
     if (!initialDataLoaded && !loading && (profile || preferences)) {
-      setFormData(prev => ({
-        ...prev,
-        units: profile?.units || prev.units,
-        language: profile?.locale?.split('-')[0] || prev.language,
-        displayName: profile?.display_name || prev.displayName,
-        age: profile?.age?.toString() || prev.age,
-        dietType: preferences?.diet_type || prev.dietType,
-        allergies: preferences?.allergies || prev.allergies,
-        dislikes: preferences?.dislikes || prev.dislikes,
-        calorieTarget: preferences?.calorie_target?.toString() || prev.calorieTarget,
-        proteinTarget: preferences?.protein_target?.toString() || prev.proteinTarget,
-        carbsTarget: preferences?.carbs_target?.toString() || prev.carbsTarget,
-        fatTarget: preferences?.fat_target?.toString() || prev.fatTarget,
-        mealsPerDay: preferences?.meals_per_day || prev.mealsPerDay,
-        medicalDisclaimer: preferences?.medical_disclaimer_accepted || prev.medicalDisclaimer,
-        diabetesFriendly: preferences?.medical_diabetes_friendly || prev.diabetesFriendly,
-        kidneyFriendly: preferences?.medical_kidney_friendly || prev.kidneyFriendly,
-        heartHealthy: preferences?.medical_heart_healthy || prev.heartHealthy,
-        lowSodium: preferences?.medical_low_sodium || prev.lowSodium,
-        cuisines: preferences?.cuisines_preferred || prev.cuisines,
-        budgetLevel: preferences?.budget_level || prev.budgetLevel,
-        maxCookTime: preferences?.max_cook_time || prev.maxCookTime,
-      }));
+      setFormData(prev => {
+        const profileDisplayName =
+          profile?.display_name && user?.email && profile.display_name === user.email
+            ? ''
+            : (profile?.display_name ?? prev.displayName);
+
+        return {
+          ...prev,
+          units: profile?.units ?? prev.units,
+          language: profile?.locale?.split('-')[0] ?? prev.language,
+          displayName: profileDisplayName,
+          age: profile?.age != null ? profile.age.toString() : prev.age,
+          dietType: preferences?.diet_type ?? prev.dietType,
+          allergies: preferences?.allergies ?? prev.allergies,
+          dislikes: preferences?.dislikes ?? prev.dislikes,
+          calorieTarget: preferences?.calorie_target != null ? preferences.calorie_target.toString() : prev.calorieTarget,
+          proteinTarget: preferences?.protein_target != null ? preferences.protein_target.toString() : prev.proteinTarget,
+          carbsTarget: preferences?.carbs_target != null ? preferences.carbs_target.toString() : prev.carbsTarget,
+          fatTarget: preferences?.fat_target != null ? preferences.fat_target.toString() : prev.fatTarget,
+          mealsPerDay: preferences?.meals_per_day ?? prev.mealsPerDay,
+          medicalDisclaimer: preferences?.medical_disclaimer_accepted ?? prev.medicalDisclaimer,
+          diabetesFriendly: preferences?.medical_diabetes_friendly ?? prev.diabetesFriendly,
+          kidneyFriendly: preferences?.medical_kidney_friendly ?? prev.kidneyFriendly,
+          heartHealthy: preferences?.medical_heart_healthy ?? prev.heartHealthy,
+          lowSodium: preferences?.medical_low_sodium ?? prev.lowSodium,
+          cuisines: preferences?.cuisines_preferred ?? prev.cuisines,
+          budgetLevel: preferences?.budget_level ?? prev.budgetLevel,
+          maxCookTime: preferences?.max_cook_time ?? prev.maxCookTime,
+        };
+      });
+
       setInitialDataLoaded(true);
     }
-  }, [profile, preferences, loading, initialDataLoaded]);
+  }, [profile, preferences, loading, initialDataLoaded, user?.email]);
 
   // Custom input state
   const [customAllergy, setCustomAllergy] = useState('');
@@ -101,29 +109,33 @@ const Onboarding = () => {
   const progress = ((currentStep + 1) / STEPS.length) * 100;
 
   const handleSave = async () => {
-    if (!isAuthenticated) {
-      // Navigate to discover without saving if not authenticated
-      navigate('/discover');
+    if (!user) {
+      toast.error(t('auth.signInRequired', 'Please sign in to save your settings.'));
+      navigate('/auth');
       return;
     }
 
     setIsSaving(true);
     try {
-      // Save profile data
-      const savedProfile = await saveProfile({
-        display_name: formData.displayName || null,
+      const displayName = formData.displayName.trim();
+
+      // Save profile data (avoid overwriting display_name with null/empty)
+      const profilePatch: any = {
         age: formData.age ? parseInt(formData.age) : null,
         units: formData.units,
         locale: formData.language,
         onboarding_completed: true,
-      });
+      };
+      if (displayName) profilePatch.display_name = displayName;
+
+      const savedProfile = await saveProfile(profilePatch);
 
       // Update auth store profile so Settings page shows correct data
       if (savedProfile) {
         setAuthProfile(savedProfile as any);
       }
 
-      // Save preferences
+      // Save preferences (creates row if missing)
       await savePreferences({
         diet_type: formData.dietType as any,
         allergies: formData.allergies,
