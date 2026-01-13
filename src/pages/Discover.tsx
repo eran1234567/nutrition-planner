@@ -68,7 +68,7 @@ const timeFilters = [
 
 const mealFilters = ['breakfast', 'lunch', 'dinner', 'snack'];
 
-const cuisineFilters = ['American', 'Italian', 'Mexican', 'Asian', 'Mediterranean', 'Indian', 'Japanese', 'Thai', 'French', 'Greek'];
+const cuisineFilters = ['American', 'Italian', 'Mexican', 'Asian', 'Mediterranean', 'Indian', 'Japanese', 'Thai', 'French', 'Greek', 'Brazilian'];
 
 interface UserRecipe {
   id: string;
