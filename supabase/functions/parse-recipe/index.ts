@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import JSZip from 'https://esm.sh/jszip@3.10.1';
 
 // Declare EdgeRuntime for background tasks
 declare const EdgeRuntime: { waitUntil: (promise: Promise<any>) => void };
@@ -11,6 +12,57 @@ const corsHeaders = {
 };
 
 const LOVABLE_API_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
+
+// Extract text content from DOCX file (which is a ZIP containing XML)
+async function extractTextFromDocx(base64Content: string): Promise<string> {
+  try {
+    // Remove data URL prefix if present
+    const base64Data = base64Content.includes(',') 
+      ? base64Content.split(',')[1] 
+      : base64Content;
+    
+    // Decode base64 to binary
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    
+    // Load as ZIP
+    const zip = await JSZip.loadAsync(bytes);
+    
+    // Get the main document content
+    const documentXml = await zip.file('word/document.xml')?.async('string');
+    if (!documentXml) {
+      throw new Error('No document.xml found in DOCX');
+    }
+    
+    // Extract text from XML - simple regex-based extraction
+    // Remove XML tags and extract text content
+    let text = documentXml
+      // Extract text from <w:t> tags (Word text elements)
+      .replace(/<w:t[^>]*>([^<]*)<\/w:t>/g, '$1')
+      // Handle paragraph breaks
+      .replace(/<\/w:p>/g, '\n')
+      // Remove remaining XML tags
+      .replace(/<[^>]+>/g, '')
+      // Decode HTML entities
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      // Clean up whitespace
+      .replace(/\n\s*\n/g, '\n\n')
+      .trim();
+    
+    console.log(`Extracted ${text.length} characters from DOCX`);
+    return text;
+  } catch (error) {
+    console.error('Error extracting text from DOCX:', error);
+    throw new Error('Failed to extract text from DOCX file');
+  }
+}
 
 // Background image generation - runs after response is sent
 async function generateRecipeImagesInBackground(
@@ -132,11 +184,15 @@ serve(async (req) => {
     }
 
     // Check if content is a base64-encoded document (PDF, DOCX)
-    const isBase64Document = content && typeof content === 'string' && 
-      (content.startsWith('data:application/pdf') || 
-       content.startsWith('data:application/vnd.openxmlformats') ||
+    const isDocx = content && typeof content === 'string' && 
+      (content.startsWith('data:application/vnd.openxmlformats') ||
        content.startsWith('data:application/msword') ||
-       content.startsWith('data:application/octet-stream'));
+       (content.startsWith('data:application/octet-stream') && content.includes('docx')));
+    
+    const isPdf = content && typeof content === 'string' && 
+      content.startsWith('data:application/pdf');
+
+    const isBase64Document = isDocx || isPdf;
 
     // For documents, we'll send the base64 directly to AI for processing
     // For text, validate size
@@ -151,7 +207,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Processing upload ${uploadId}, isImage: ${isImage}, isDocument: ${isBase64Document}`);
+    console.log(`Processing upload ${uploadId}, isImage: ${isImage}, isDocx: ${isDocx}, isPdf: ${isPdf}`);
 
     // Update status to parsing
     await supabase.from('uploads').update({ status: 'parsing' }).eq('id', uploadId);
@@ -214,9 +270,11 @@ IMPORTANT:
 
     // Build messages based on whether we have an image, document, or text
     let messages: any[] = [];
+    let model = 'google/gemini-2.5-flash'; // Default to flash for text
     
     if (isImage && content && content.startsWith('data:image/')) {
       // For images, use vision capabilities
+      model = 'google/gemini-2.5-pro';
       messages = [
         { role: 'system', content: systemPrompt },
         { 
@@ -233,9 +291,20 @@ IMPORTANT:
           ]
         }
       ];
-    } else if (isBase64Document && content) {
-      // For documents (PDF, DOCX), extract text from base64 and send to AI
-      // The AI can process the base64 content directly with vision models
+    } else if (isDocx && content) {
+      // For DOCX files, extract text first (Gemini doesn't support DOCX MIME type)
+      console.log('Extracting text from DOCX file...');
+      const extractedText = await extractTextFromDocx(content);
+      console.log(`Extracted text preview: ${extractedText.substring(0, 500)}...`);
+      
+      const prompt = `Extract ALL recipes from the following document content.\n\n${jsonFormat}\n\nDocument content:\n${extractedText}`;
+      messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt }
+      ];
+    } else if (isPdf && content) {
+      // For PDFs, use vision capabilities (Gemini supports PDF)
+      model = 'google/gemini-2.5-pro';
       messages = [
         { role: 'system', content: systemPrompt },
         { 
@@ -247,7 +316,7 @@ IMPORTANT:
             },
             {
               type: 'text',
-              text: `This is a document containing recipes. Extract ALL recipes from it.\n\n${jsonFormat}`
+              text: `This is a PDF document containing recipes. Extract ALL recipes from it.\n\n${jsonFormat}`
             }
           ]
         }
@@ -260,9 +329,6 @@ IMPORTANT:
         { role: 'user', content: prompt }
       ];
     }
-
-    // Use gemini-2.5-pro for images/documents (better vision), flash for text
-    const model = (isImage || isBase64Document) ? 'google/gemini-2.5-pro' : 'google/gemini-2.5-flash';
     
     console.log(`Calling AI with model: ${model}`);
     const aiStartTime = Date.now();
