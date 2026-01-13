@@ -230,22 +230,43 @@ const MyRecipes = () => {
       
       // Save to database
       if (user) {
+        // Determine proper MIME type - browsers sometimes return empty string for .docx
+        let mimeType = file.type;
+        if (!mimeType || mimeType === 'application/octet-stream') {
+          const ext = file.name.toLowerCase().split('.').pop();
+          const mimeMap: Record<string, string> = {
+            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'doc': 'application/msword',
+            'pdf': 'application/pdf',
+            'txt': 'text/plain',
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png': 'image/png',
+            'gif': 'image/gif',
+            'webp': 'image/webp',
+          };
+          mimeType = mimeMap[ext || ''] || 'application/octet-stream';
+        }
+
         try {
           const { data: uploadData, error } = await supabase.from('uploads').insert({
             owner_user_id: user.id,
             file_name: file.name,
-            file_type: file.type || (file.name.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/octet-stream'),
+            file_type: mimeType,
             status: 'pending',
             scope: 'private'
           }).select().single();
 
-          if (error) throw error;
+          if (error) {
+            console.error('Upload insert error:', error);
+            throw error;
+          }
 
           const newUpload: UploadedItem = {
             id: uploadData.id,
             type: 'file',
             name: file.name,
-            fileType: file.type,
+            fileType: mimeType,
             status: 'pending',
             createdAt: new Date(),
           };
@@ -263,6 +284,7 @@ const MyRecipes = () => {
             setUploads(prev => prev.map(u => u.id === uploadData.id ? { ...u, status: 'failed' as const } : u));
           }
         } catch (error) {
+          console.error('File upload error:', error);
           toast.error(t('myRecipes.uploadError', 'Failed to save file'));
         }
       }
