@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, Flame, Users, Check, Plus, Trash2 } from 'lucide-react';
+import { Clock, Users, Check, Plus, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import type { Recipe } from '@/types';
@@ -113,24 +113,27 @@ export function RecipeCard({
           {recipe.title}
         </h3>
 
-        {/* Macros */}
+        {/* Nutrition per serving */}
         {nutrition && (
-          <div className="flex flex-wrap gap-1.5">
-            <div className="macro-badge macro-calories">
-              <Flame className="w-3 h-3" />
-              <span>{nutrition.calories}</span>
-            </div>
-            <div className="macro-badge macro-protein">
-              <span>P</span>
-              <span>{nutrition.protein_g}g</span>
-            </div>
-            <div className="macro-badge macro-carbs">
-              <span>C</span>
-              <span>{nutrition.carbs_g}g</span>
-            </div>
-            <div className="macro-badge macro-fat">
-              <span>F</span>
-              <span>{nutrition.fat_g}g</span>
+          <div className="bg-muted/50 rounded-lg p-2 mt-1">
+            <p className="text-2xs text-muted-foreground mb-1.5 font-medium">Per serving</p>
+            <div className="flex items-center justify-between gap-1">
+              <div className="text-center flex-1">
+                <p className="text-sm font-bold text-[hsl(var(--calories))]">{nutrition.calories}</p>
+                <p className="text-2xs text-muted-foreground">kcal</p>
+              </div>
+              <div className="text-center flex-1">
+                <p className="text-sm font-bold text-[hsl(var(--protein))]">{nutrition.protein_g}g</p>
+                <p className="text-2xs text-muted-foreground">protein</p>
+              </div>
+              <div className="text-center flex-1">
+                <p className="text-sm font-bold text-[hsl(var(--carbs))]">{nutrition.carbs_g}g</p>
+                <p className="text-2xs text-muted-foreground">carbs</p>
+              </div>
+              <div className="text-center flex-1">
+                <p className="text-sm font-bold text-[hsl(var(--fat))]">{nutrition.fat_g}g</p>
+                <p className="text-2xs text-muted-foreground">fat</p>
+              </div>
             </div>
           </div>
         )}
