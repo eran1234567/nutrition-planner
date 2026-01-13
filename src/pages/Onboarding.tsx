@@ -108,11 +108,11 @@ const Onboarding = () => {
 
   const progress = ((currentStep + 1) / STEPS.length) * 100;
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     if (!user) {
       toast.error(t('auth.signInRequired', 'Please sign in to save your settings.'));
       navigate('/auth');
-      return;
+      return false;
     }
 
     setIsSaving(true);
@@ -143,32 +143,37 @@ const Onboarding = () => {
       }
 
       // Save preferences (creates row if missing) - pass explicit profile ID
-      await savePreferences({
-        diet_type: formData.dietType as any,
-        allergies: formData.allergies,
-        dislikes: formData.dislikes,
-        calorie_target: formData.calorieTarget ? parseInt(formData.calorieTarget) : null,
-        protein_target: formData.proteinTarget ? parseInt(formData.proteinTarget) : null,
-        carbs_target: formData.carbsTarget ? parseInt(formData.carbsTarget) : null,
-        fat_target: formData.fatTarget ? parseInt(formData.fatTarget) : null,
-        meals_per_day: formData.mealsPerDay,
-        medical_disclaimer_accepted: formData.medicalDisclaimer,
-        medical_diabetes_friendly: formData.diabetesFriendly,
-        medical_kidney_friendly: formData.kidneyFriendly,
-        medical_heart_healthy: formData.heartHealthy,
-        medical_low_sodium: formData.lowSodium,
-        cuisines_preferred: formData.cuisines,
-        budget_level: formData.budgetLevel,
-        max_cook_time: formData.maxCookTime,
-      }, profileIdForPrefs);
+      await savePreferences(
+        {
+          diet_type: formData.dietType as any,
+          allergies: formData.allergies,
+          dislikes: formData.dislikes,
+          calorie_target: formData.calorieTarget ? parseInt(formData.calorieTarget) : null,
+          protein_target: formData.proteinTarget ? parseInt(formData.proteinTarget) : null,
+          carbs_target: formData.carbsTarget ? parseInt(formData.carbsTarget) : null,
+          fat_target: formData.fatTarget ? parseInt(formData.fatTarget) : null,
+          meals_per_day: formData.mealsPerDay,
+          medical_disclaimer_accepted: formData.medicalDisclaimer,
+          medical_diabetes_friendly: formData.diabetesFriendly,
+          medical_kidney_friendly: formData.kidneyFriendly,
+          medical_heart_healthy: formData.heartHealthy,
+          medical_low_sodium: formData.lowSodium,
+          cuisines_preferred: formData.cuisines,
+          budget_level: formData.budgetLevel,
+          max_cook_time: formData.maxCookTime,
+        },
+        profileIdForPrefs
+      );
 
       // Refetch to ensure local state is up to date
       await refetch();
 
       toast.success(t('common.saved', 'Settings saved!'));
+      return true;
     } catch (error) {
       console.error('Error saving:', error);
       toast.error(t('common.error', 'Failed to save'));
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -177,16 +182,19 @@ const Onboarding = () => {
   const handleNext = async () => {
     // In edit mode, save immediately and return to settings
     if (editMode) {
-      await handleSave();
-      navigate('/settings');
+      const ok = await handleSave();
+      if (ok) navigate('/settings');
       return;
     }
-    
+
     if (currentStep < STEPS.length - 1) {
       setCurrentStep(currentStep + 1);
-    } else {
-      // Complete onboarding
-      await handleSave();
+      return;
+    }
+
+    // Complete onboarding
+    const ok = await handleSave();
+    if (ok) {
       navigate('/discover');
     }
   };
