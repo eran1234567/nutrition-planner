@@ -364,18 +364,33 @@ IMPORTANT:
     console.log(`Calling AI with model: ${model}`);
     const aiStartTime = Date.now();
     
-    const aiResponse = await fetch(LOVABLE_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: 0.3,
-      }),
-    });
+    // Create AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout (edge functions have 60s limit)
+    
+    let aiResponse;
+    try {
+      aiResponse = await fetch(LOVABLE_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: 0.3,
+        }),
+        signal: controller.signal,
+      });
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        throw new Error('AI request timed out. Please try with a smaller file or simpler recipe.');
+      }
+      throw fetchError;
+    }
+    clearTimeout(timeoutId);
 
     console.log(`AI response received in ${Date.now() - aiStartTime}ms`);
 
