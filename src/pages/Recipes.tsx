@@ -1,18 +1,39 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Plus, Upload, Link, Camera, PenLine, BookOpen } from 'lucide-react';
+import { Plus, Upload, Link, Camera, PenLine, BookOpen, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
-import { seedRecipes } from '@/data/seedRecipes';
+import { supabase } from '@/integrations/supabase/client';
 import { motion } from 'framer-motion';
+
+interface UserRecipe {
+  id: string;
+  title: string;
+  description: string | null;
+  image_url: string | null;
+  prep_time: number | null;
+  cook_time: number | null;
+  total_time: number | null;
+  servings: number | null;
+  is_kid_friendly: boolean | null;
+  is_meal_prep_friendly: boolean | null;
+  nutrition?: {
+    calories: number | null;
+    protein_g: number | null;
+    carbs_g: number | null;
+    fat_g: number | null;
+  } | null;
+}
 
 export default function Recipes() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [userRecipes, setUserRecipes] = useState<UserRecipe[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const addOptions = [
     { icon: Upload, label: 'Upload file', desc: 'PDF, image, or doc' },
@@ -21,8 +42,50 @@ export default function Recipes() {
     { icon: PenLine, label: 'Create manually', desc: 'Write your own' },
   ];
 
-  // For now, show seed recipes as examples
-  const userRecipes = seedRecipes.slice(0, 4);
+  useEffect(() => {
+    const fetchUserRecipes = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      const { data: recipes, error } = await supabase
+        .from('recipes')
+        .select(`
+          id,
+          title,
+          description,
+          image_url,
+          prep_time,
+          cook_time,
+          total_time,
+          servings,
+          is_kid_friendly,
+          is_meal_prep_friendly,
+          recipe_nutrition (
+            calories,
+            protein_g,
+            carbs_g,
+            fat_g
+          )
+        `)
+        .eq('owner_user_id', user.id)
+        .is('is_deleted', false)
+        .order('created_at', { ascending: false });
+
+      if (!error && recipes) {
+        const formattedRecipes = recipes.map(r => ({
+          ...r,
+          nutrition: r.recipe_nutrition?.[0] || null
+        }));
+        setUserRecipes(formattedRecipes);
+      }
+      setLoading(false);
+    };
+
+    fetchUserRecipes();
+  }, []);
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -64,14 +127,18 @@ export default function Recipes() {
         )}
 
         {/* Empty State */}
-        {userRecipes.length === 0 ? (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : userRecipes.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
               <BookOpen className="w-8 h-8 text-muted-foreground" />
             </div>
             <h3 className="font-semibold text-lg mb-1">{t('recipes.noRecipes')}</h3>
             <p className="text-muted-foreground text-sm mb-6">{t('recipes.noRecipesDesc')}</p>
-            <Button onClick={() => setShowAddMenu(true)}>
+            <Button onClick={() => navigate('/my-recipes')}>
               <Plus className="w-4 h-4 mr-2" />
               {t('recipes.addRecipe')}
             </Button>
@@ -81,7 +148,31 @@ export default function Recipes() {
             {userRecipes.map((recipe) => (
               <RecipeCard 
                 key={recipe.id} 
-                recipe={recipe as any} 
+                recipe={{
+                  id: recipe.id,
+                  title: recipe.title,
+                  scope: 'private',
+                  image_url: recipe.image_url || undefined,
+                  prep_time: recipe.prep_time || undefined,
+                  cook_time: recipe.cook_time || undefined,
+                  total_time: recipe.total_time || undefined,
+                  servings: recipe.servings || 4,
+                  difficulty: 'medium',
+                  is_kid_friendly: recipe.is_kid_friendly || false,
+                  is_meal_prep_friendly: recipe.is_meal_prep_friendly || false,
+                  is_budget_friendly: false,
+                  is_deleted: false,
+                  created_at: '',
+                  updated_at: '',
+                  nutrition: recipe.nutrition ? {
+                    id: '',
+                    recipe_id: recipe.id,
+                    calories: recipe.nutrition.calories || undefined,
+                    protein_g: recipe.nutrition.protein_g || undefined,
+                    carbs_g: recipe.nutrition.carbs_g || undefined,
+                    fat_g: recipe.nutrition.fat_g || undefined,
+                  } : undefined,
+                }} 
                 onClick={() => navigate(`/recipe/${recipe.id}`)}
                 compact 
               />
