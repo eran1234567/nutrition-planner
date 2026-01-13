@@ -286,7 +286,8 @@ export default function Discover() {
   const filteredRecipes = useMemo(() => {
     let recipes = allRecipes.filter(recipe => {
       // Filter out recipes without valid images (only for app recipes)
-      if (!recipe.isUserRecipe && (!recipe.image_url || recipe.image_url.includes('undefined') || !recipe.image_url.startsWith('http'))) {
+      // Allow http URLs and relative paths starting with /
+      if (!recipe.isUserRecipe && (!recipe.image_url || recipe.image_url.includes('undefined') || (!recipe.image_url.startsWith('http') && !recipe.image_url.startsWith('/')))) {
         return false;
       }
 
