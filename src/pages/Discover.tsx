@@ -161,6 +161,9 @@ export default function Discover() {
     }
   }, [userRecipes, globalRecipes, recipeSource]);
 
+  // User's max cook time preference
+  const userMaxCookTime = preferences?.max_cook_time ?? null;
+
   const filteredRecipes = useMemo(() => {
     return allRecipes.filter(recipe => {
       // Filter out recipes without valid images (only for app recipes)
@@ -173,9 +176,18 @@ export default function Discover() {
         return false;
       }
 
-      // Time filter
+      // Time filter (manual selection from chips)
       if (selectedTime && recipe.total_time && recipe.total_time > selectedTime) {
         return false;
+      }
+
+      // User preference: max cook time filter (from onboarding)
+      // Apply to app recipes; use total_time or fallback to cook_time
+      if (!recipe.isUserRecipe && userMaxCookTime) {
+        const recipeTime = recipe.total_time ?? recipe.cook_time ?? 0;
+        if (recipeTime > userMaxCookTime) {
+          return false;
+        }
       }
 
       // Meal type filter
@@ -202,7 +214,7 @@ export default function Discover() {
 
       return true;
     });
-  }, [allRecipes, searchQuery, selectedTime, selectedMealType, blockedTerms]);
+  }, [allRecipes, searchQuery, selectedTime, userMaxCookTime, selectedMealType, blockedTerms]);
 
   const isSelected = (recipeId: string) => selectedMeals.some(r => r.id === recipeId);
 
