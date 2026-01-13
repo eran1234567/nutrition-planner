@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Plus, Upload, Link, Camera, PenLine, BookOpen, Loader2, Trash2 } from 'lucide-react';
+import { Plus, Upload, Link, Camera, PenLine, BookOpen, Loader2, Trash2, X } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
@@ -50,6 +51,7 @@ export default function Recipes() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [processingUpload, setProcessingUpload] = useState<{ name: string; progress: number } | null>(null);
 
   const addOptions = [
     { icon: Upload, label: 'Upload file', desc: 'PDF, image, or doc', action: 'upload' },
@@ -191,31 +193,48 @@ export default function Recipes() {
 
         if (error) throw error;
 
-        toast.success(t('myRecipes.uploadSuccess', 'File added - parsing...'));
+        // Show processing state
+        setShowAddMenu(true);
+        setProcessingUpload({ name: file.name, progress: 10 });
 
         if (fileContent) {
-          supabase.functions.invoke('parse-recipe', {
+          // Simulate progress
+          const progressInterval = setInterval(() => {
+            setProcessingUpload(prev => prev ? { ...prev, progress: Math.min(prev.progress + 15, 85) } : null);
+          }, 800);
+
+          const { data } = await supabase.functions.invoke('parse-recipe', {
             body: { 
               uploadId: uploadData.id, 
               content: fileContent,
               isImage: isImage
             },
-          }).then(({ data }) => {
-            if (data?.success) {
-              toast.success(t('myRecipes.parseSuccess', `Found ${data.count} recipe(s)!`));
-              // Refresh list
-              fetchUserRecipes();
-            } else {
-              toast.error(data?.error || t('myRecipes.parseError', 'Failed to parse recipe'));
-            }
           });
+
+          clearInterval(progressInterval);
+          setProcessingUpload(prev => prev ? { ...prev, progress: 100 } : null);
+
+          if (data?.success) {
+            toast.success(t('myRecipes.parseSuccess', `Found ${data.count} recipe(s)!`));
+            await fetchUserRecipes();
+          } else {
+            toast.error(data?.error || t('myRecipes.parseError', 'Failed to parse recipe'));
+          }
+
+          // Close after short delay
+          setTimeout(() => {
+            setProcessingUpload(null);
+            setShowAddMenu(false);
+          }, 500);
         } else {
           toast.error(t('myRecipes.unsupportedFile', 'Unsupported file type'));
           await supabase.from('uploads').update({ status: 'failed', error_message: 'Unsupported file type' }).eq('id', uploadData.id);
+          setProcessingUpload(null);
         }
       } catch (error) {
         console.error('File upload error:', error);
         toast.error(t('myRecipes.uploadError', 'Failed to save file'));
+        setProcessingUpload(null);
       }
     }
     
@@ -250,25 +269,44 @@ export default function Recipes() {
 
       if (error) throw error;
 
-      toast.success(t('myRecipes.linkAdded', 'Link added - parsing...'));
+      const urlToProcess = linkUrl;
       setLinkUrl('');
       setShowLinkInput(false);
+      
+      // Show processing state
+      setShowAddMenu(true);
+      setProcessingUpload({ name: parsedUrl.hostname, progress: 10 });
 
-      supabase.functions.invoke('parse-recipe', {
+      // Simulate progress
+      const progressInterval = setInterval(() => {
+        setProcessingUpload(prev => prev ? { ...prev, progress: Math.min(prev.progress + 15, 85) } : null);
+      }, 800);
+
+      const { data } = await supabase.functions.invoke('parse-recipe', {
         body: { 
           uploadId: uploadData.id, 
-          sourceUrl: linkUrl
+          sourceUrl: urlToProcess
         },
-      }).then(({ data }) => {
-        if (data?.success) {
-          toast.success(t('myRecipes.parseSuccess', `Found ${data.count} recipe(s)!`));
-          fetchUserRecipes();
-        } else {
-          toast.error(data?.error || t('myRecipes.parseError', 'Failed to parse recipe'));
-        }
       });
+
+      clearInterval(progressInterval);
+      setProcessingUpload(prev => prev ? { ...prev, progress: 100 } : null);
+
+      if (data?.success) {
+        toast.success(t('myRecipes.parseSuccess', `Found ${data.count} recipe(s)!`));
+        await fetchUserRecipes();
+      } else {
+        toast.error(data?.error || t('myRecipes.parseError', 'Failed to parse recipe'));
+      }
+
+      // Close after short delay
+      setTimeout(() => {
+        setProcessingUpload(null);
+        setShowAddMenu(false);
+      }, 500);
     } catch (error) {
       toast.error(t('myRecipes.linkError', 'Failed to save link'));
+      setProcessingUpload(null);
     }
   };
 
@@ -333,24 +371,52 @@ export default function Recipes() {
             animate={{ opacity: 1, y: 0 }}
             className="mb-6 p-4 bg-card rounded-xl border border-border"
           >
-            <h3 className="font-semibold mb-3">{t('recipes.addRecipe')}</h3>
-            <div className="grid grid-cols-2 gap-2">
-              {addOptions.map((option) => (
-                <button
-                  key={option.label}
-                  onClick={() => handleAddOption(option.action)}
-                  className="flex items-center gap-3 p-3 rounded-lg bg-muted hover:bg-secondary transition-colors text-left"
-                >
-                  <div className="w-10 h-10 rounded-lg bg-primary-soft flex items-center justify-center">
-                    <option.icon className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">{option.label}</p>
-                    <p className="text-xs text-muted-foreground">{option.desc}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
+            {processingUpload ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold">{t('recipes.processing', 'Processing Recipe')}</h3>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={() => {
+                      setProcessingUpload(null);
+                      setShowAddMenu(false);
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground truncate">{processingUpload.name}</p>
+                <Progress value={processingUpload.progress} className="h-2" />
+                <p className="text-xs text-muted-foreground text-center">
+                  {processingUpload.progress < 100 
+                    ? t('recipes.parsingRecipe', 'Parsing recipe...') 
+                    : t('recipes.parsingComplete', 'Complete!')}
+                </p>
+              </div>
+            ) : (
+              <>
+                <h3 className="font-semibold mb-3">{t('recipes.addRecipe')}</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {addOptions.map((option) => (
+                    <button
+                      key={option.label}
+                      onClick={() => handleAddOption(option.action)}
+                      className="flex items-center gap-3 p-3 rounded-lg bg-muted hover:bg-secondary transition-colors text-left"
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-primary-soft flex items-center justify-center">
+                        <option.icon className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm">{option.label}</p>
+                        <p className="text-xs text-muted-foreground">{option.desc}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </motion.div>
         )}
 
