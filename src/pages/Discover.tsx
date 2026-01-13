@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { Search, Clock, Sparkles, BookOpen, ChefHat } from 'lucide-react';
+import { Search, Clock, Sparkles, BookOpen, ChefHat, Baby } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -16,6 +16,48 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserData } from '@/hooks/useUserData';
 import { supabase } from '@/integrations/supabase/client';
+
+// Age-based meal suitability
+type AgeGroup = 'toddler' | 'child' | 'teen' | 'adult';
+
+const getAgeGroup = (age: number | null | undefined): AgeGroup => {
+  if (!age || age >= 16) return 'adult';
+  if (age >= 10) return 'teen';
+  if (age >= 4) return 'child';
+  return 'toddler';
+};
+
+// Ingredients/terms not suitable for young children (safety, texture, spice)
+const ageRestrictedTerms: Record<AgeGroup, string[]> = {
+  toddler: [
+    // Choking hazards
+    'whole nut', 'peanut', 'almond', 'walnut', 'cashew', 'pistachio', 'macadamia',
+    'popcorn', 'hard candy', 'gum', 'marshmallow',
+    // Spicy foods
+    'jalapeño', 'jalapeno', 'habanero', 'ghost pepper', 'cayenne', 'hot sauce', 'sriracha', 'wasabi', 'horseradish',
+    'extra spicy', 'very spicy', 'fiery', 'blazing',
+    // Raw/undercooked items
+    'raw fish', 'sashimi', 'tartare', 'rare steak', 'runny egg', 'soft boiled',
+    // High sodium/processed
+    'cured meat', 'prosciutto', 'salami', 'pepperoni',
+    // Alcohol-based
+    'wine sauce', 'beer batter', 'bourbon', 'rum', 'whiskey', 'brandy',
+    // Tough textures
+    'jerky', 'beef jerky', 'dried meat',
+  ],
+  child: [
+    // Less restrictive - mainly spicy and raw items
+    'jalapeño', 'jalapeno', 'habanero', 'ghost pepper', 'cayenne',
+    'extra spicy', 'very spicy', 'fiery', 'blazing',
+    'raw fish', 'sashimi', 'tartare',
+    'wine sauce', 'beer batter', 'bourbon', 'rum', 'whiskey', 'brandy',
+  ],
+  teen: [
+    // Only alcohol-based items
+    'wine sauce', 'beer batter', 'bourbon', 'rum sauce', 'whiskey glaze', 'brandy',
+  ],
+  adult: [], // No restrictions
+};
 
 const timeFilters = [
   { label: '< 15 min', max: 15 },
@@ -57,7 +99,7 @@ export default function Discover() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
-  const { preferences } = useUserData();
+  const { profile, preferences } = useUserData();
   const { selectedMeals, addSelectedMeal, removeSelectedMeal } = useAppStore();
 
   // If the user isn't signed in yet, onboarding stores choices locally.
@@ -137,11 +179,41 @@ export default function Discover() {
     return Array.from(new Set(expanded)).filter(Boolean);
   }, [effectiveAllergies, effectiveDislikes, userDietType]);
 
+  // Get user age from profile or pending onboarding
+  const pendingAge = useMemo(() => {
+    try {
+      const raw = window.localStorage.getItem('pendingOnboarding');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed.age ? parseInt(parsed.age) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const userAge = pendingAge ?? profile?.age ?? null;
+  const userAgeGroup = getAgeGroup(userAge);
+
+  // Get age-restricted terms based on user's age
+  const ageBlockedTerms = useMemo(() => {
+    const restricted = ageRestrictedTerms[userAgeGroup] || [];
+    // Expand with singular/plural variants
+    return restricted.flatMap(term => {
+      const variants = new Set<string>();
+      variants.add(term.toLowerCase());
+      if (term.endsWith('s') && term.length > 1) variants.add(term.slice(0, -1).toLowerCase());
+      else variants.add(`${term}s`.toLowerCase());
+      return Array.from(variants);
+    });
+  }, [userAgeGroup]);
+
   // Debug: confirm preferences are present and the terms we're filtering
   useEffect(() => {
     console.log('[Discover] userDietType:', userDietType);
+    console.log('[Discover] userAge:', userAge, 'ageGroup:', userAgeGroup);
     console.log('[Discover] blockedTerms:', blockedTerms);
-  }, [blockedTerms, userDietType]);
+    console.log('[Discover] ageBlockedTerms:', ageBlockedTerms);
+  }, [blockedTerms, userDietType, userAge, userAgeGroup, ageBlockedTerms]);
 
   // Fetch global recipes from database
   const { data: globalRecipes = [], isLoading: isLoadingGlobal } = useGlobalRecipes();
@@ -212,7 +284,7 @@ export default function Discover() {
   }, [userRecipes, globalRecipes, recipeSource]);
 
   const filteredRecipes = useMemo(() => {
-    return allRecipes.filter(recipe => {
+    let recipes = allRecipes.filter(recipe => {
       // Filter out recipes without valid images (only for app recipes)
       if (!recipe.isUserRecipe && (!recipe.image_url || recipe.image_url.includes('undefined') || !recipe.image_url.startsWith('http'))) {
         return false;
@@ -238,9 +310,10 @@ export default function Discover() {
         return false;
       }
 
-      // Filter based on user allergies and dislikes (only for global/app recipes, not user's own)
+      // Filter based on user allergies, diet, and dislikes (only for global/app recipes, not user's own)
       if (!recipe.isUserRecipe && blockedTerms.length > 0) {
         const titleLower = recipe.title.toLowerCase();
+        const descLower = (recipe.description || '').toLowerCase();
 
         // Get all ingredient names (use normalized_name if available, fallback to name)
         const ingredientNames = (recipe.ingredients || []).map((ing) =>
@@ -255,9 +328,37 @@ export default function Discover() {
         if (matchesBlockedIngredients()) return false;
       }
 
+      // Age-based filtering (only for app recipes)
+      if (!recipe.isUserRecipe && ageBlockedTerms.length > 0) {
+        const titleLower = recipe.title.toLowerCase();
+        const descLower = (recipe.description || '').toLowerCase();
+        const ingredientNames = (recipe.ingredients || []).map((ing) =>
+          (ing.normalized_name || ing.name || '').toLowerCase()
+        );
+
+        const matchesAgeRestricted = (text: string) => ageBlockedTerms.some((term) => text.includes(term));
+        const matchesAgeRestrictedIngredients = () =>
+          ageBlockedTerms.some((term) => ingredientNames.some((name) => name.includes(term)));
+
+        if (matchesAgeRestricted(titleLower)) return false;
+        if (matchesAgeRestricted(descLower)) return false;
+        if (matchesAgeRestrictedIngredients()) return false;
+      }
+
       return true;
     });
-  }, [allRecipes, searchQuery, selectedTime, selectedMealType, selectedCuisine, blockedTerms]);
+
+    // For young children (toddler/child), prioritize kid-friendly recipes by sorting them first
+    if (userAgeGroup === 'toddler' || userAgeGroup === 'child') {
+      recipes = recipes.sort((a, b) => {
+        const aKidFriendly = (a as any).is_kid_friendly ? 1 : 0;
+        const bKidFriendly = (b as any).is_kid_friendly ? 1 : 0;
+        return bKidFriendly - aKidFriendly; // Kid-friendly first
+      });
+    }
+
+    return recipes;
+  }, [allRecipes, searchQuery, selectedTime, selectedMealType, selectedCuisine, blockedTerms, ageBlockedTerms, userAgeGroup]);
 
   const isSelected = (recipeId: string) => selectedMeals.some(r => r.id === recipeId);
 
@@ -288,7 +389,27 @@ export default function Discover() {
           />
         </div>
 
-        {/* Recipe Source Filter */}
+        {/* Age-based filtering indicator for young users */}
+        {(userAgeGroup === 'toddler' || userAgeGroup === 'child') && userAge && (
+          <div className="p-3 rounded-xl bg-warning/10 border border-warning/20 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-warning/20 flex items-center justify-center">
+                <Baby className="w-4 h-4 text-warning" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-warning-foreground">
+                  {t('discover.kidFriendlyMode', 'Kid-Friendly Mode')}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {userAgeGroup === 'toddler' 
+                    ? t('discover.toddlerFiltering', 'Showing safe, mild recipes for toddlers')
+                    : t('discover.childFiltering', 'Prioritizing kid-approved meals')
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         {userRecipes.length > 0 && (
           <div className="p-3 rounded-xl bg-card border border-border mb-4">
             <div className="flex items-center gap-3 mb-3">
