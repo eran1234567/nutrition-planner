@@ -1,1 +1,7 @@
 project_id = "vollogobxbnxyymzhhjq"
+
+[functions.parse-recipe]
+verify_jwt = false
+
+[functions.seed-global-recipes]
+verify_jwt = false

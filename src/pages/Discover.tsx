@@ -9,7 +9,8 @@ import { BottomNav } from '@/components/layout/BottomNav';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
 import { StickyActions } from '@/components/ui/StickyActions';
 import { Chip } from '@/components/ui/Chip';
-import { seedRecipes } from '@/data/seedRecipes';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useGlobalRecipes } from '@/hooks/useGlobalRecipes';
 import { useAppStore } from '@/stores/appStore';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -56,6 +57,9 @@ export default function Discover() {
   const [selectedMealType, setSelectedMealType] = useState<string | null>(null);
   const [userRecipes, setUserRecipes] = useState<UserRecipe[]>([]);
   const [recipeSource, setRecipeSource] = useState<'all' | 'my' | 'app'>('all');
+
+  // Fetch global recipes from database
+  const { data: globalRecipes = [], isLoading: isLoadingGlobal } = useGlobalRecipes();
 
   // Load user's recipes from database
   useEffect(() => {
@@ -110,26 +114,20 @@ export default function Discover() {
   }, [user]);
 
   const allRecipes = useMemo(() => {
-    // Convert seed recipes to same format
-    const formattedSeedRecipes = seedRecipes.map(r => ({
-      ...r,
-      isUserRecipe: false,
-    }));
-
     // Filter based on recipe source
     switch (recipeSource) {
       case 'my':
         return userRecipes;
       case 'app':
-        return formattedSeedRecipes;
+        return globalRecipes;
       default: // 'all'
-        return [...userRecipes, ...formattedSeedRecipes];
+        return [...userRecipes, ...globalRecipes];
     }
-  }, [userRecipes, recipeSource]);
+  }, [userRecipes, globalRecipes, recipeSource]);
 
   const filteredRecipes = useMemo(() => {
     return allRecipes.filter(recipe => {
-      // Filter out recipes without valid images (only for seed recipes)
+      // Filter out recipes without valid images (only for app recipes)
       if (!recipe.isUserRecipe && (!recipe.image_url || recipe.image_url.includes('undefined') || !recipe.image_url.startsWith('http'))) {
         return false;
       }
@@ -253,21 +251,38 @@ export default function Discover() {
           ))}
         </div>
 
-        {/* Recipe Grid */}
-        <div className="grid grid-cols-2 gap-3">
-          {filteredRecipes.map((recipe) => (
-            <RecipeCard
-              key={recipe.id}
-              recipe={recipe as any}
-              isSelected={isSelected(recipe.id)}
-              onSelect={() => handleSelect(recipe)}
-              onClick={() => navigate(`/recipe/${recipe.id}`)}
-              compact
-            />
-          ))}
-        </div>
+        {/* Loading skeletons */}
+        {isLoadingGlobal && (
+          <div className="grid grid-cols-2 gap-3">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="rounded-xl overflow-hidden">
+                <Skeleton className="aspect-[4/3] w-full" />
+                <div className="p-3 space-y-2">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
-        {filteredRecipes.length === 0 && (
+        {/* Recipe Grid */}
+        {!isLoadingGlobal && (
+          <div className="grid grid-cols-2 gap-3">
+            {filteredRecipes.map((recipe) => (
+              <RecipeCard
+                key={recipe.id}
+                recipe={recipe as any}
+                isSelected={isSelected(recipe.id)}
+                onSelect={() => handleSelect(recipe)}
+                onClick={() => navigate(`/recipe/${recipe.id}`)}
+                compact
+              />
+            ))}
+          </div>
+        )}
+
+        {!isLoadingGlobal && filteredRecipes.length === 0 && (
           <div className="text-center py-12">
             <p className="text-muted-foreground">{t('discover.noRecipes', 'No recipes found')}</p>
             {recipeSource === 'my' && userRecipes.length === 0 && (
