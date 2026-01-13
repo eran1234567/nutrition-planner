@@ -33,7 +33,7 @@ const prefetchUserRecipes = async (userId: string) => {
       )
     `)
     .eq('owner_user_id', userId)
-    .is('is_deleted', false)
+    .eq('is_deleted', false)
     .order('created_at', { ascending: false });
 
   return (recipes || []).map(r => ({
