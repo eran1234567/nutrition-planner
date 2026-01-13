@@ -102,10 +102,11 @@ const Onboarding = () => {
   const progress = ((currentStep + 1) / STEPS.length) * 100;
 
   const handleSave = async (): Promise<boolean> => {
+    // If user is not authenticated, skip saving to DB but still allow navigation
     if (!user) {
-      toast.error(t('auth.signInRequired', 'Please sign in to save your settings.'));
-      navigate('/auth');
-      return false;
+      // Store preferences in localStorage for later sync when user signs up
+      localStorage.setItem('pendingOnboarding', JSON.stringify(formData));
+      return true;
     }
 
     setIsSaving(true);
@@ -182,7 +183,7 @@ const Onboarding = () => {
       return;
     }
 
-    // Complete onboarding
+    // Complete onboarding - save and go to discover
     const ok = await handleSave();
     if (ok) {
       navigate('/discover');
