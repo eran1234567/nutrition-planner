@@ -17,13 +17,50 @@ type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 const getMealTypesForCount = (count: number): MealType[] => {
   switch (count) {
     case 1: return ['lunch'];
-    case 2: return ['lunch', 'dinner'];
+    case 2: return ['breakfast', 'lunch'];
     case 3: return ['breakfast', 'lunch', 'dinner'];
     case 4: return ['breakfast', 'lunch', 'dinner', 'snack'];
     case 5: return ['breakfast', 'snack', 'lunch', 'snack', 'dinner'] as MealType[];
     case 6: return ['breakfast', 'snack', 'lunch', 'snack', 'dinner', 'snack'] as MealType[];
     default: return ['breakfast', 'lunch', 'dinner'];
   }
+};
+
+// Infer the appropriate meal type for a recipe based on tags, title, and nutrition
+const inferMealType = (meal: { title: string; tags?: Array<{ tag_type: string; tag_value: string }> }): MealType => {
+  // First check explicit meal_type tag
+  const mealTypeTag = meal.tags?.find(tag => 
+    tag.tag_type === 'meal_type' && ['breakfast', 'lunch', 'dinner', 'snack'].includes(tag.tag_value)
+  );
+  if (mealTypeTag) {
+    return mealTypeTag.tag_value as MealType;
+  }
+  
+  // Infer from title
+  const title = meal.title.toLowerCase();
+  
+  // Breakfast indicators
+  if (title.includes('breakfast') || title.includes('oatmeal') || title.includes('omelet') || 
+      title.includes('pancake') || title.includes('egg muffin') || title.includes('crepe') ||
+      title.includes('french toast') || title.includes('waffle')) {
+    return 'breakfast';
+  }
+  
+  // Snack indicators
+  if (title.includes('snack') || title.includes('shake') || title.includes('smoothie') || 
+      title.includes('hummus') || title.includes('dip') || title.includes('pudding') ||
+      title.includes('protein shake') || title.includes('fruit salad')) {
+    return 'snack';
+  }
+  
+  // Lunch indicators (lighter meals, salads, sandwiches, soups)
+  if (title.includes('salad') || title.includes('sandwich') || title.includes('wrap') || 
+      title.includes('soup') || title.includes('deviled') || title.includes('spring roll')) {
+    return 'lunch';
+  }
+  
+  // Default to dinner for heavier/main dishes
+  return 'dinner';
 };
 
 export default function Plan() {
@@ -42,11 +79,11 @@ export default function Plan() {
   // Get the meal types to display based on user preference
   const activeMealTypes = useMemo(() => getMealTypesForCount(mealsPerDay), [mealsPerDay]);
 
-  // Distribute selected meals by their meal_type tag or infer from recipe tags
+  // Assign selected meals to the appropriate meal slots based on inferred type
   const getMealsForDay = (dayIndex: number) => {
-    if (selectedMeals.length === 0) return [];
+    if (selectedMeals.length === 0) return {};
     
-    // Group meals by their meal_type tag
+    // Group meals by their inferred meal type
     const mealsByType: Record<MealType, typeof selectedMeals> = {
       breakfast: [],
       lunch: [],
@@ -55,43 +92,38 @@ export default function Plan() {
     };
     
     selectedMeals.forEach((meal) => {
-      // Check recipe tags for meal_type
-      const mealTypeTag = meal.tags?.find(tag => 
-        tag.tag_type === 'meal_type' && ['breakfast', 'lunch', 'dinner', 'snack'].includes(tag.tag_value)
-      );
-      
-      if (mealTypeTag) {
-        mealsByType[mealTypeTag.tag_value as MealType].push(meal);
-      } else {
-        // Fallback: infer from title or assign based on nutrition
-        const title = meal.title.toLowerCase();
-        if (title.includes('breakfast') || title.includes('oatmeal') || title.includes('omelet') || title.includes('pancake')) {
-          mealsByType.breakfast.push(meal);
-        } else if (title.includes('snack') || title.includes('shake') || title.includes('smoothie') || title.includes('hummus')) {
-          mealsByType.snack.push(meal);
-        } else if (title.includes('salad') || title.includes('sandwich') || title.includes('wrap') || title.includes('soup')) {
-          mealsByType.lunch.push(meal);
-        } else {
-          mealsByType.dinner.push(meal);
-        }
+      const inferredType = inferMealType(meal);
+      mealsByType[inferredType].push(meal);
+    });
+    
+    // Build a map of mealType -> meal for this day
+    const dayMeals: Record<MealType, typeof selectedMeals[0] | null> = {
+      breakfast: null,
+      lunch: null,
+      dinner: null,
+      snack: null,
+    };
+    
+    // For each active meal type, pick a meal (cycling through available meals per day)
+    activeMealTypes.forEach((mealType, slotIndex) => {
+      const mealsOfType = mealsByType[mealType];
+      if (mealsOfType.length > 0) {
+        // Cycle through meals of this type based on day index
+        const mealIndex = dayIndex % mealsOfType.length;
+        dayMeals[mealType] = mealsOfType[mealIndex];
       }
     });
     
-    // For each active meal type, pick a meal (cycling through available meals per day)
-    return activeMealTypes.map((mealType, index) => {
-      const mealsOfType = mealsByType[mealType];
-      if (mealsOfType.length === 0) return null;
-      
-      // Cycle through meals of this type based on day index
-      const mealIndex = (dayIndex + index) % mealsOfType.length;
-      return {
-        ...mealsOfType[mealIndex],
-        mealType,
-      };
-    }).filter(Boolean);
+    return dayMeals;
   };
 
   const currentDayMeals = getMealsForDay(selectedDay);
+
+  // Calculate total calories for displayed meals
+  const totalCalories = activeMealTypes.reduce((acc, mealType) => {
+    const meal = currentDayMeals[mealType];
+    return acc + (meal?.nutrition?.calories || 0);
+  }, 0);
 
   return (
     <div className="min-h-screen bg-background pb-40">
@@ -123,14 +155,14 @@ export default function Plan() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold">{format(days[selectedDay], 'EEEE, MMM d')}</h2>
-            {currentDayMeals.length > 0 && (
+            {totalCalories > 0 && (
               <span className="text-sm text-muted-foreground">
-                {currentDayMeals.reduce((acc, m) => acc + (m.nutrition?.calories || 0), 0)} cal
+                {totalCalories} cal
               </span>
             )}
           </div>
 
-          {currentDayMeals.length === 0 ? (
+          {selectedMeals.length === 0 ? (
             <div className="py-12 text-center">
               <p className="text-muted-foreground mb-4">{t('plan.noMeals')}</p>
               <Button variant="outline" onClick={() => navigate('/discover')}>
@@ -141,8 +173,7 @@ export default function Plan() {
           ) : (
             <div className="space-y-3">
               {activeMealTypes.map((mealType, index) => {
-                const meal = currentDayMeals.find(m => m?.mealType === mealType && currentDayMeals.indexOf(m) === index);
-                const actualMeal = currentDayMeals[index];
+                const meal = currentDayMeals[mealType];
                 return (
                   <div
                     key={`${mealType}-${index}`}
@@ -153,25 +184,25 @@ export default function Plan() {
                   >
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-medium capitalize">{t(`mealTypes.${mealType}`)}</span>
-                      {!actualMeal && (
-                        <Button variant="ghost" size="sm">
+                      {!meal && (
+                        <Button variant="ghost" size="sm" onClick={() => navigate('/discover')}>
                           <Plus className="w-4 h-4" />
                         </Button>
                       )}
                     </div>
-                    {actualMeal && (
+                    {meal && (
                       <div className="flex gap-3">
                         <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-                          {actualMeal.image_url ? (
-                            <img src={actualMeal.image_url} alt={actualMeal.title} className="w-full h-full object-cover" />
+                          {meal.image_url ? (
+                            <img src={meal.image_url} alt={meal.title} className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-2xl">🍽️</div>
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{actualMeal.title}</p>
+                          <p className="font-medium text-sm truncate">{meal.title}</p>
                           <p className="text-xs text-muted-foreground">
-                            {actualMeal.nutrition?.calories} cal · {actualMeal.nutrition?.protein_g}g protein
+                            {meal.nutrition?.calories} cal · {meal.nutrition?.protein_g}g protein
                           </p>
                         </div>
                       </div>
