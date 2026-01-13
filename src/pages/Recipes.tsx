@@ -1,14 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Upload, Link, Camera, PenLine, BookOpen, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuthStore } from '@/stores/authStore';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import {
@@ -41,57 +39,15 @@ interface UserRecipe {
   } | null;
 }
 
-const fetchUserRecipes = async (userId: string): Promise<UserRecipe[]> => {
-  const { data: recipes, error } = await supabase
-    .from('recipes')
-    .select(`
-      id,
-      title,
-      description,
-      image_url,
-      prep_time,
-      cook_time,
-      total_time,
-      servings,
-      is_kid_friendly,
-      is_meal_prep_friendly,
-      recipe_nutrition (
-        calories,
-        protein_g,
-        carbs_g,
-        fat_g
-      )
-    `)
-    .eq('owner_user_id', userId)
-    .eq('is_deleted', false)
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-
-  return (recipes || []).map(r => ({
-    ...r,
-    nutrition: r.recipe_nutrition?.[0] || null
-  }));
-};
-
 export default function Recipes() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const user = useAuthStore(state => state.user);
-  
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [userRecipes, setUserRecipes] = useState<UserRecipe[]>([]);
+  const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [recipeToDelete, setRecipeToDelete] = useState<UserRecipe | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  const { data: userRecipes = [], isLoading: loading } = useQuery({
-    queryKey: ['user-recipes', user?.id],
-    queryFn: () => fetchUserRecipes(user!.id),
-    enabled: !!user?.id,
-    staleTime: 5 * 60 * 1000, // 5 minutes - data considered fresh
-    gcTime: 30 * 60 * 1000, // 30 minutes - keep in cache
-  });
 
   const addOptions = [
     { icon: Upload, label: 'Upload file', desc: 'PDF, image, or doc' },
@@ -99,6 +55,51 @@ export default function Recipes() {
     { icon: Camera, label: 'Take photo', desc: 'Snap a recipe' },
     { icon: PenLine, label: 'Create manually', desc: 'Write your own' },
   ];
+
+  useEffect(() => {
+    const fetchUserRecipes = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      const { data: recipes, error } = await supabase
+        .from('recipes')
+        .select(`
+          id,
+          title,
+          description,
+          image_url,
+          prep_time,
+          cook_time,
+          total_time,
+          servings,
+          is_kid_friendly,
+          is_meal_prep_friendly,
+          recipe_nutrition (
+            calories,
+            protein_g,
+            carbs_g,
+            fat_g
+          )
+        `)
+        .eq('owner_user_id', user.id)
+        .is('is_deleted', false)
+        .order('created_at', { ascending: false });
+
+      if (!error && recipes) {
+        const formattedRecipes = recipes.map(r => ({
+          ...r,
+          nutrition: r.recipe_nutrition?.[0] || null
+        }));
+        setUserRecipes(formattedRecipes);
+      }
+      setLoading(false);
+    };
+
+    fetchUserRecipes();
+  }, []);
 
   const handleDeleteClick = (recipe: UserRecipe) => {
     setRecipeToDelete(recipe);
@@ -117,10 +118,7 @@ export default function Recipes() {
     if (error) {
       toast.error(t('recipes.deleteError', 'Failed to delete recipe'));
     } else {
-      // Optimistically update the cache
-      queryClient.setQueryData(['user-recipes', user?.id], (old: UserRecipe[] | undefined) => 
-        old?.filter(r => r.id !== recipeToDelete.id) ?? []
-      );
+      setUserRecipes(prev => prev.filter(r => r.id !== recipeToDelete.id));
       toast.success(t('recipes.deleteSuccess', 'Recipe deleted'));
     }
     
