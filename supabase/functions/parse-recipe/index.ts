@@ -2,12 +2,66 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// Declare EdgeRuntime for background tasks
+declare const EdgeRuntime: { waitUntil: (promise: Promise<any>) => void };
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 const LOVABLE_API_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
+
+// Background image generation - runs after response is sent
+async function generateRecipeImagesInBackground(
+  recipeIds: { id: string; title: string; description: string | null }[],
+  supabaseUrl: string,
+  supabaseServiceKey: string,
+  lovableApiKey: string
+) {
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  
+  // Generate images in parallel (max 3 at a time to avoid rate limits)
+  const batchSize = 3;
+  for (let i = 0; i < recipeIds.length; i += batchSize) {
+    const batch = recipeIds.slice(i, i + batchSize);
+    await Promise.all(batch.map(async (recipe) => {
+      try {
+        console.log(`Generating image for recipe: ${recipe.title}`);
+        
+        const imagePrompt = `Professional food photography of ${recipe.title}. ${recipe.description || ''} 
+Beautiful plated dish, overhead angle, natural lighting, appetizing presentation, high-quality food photography style, 16:9 aspect ratio.`;
+
+        const imageResponse = await fetch(LOVABLE_API_URL, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${lovableApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-flash-image-preview',
+            messages: [{ role: 'user', content: imagePrompt }],
+            modalities: ['image', 'text']
+          }),
+        });
+
+        if (imageResponse.ok) {
+          const imageData = await imageResponse.json();
+          const generatedImageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+          
+          if (generatedImageUrl) {
+            await supabase.from('recipes').update({
+              image_url: generatedImageUrl
+            }).eq('id', recipe.id);
+            console.log(`Image saved for: ${recipe.title}`);
+          }
+        }
+      } catch (err) {
+        console.error(`Failed to generate image for ${recipe.title}:`, err);
+      }
+    }));
+  }
+}
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -77,31 +131,42 @@ serve(async (req) => {
       }
     }
 
-    // 5. Validate text content length (max 100KB for text)
-    const MAX_TEXT_SIZE = 100_000; // 100KB
-    if (!isImage && content && typeof content === 'string' && content.length > MAX_TEXT_SIZE) {
-      console.error('Text content too large:', content.length);
-      return new Response(
-        JSON.stringify({ success: false, error: 'Text content exceeds maximum size of 100KB' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Check if content is a base64-encoded document (PDF, DOCX)
+    const isBase64Document = content && typeof content === 'string' && 
+      (content.startsWith('data:application/pdf') || 
+       content.startsWith('data:application/vnd.openxmlformats') ||
+       content.startsWith('data:application/msword') ||
+       content.startsWith('data:application/octet-stream'));
+
+    // For documents, we'll send the base64 directly to AI for processing
+    // For text, validate size
+    if (!isImage && !isBase64Document && content && typeof content === 'string') {
+      const MAX_TEXT_SIZE = 100_000; // 100KB
+      if (content.length > MAX_TEXT_SIZE) {
+        console.error('Text content too large:', content.length);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Text content exceeds maximum size of 100KB' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
-    console.log(`Processing upload ${uploadId}, type: ${fileType}, isImage: ${isImage}`);
+    console.log(`Processing upload ${uploadId}, isImage: ${isImage}, isDocument: ${isBase64Document}`);
 
     // Update status to parsing
     await supabase.from('uploads').update({ status: 'parsing' }).eq('id', uploadId);
 
     // Build the prompt based on content type
     const systemPrompt = `You are an expert recipe extraction and nutrition calculation AI. Your job is to:
-1. Extract EVERY ingredient with exact quantities and units from the recipe
-2. Calculate accurate nutrition per serving based on the ingredients
-3. Always respond with valid JSON only, no markdown code blocks or explanation.
+1. Extract EVERY recipe from the provided content
+2. For each recipe, extract all ingredients with exact quantities and units
+3. Calculate accurate nutrition per serving based on the ingredients
+4. Always respond with valid JSON only, no markdown code blocks or explanation.
 
-CRITICAL: You MUST extract ALL ingredients visible in the recipe. Each ingredient needs:
-- name: the ingredient name (e.g., "eggs", "mayonnaise", "green onions")
-- quantity: numeric amount (e.g., 4, 0.5, 2)
-- unit: measurement unit (e.g., "large", "tablespoons", "cups", "pieces", or null if just a count)
+CRITICAL: 
+- Extract ALL recipes if there are multiple
+- Each ingredient needs: name, quantity (numeric), unit (or null)
+- Calculate realistic nutrition values based on actual ingredients
 
 For nutrition calculation:
 - Calculate based on the actual ingredients and quantities
@@ -121,9 +186,7 @@ For nutrition calculation:
       "difficulty": "easy|medium|hard",
       "cuisine": "American|Italian|Mexican|Asian|etc",
       "ingredients": [
-        { "name": "hard boiled eggs", "quantity": 4, "unit": "large" },
-        { "name": "mayonnaise", "quantity": 2, "unit": "tablespoons" },
-        { "name": "green onions", "quantity": 2, "unit": "stalks" }
+        { "name": "ingredient name", "quantity": 2, "unit": "cups" }
       ],
       "steps": [
         "Step 1 instruction",
@@ -143,16 +206,17 @@ For nutrition calculation:
 }
 
 IMPORTANT: 
-- Extract EVERY single ingredient mentioned, even if quantity is not explicitly stated (estimate reasonable amounts)
-- Calculate realistic nutrition values based on the actual ingredients
-- If servings not specified, estimate based on recipe size (typically 2-4)
-- If you cannot find recipe information, return: { "recipes": [], "error": "Could not extract recipe information" }`;
+- Extract ALL recipes from the document
+- Extract EVERY ingredient for each recipe
+- Calculate realistic nutrition values
+- If servings not specified, estimate based on recipe size
+- If no recipes found, return: { "recipes": [], "error": "Could not extract recipe information" }`;
 
-    // Build messages based on whether we have an image or text
+    // Build messages based on whether we have an image, document, or text
     let messages: any[] = [];
     
     if (isImage && content && content.startsWith('data:image/')) {
-      // For images, use vision capabilities with multimodal message
+      // For images, use vision capabilities
       messages = [
         { role: 'system', content: systemPrompt },
         { 
@@ -160,42 +224,48 @@ IMPORTANT:
           content: [
             {
               type: 'image_url',
-              image_url: {
-                url: content
-              }
+              image_url: { url: content }
             },
             {
               type: 'text',
-              text: `CAREFULLY extract ALL recipe information from this image.
-
-CRITICAL TASKS:
-1. Read EVERY ingredient listed - include the exact quantity and unit for each
-2. Read ALL cooking instructions/steps
-3. Calculate accurate nutrition per serving based on the ingredients you extract
-4. Identify the recipe title, servings count, and cooking times if visible
-
-${jsonFormat}`
+              text: `Extract ALL recipe information from this image.\n\n${jsonFormat}`
+            }
+          ]
+        }
+      ];
+    } else if (isBase64Document && content) {
+      // For documents (PDF, DOCX), extract text from base64 and send to AI
+      // The AI can process the base64 content directly with vision models
+      messages = [
+        { role: 'system', content: systemPrompt },
+        { 
+          role: 'user', 
+          content: [
+            {
+              type: 'image_url',
+              image_url: { url: content }
+            },
+            {
+              type: 'text',
+              text: `This is a document containing recipes. Extract ALL recipes from it.\n\n${jsonFormat}`
             }
           ]
         }
       ];
     } else {
       // For text content
-      const prompt = `Extract recipe information from the following content and return it as JSON.
-
-${jsonFormat}
-
-Content to analyze:
-${content || sourceUrl || 'No content provided'}`;
-      
+      const prompt = `Extract ALL recipes from the following content.\n\n${jsonFormat}\n\nContent:\n${content || sourceUrl || 'No content provided'}`;
       messages = [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt }
       ];
     }
 
-    // Call Lovable AI - use gemini-2.5-pro for images (better vision) or flash for text
-    const model = isImage ? 'google/gemini-2.5-pro' : 'google/gemini-2.5-flash';
+    // Use gemini-2.5-pro for images/documents (better vision), flash for text
+    const model = (isImage || isBase64Document) ? 'google/gemini-2.5-pro' : 'google/gemini-2.5-flash';
+    
+    console.log(`Calling AI with model: ${model}`);
+    const aiStartTime = Date.now();
     
     const aiResponse = await fetch(LOVABLE_API_URL, {
       method: 'POST',
@@ -210,6 +280,8 @@ ${content || sourceUrl || 'No content provided'}`;
       }),
     });
 
+    console.log(`AI response received in ${Date.now() - aiStartTime}ms`);
+
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
       console.error('AI API error:', errorText);
@@ -223,12 +295,11 @@ ${content || sourceUrl || 'No content provided'}`;
       throw new Error('No response from AI');
     }
 
-    console.log('AI response received:', aiContent.substring(0, 200));
+    console.log('AI response preview:', aiContent.substring(0, 300));
 
     // Parse the JSON response
     let parsedRecipes;
     try {
-      // Remove markdown code blocks if present
       let cleanContent = aiContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       parsedRecipes = JSON.parse(cleanContent);
     } catch (parseError) {
@@ -236,12 +307,7 @@ ${content || sourceUrl || 'No content provided'}`;
       throw new Error('Failed to parse AI response as JSON');
     }
 
-    // ========== VALIDATE AI OUTPUT STRUCTURE ==========
-    if (!parsedRecipes || typeof parsedRecipes !== 'object') {
-      throw new Error('Invalid AI response: not an object');
-    }
-    
-    if (!Array.isArray(parsedRecipes.recipes)) {
+    if (!parsedRecipes || !Array.isArray(parsedRecipes.recipes)) {
       console.error('Invalid AI response structure:', JSON.stringify(parsedRecipes).substring(0, 200));
       throw new Error('Invalid AI response: missing recipes array');
     }
@@ -257,18 +323,16 @@ ${content || sourceUrl || 'No content provided'}`;
       throw new Error('Upload not found');
     }
 
-    // Save recipes to database
-    const createdRecipes = [];
-    for (const recipe of parsedRecipes.recipes) {
-      // ========== VALIDATE AND SANITIZE EACH RECIPE ==========
-      
-      // Validate required title field
+    console.log(`Found ${parsedRecipes.recipes.length} recipes to save`);
+
+    // Save all recipes in parallel for speed
+    const recipePromises = parsedRecipes.recipes.map(async (recipe: any) => {
       if (!recipe.title || typeof recipe.title !== 'string') {
         console.warn('Skipping recipe with invalid title');
-        continue;
+        return null;
       }
       
-      // Sanitize string fields (max lengths)
+      // Sanitize fields
       const sanitizedTitle = recipe.title.trim().substring(0, 200);
       const sanitizedDescription = typeof recipe.description === 'string' 
         ? recipe.description.trim().substring(0, 1000) 
@@ -277,26 +341,19 @@ ${content || sourceUrl || 'No content provided'}`;
         ? recipe.cuisine.trim().substring(0, 50)
         : null;
       
-      // Validate and sanitize numeric fields
       const sanitizedServings = (typeof recipe.servings === 'number' && recipe.servings >= 1 && recipe.servings <= 100)
-        ? Math.round(recipe.servings)
-        : 4;
+        ? Math.round(recipe.servings) : 4;
       const sanitizedPrepTime = (typeof recipe.prep_time === 'number' && recipe.prep_time >= 0 && recipe.prep_time <= 1440)
-        ? Math.round(recipe.prep_time)
-        : null;
+        ? Math.round(recipe.prep_time) : null;
       const sanitizedCookTime = (typeof recipe.cook_time === 'number' && recipe.cook_time >= 0 && recipe.cook_time <= 1440)
-        ? Math.round(recipe.cook_time)
-        : null;
+        ? Math.round(recipe.cook_time) : null;
       const sanitizedTotalTime = (typeof recipe.total_time === 'number' && recipe.total_time >= 0 && recipe.total_time <= 2880)
-        ? Math.round(recipe.total_time)
-        : ((sanitizedPrepTime || 0) + (sanitizedCookTime || 0)) || null;
+        ? Math.round(recipe.total_time) : ((sanitizedPrepTime || 0) + (sanitizedCookTime || 0)) || null;
       
-      // Validate difficulty
       const validDifficulties = ['easy', 'medium', 'hard'];
-      const sanitizedDifficulty = validDifficulties.includes(recipe.difficulty) 
-        ? recipe.difficulty 
-        : 'medium';
-      // Insert recipe with sanitized data
+      const sanitizedDifficulty = validDifficulties.includes(recipe.difficulty) ? recipe.difficulty : 'medium';
+
+      // Insert recipe
       const { data: newRecipe, error: recipeError } = await supabase
         .from('recipes')
         .insert({
@@ -316,42 +373,35 @@ ${content || sourceUrl || 'No content provided'}`;
 
       if (recipeError) {
         console.error('Error creating recipe:', recipeError);
-        continue;
+        return null;
       }
 
-      createdRecipes.push(newRecipe);
+      // Insert related data in parallel
+      const relatedPromises = [];
 
-      // Insert ingredients with validation
+      // Ingredients
       if (Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0) {
         const validIngredients = recipe.ingredients
           .filter((ing: any) => ing && typeof ing.name === 'string' && ing.name.trim())
-          .slice(0, 100) // Max 100 ingredients per recipe
+          .slice(0, 100)
           .map((ing: any, idx: number) => ({
             recipe_id: newRecipe.id,
             name: ing.name.trim().substring(0, 200),
-            quantity: (typeof ing.quantity === 'number' && ing.quantity >= 0 && ing.quantity <= 10000) 
-              ? ing.quantity 
-              : null,
+            quantity: (typeof ing.quantity === 'number' && ing.quantity >= 0 && ing.quantity <= 10000) ? ing.quantity : null,
             unit: typeof ing.unit === 'string' ? ing.unit.trim().substring(0, 50) : null,
             order_index: idx,
           }));
         
         if (validIngredients.length > 0) {
-          console.log(`Inserting ${validIngredients.length} ingredients for recipe ${newRecipe.id}`);
-          const { error: ingError } = await supabase.from('recipe_ingredients').insert(validIngredients);
-          if (ingError) {
-            console.error('Error inserting ingredients:', ingError);
-          }
+          relatedPromises.push(supabase.from('recipe_ingredients').insert(validIngredients));
         }
-      } else {
-        console.warn(`No valid ingredients found for recipe ${sanitizedTitle}`);
       }
 
-      // Insert steps with validation
+      // Steps
       if (Array.isArray(recipe.steps) && recipe.steps.length > 0) {
         const validSteps = recipe.steps
           .filter((step: any) => typeof step === 'string' && step.trim())
-          .slice(0, 50) // Max 50 steps per recipe
+          .slice(0, 50)
           .map((step: string, idx: number) => ({
             recipe_id: newRecipe.id,
             step_number: idx + 1,
@@ -359,19 +409,19 @@ ${content || sourceUrl || 'No content provided'}`;
           }));
         
         if (validSteps.length > 0) {
-          await supabase.from('recipe_steps').insert(validSteps);
+          relatedPromises.push(supabase.from('recipe_steps').insert(validSteps));
         }
       }
 
-      // Insert nutrition with validation - always create a record even if values are partial
+      // Nutrition
       const validateNutrition = (val: any, max: number): number | null => {
         if (typeof val === 'number' && val >= 0 && val <= max) {
-          return Math.round(val * 10) / 10; // Round to 1 decimal
+          return Math.round(val * 10) / 10;
         }
         return null;
       };
       
-      const nutritionData = {
+      relatedPromises.push(supabase.from('recipe_nutrition').insert({
         recipe_id: newRecipe.id,
         calories: validateNutrition(recipe.nutrition?.calories, 10000),
         protein_g: validateNutrition(recipe.nutrition?.protein_g, 1000),
@@ -379,20 +429,13 @@ ${content || sourceUrl || 'No content provided'}`;
         fat_g: validateNutrition(recipe.nutrition?.fat_g, 1000),
         fiber_g: validateNutrition(recipe.nutrition?.fiber_g, 500),
         sodium_mg: validateNutrition(recipe.nutrition?.sodium_mg, 50000),
-      };
-      
-      const { error: nutritionError } = await supabase.from('recipe_nutrition').insert(nutritionData);
-      if (nutritionError) {
-        console.error('Error inserting nutrition:', nutritionError);
-      } else {
-        console.log('Nutrition inserted for recipe:', sanitizedTitle);
-      }
+      }));
 
-      // Insert tags with validation
+      // Tags
       if (Array.isArray(recipe.tags) && recipe.tags.length > 0) {
         const validTags = recipe.tags
           .filter((tag: any) => typeof tag === 'string' && tag.trim())
-          .slice(0, 20) // Max 20 tags per recipe
+          .slice(0, 20)
           .map((tag: string) => ({
             recipe_id: newRecipe.id,
             tag_type: 'meal',
@@ -400,85 +443,47 @@ ${content || sourceUrl || 'No content provided'}`;
           }));
         
         if (validTags.length > 0) {
-          await supabase.from('recipe_tags').insert(validTags);
+          relatedPromises.push(supabase.from('recipe_tags').insert(validTags));
         }
       }
 
       // Link upload to recipe
-      await supabase.from('upload_recipe_links').insert({
+      relatedPromises.push(supabase.from('upload_recipe_links').insert({
         upload_id: uploadId,
         recipe_id: newRecipe.id,
-      });
+      }));
 
-      // Generate an image for the recipe using AI
-      try {
-        console.log(`Generating image for recipe: ${recipe.title}`);
-        
-        const imagePrompt = `Professional food photography of ${recipe.title}. ${recipe.description || ''} 
-Beautiful plated dish, overhead angle, natural lighting, appetizing presentation, high-quality food photography style, 16:9 aspect ratio.`;
+      await Promise.all(relatedPromises);
+      
+      return { id: newRecipe.id, title: sanitizedTitle, description: sanitizedDescription };
+    });
 
-        const imageResponse = await fetch(LOVABLE_API_URL, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.5-flash-image-preview',
-            messages: [
-              {
-                role: 'user',
-                content: imagePrompt
-              }
-            ],
-            modalities: ['image', 'text']
-          }),
-        });
+    const results = await Promise.all(recipePromises);
+    const createdRecipes = results.filter(r => r !== null) as { id: string; title: string; description: string | null }[];
 
-        if (imageResponse.ok) {
-          const imageData = await imageResponse.json();
-          const generatedImageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-          
-          if (generatedImageUrl) {
-            // Update recipe with the generated image
-            await supabase.from('recipes').update({
-              image_url: generatedImageUrl
-            }).eq('id', newRecipe.id);
-            
-            console.log(`Image generated and saved for recipe: ${recipe.title}`);
-          }
-        } else {
-          console.error('Failed to generate image:', await imageResponse.text());
-        }
-      } catch (imgError) {
-        console.error('Error generating recipe image:', imgError);
-        // Continue without image - not a critical failure
-      }
-    }
+    console.log(`Successfully saved ${createdRecipes.length} recipes in ${Date.now() - aiStartTime}ms total`);
 
-    // Rename upload file based on parsed recipes
-    // If single recipe: rename to recipe title
-    // If multiple recipes: keep original file name
+    // Update upload status
     const recipesCount = createdRecipes.length;
     if (recipesCount === 1 && createdRecipes[0]?.title) {
-      // Single recipe - rename file to recipe title
-      const recipeTitle = createdRecipes[0].title;
       await supabase.from('uploads').update({
         status: 'parsed',
         parsed_text: aiContent,
-        file_name: recipeTitle,
+        file_name: createdRecipes[0].title,
       }).eq('id', uploadId);
-      console.log(`Renamed upload to single recipe title: "${recipeTitle}"`);
     } else {
-      // Multiple recipes or no recipes - keep original file name
       await supabase.from('uploads').update({
         status: 'parsed',
         parsed_text: aiContent,
       }).eq('id', uploadId);
-      console.log(`Kept original file name (${recipesCount} recipes extracted)`);
     }
 
-    console.log(`Successfully parsed ${createdRecipes.length} recipes`);
+    // Generate images in background AFTER returning response
+    if (createdRecipes.length > 0) {
+      EdgeRuntime.waitUntil(
+        generateRecipeImagesInBackground(createdRecipes, supabaseUrl, supabaseServiceKey, LOVABLE_API_KEY)
+      );
+    }
 
     return new Response(
       JSON.stringify({
@@ -493,7 +498,6 @@ Beautiful plated dish, overhead angle, natural lighting, appetizing presentation
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error parsing recipe:', errorMessage);
     
-    // Try to update upload status to failed
     try {
       const { uploadId } = await req.clone().json();
       if (uploadId) {
