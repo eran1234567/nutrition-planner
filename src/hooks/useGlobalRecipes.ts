@@ -79,27 +79,32 @@ export function useGlobalRecipes() {
         throw error;
       }
 
-      return (data || []).map(r => ({
-        id: r.id,
-        title: r.title,
-        description: r.description,
-        image_url: r.image_url,
-        prep_time: r.prep_time,
-        cook_time: r.cook_time,
-        total_time: r.total_time,
-        servings: r.servings,
-        difficulty: r.difficulty,
-        cuisine: r.cuisine,
-        is_kid_friendly: r.is_kid_friendly,
-        is_meal_prep_friendly: r.is_meal_prep_friendly,
-        is_budget_friendly: r.is_budget_friendly,
-        scope: r.scope,
-        nutrition: r.recipe_nutrition?.[0] || undefined,
-        ingredients: r.recipe_ingredients || [],
-        steps: r.recipe_steps || [],
-        tags: r.recipe_tags || [],
-        isUserRecipe: false,
-      }));
+      return (data || []).map(r => {
+        // recipe_nutrition is a one-to-one relation, so it's an object (or null), not an array
+        const nutritionData = r.recipe_nutrition;
+        
+        return {
+          id: r.id,
+          title: r.title,
+          description: r.description,
+          image_url: r.image_url,
+          prep_time: r.prep_time,
+          cook_time: r.cook_time,
+          total_time: r.total_time,
+          servings: r.servings,
+          difficulty: r.difficulty,
+          cuisine: r.cuisine,
+          is_kid_friendly: r.is_kid_friendly,
+          is_meal_prep_friendly: r.is_meal_prep_friendly,
+          is_budget_friendly: r.is_budget_friendly,
+          scope: r.scope,
+          nutrition: nutritionData || undefined,
+          ingredients: r.recipe_ingredients || [],
+          steps: r.recipe_steps || [],
+          tags: r.recipe_tags || [],
+          isUserRecipe: false,
+        };
+      });
     },
     staleTime: 1000 * 60 * 10, // Cache for 10 minutes
   });

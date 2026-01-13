@@ -2,10 +2,29 @@ import { useState } from 'react';
 import { Clock, Users, Check, Plus, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import type { Recipe } from '@/types';
+
+interface NutritionData {
+  calories?: number | null;
+  protein_g?: number | null;
+  carbs_g?: number | null;
+  fat_g?: number | null;
+}
+
+interface RecipeCardRecipe {
+  id: string;
+  title: string;
+  image_url?: string | null;
+  total_time?: number | null;
+  servings?: number | null;
+  is_kid_friendly?: boolean | null;
+  is_meal_prep_friendly?: boolean | null;
+  nutrition?: NutritionData | null;
+  // Allow additional properties from different recipe types
+  [key: string]: unknown;
+}
 
 interface RecipeCardProps {
-  recipe: Recipe;
+  recipe: RecipeCardRecipe;
   isSelected?: boolean;
   onSelect?: () => void;
   onClick?: () => void;
@@ -23,6 +42,14 @@ export function RecipeCard({
 }: RecipeCardProps) {
   const nutrition = recipe.nutrition;
   const [imageError, setImageError] = useState(false);
+  
+  // Check if we have valid nutrition data to display
+  const hasNutrition = nutrition && (
+    nutrition.calories != null || 
+    nutrition.protein_g != null || 
+    nutrition.carbs_g != null || 
+    nutrition.fat_g != null
+  );
 
   return (
     <motion.article
@@ -114,24 +141,24 @@ export function RecipeCard({
         </h3>
 
         {/* Nutrition per serving */}
-        {nutrition && (
+        {hasNutrition && (
           <div className="bg-muted/50 rounded-lg p-2 mt-1">
             <p className="text-2xs text-muted-foreground mb-1.5 font-medium">Per serving</p>
             <div className="flex items-center justify-between gap-1">
               <div className="text-center flex-1">
-                <p className="text-sm font-bold text-[hsl(var(--calories))]">{nutrition.calories}</p>
+                <p className="text-sm font-bold text-[hsl(var(--calories))]">{nutrition?.calories ?? '-'}</p>
                 <p className="text-2xs text-muted-foreground">kcal</p>
               </div>
               <div className="text-center flex-1">
-                <p className="text-sm font-bold text-[hsl(var(--protein))]">{nutrition.protein_g}g</p>
+                <p className="text-sm font-bold text-[hsl(var(--protein))]">{nutrition?.protein_g ?? '-'}g</p>
                 <p className="text-2xs text-muted-foreground">protein</p>
               </div>
               <div className="text-center flex-1">
-                <p className="text-sm font-bold text-[hsl(var(--carbs))]">{nutrition.carbs_g}g</p>
+                <p className="text-sm font-bold text-[hsl(var(--carbs))]">{nutrition?.carbs_g ?? '-'}g</p>
                 <p className="text-2xs text-muted-foreground">carbs</p>
               </div>
               <div className="text-center flex-1">
-                <p className="text-sm font-bold text-[hsl(var(--fat))]">{nutrition.fat_g}g</p>
+                <p className="text-sm font-bold text-[hsl(var(--fat))]">{nutrition?.fat_g ?? '-'}g</p>
                 <p className="text-2xs text-muted-foreground">fat</p>
               </div>
             </div>
