@@ -9,7 +9,6 @@ import {
   Target, 
   AlertTriangle, 
   Heart,
-  ChefHat,
   LogOut,
   ChevronRight,
   Upload
@@ -68,13 +67,6 @@ const settingsItems = [
     labelKey: 'settings.medical',
     descKey: 'settings.medicalDesc',
     step: 4,
-  },
-  {
-    id: 'cuisine',
-    icon: ChefHat,
-    labelKey: 'settings.cuisine',
-    descKey: 'settings.cuisineDesc',
-    step: 5,
   },
 ];
 

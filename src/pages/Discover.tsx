@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { Search, Clock, Sparkles, BookOpen } from 'lucide-react';
+import { Search, Clock, Sparkles, BookOpen, ChefHat } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -25,6 +25,8 @@ const timeFilters = [
 ];
 
 const mealFilters = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+const cuisineFilters = ['American', 'Italian', 'Mexican', 'Asian', 'Mediterranean', 'Indian', 'Japanese', 'Thai', 'French', 'Greek'];
 
 interface UserRecipe {
   id: string;
@@ -61,6 +63,7 @@ export default function Discover() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTime, setSelectedTime] = useState<number | null>(null);
   const [selectedMealType, setSelectedMealType] = useState<string | null>(null);
+  const [selectedCuisine, setSelectedCuisine] = useState<string | null>(null);
   const [userRecipes, setUserRecipes] = useState<UserRecipe[]>([]);
   const [recipeSource, setRecipeSource] = useState<'all' | 'my' | 'app'>('all');
 
@@ -161,9 +164,6 @@ export default function Discover() {
     }
   }, [userRecipes, globalRecipes, recipeSource]);
 
-  // User's max cook time preference
-  const userMaxCookTime = preferences?.max_cook_time ?? null;
-
   const filteredRecipes = useMemo(() => {
     return allRecipes.filter(recipe => {
       // Filter out recipes without valid images (only for app recipes)
@@ -181,17 +181,13 @@ export default function Discover() {
         return false;
       }
 
-      // User preference: max cook time filter (from onboarding)
-      // Apply to app recipes; use total_time or fallback to cook_time
-      if (!recipe.isUserRecipe && userMaxCookTime) {
-        const recipeTime = recipe.total_time ?? recipe.cook_time ?? 0;
-        if (recipeTime > userMaxCookTime) {
-          return false;
-        }
-      }
-
       // Meal type filter
       if (selectedMealType && !recipe.tags.some(t => t.tag_type === 'meal' && t.tag_value === selectedMealType)) {
+        return false;
+      }
+
+      // Cuisine filter
+      if (selectedCuisine && recipe.cuisine?.toLowerCase() !== selectedCuisine.toLowerCase()) {
         return false;
       }
 
@@ -214,7 +210,7 @@ export default function Discover() {
 
       return true;
     });
-  }, [allRecipes, searchQuery, selectedTime, userMaxCookTime, selectedMealType, blockedTerms]);
+  }, [allRecipes, searchQuery, selectedTime, selectedMealType, selectedCuisine, blockedTerms]);
 
   const isSelected = (recipeId: string) => selectedMeals.some(r => r.id === recipeId);
 
@@ -302,7 +298,7 @@ export default function Discover() {
         </div>
 
         {/* Time filters */}
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-4 mb-4">
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 mb-2">
           {timeFilters.map(filter => (
             <Chip
               key={filter.max}
@@ -312,6 +308,21 @@ export default function Discover() {
               icon={<Clock className="w-3 h-3" />}
             >
               {filter.label}
+            </Chip>
+          ))}
+        </div>
+
+        {/* Cuisine filters */}
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-4 mb-4">
+          {cuisineFilters.map(cuisine => (
+            <Chip
+              key={cuisine}
+              selected={selectedCuisine === cuisine}
+              onClick={() => setSelectedCuisine(selectedCuisine === cuisine ? null : cuisine)}
+              variant="outline"
+              icon={<ChefHat className="w-3 h-3" />}
+            >
+              {t(`cuisines.${cuisine.toLowerCase()}`, cuisine)}
             </Chip>
           ))}
         </div>
