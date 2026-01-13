@@ -283,6 +283,51 @@ ${content || sourceUrl || 'No content provided'}`;
         upload_id: uploadId,
         recipe_id: newRecipe.id,
       });
+
+      // Generate an image for the recipe using AI
+      try {
+        console.log(`Generating image for recipe: ${recipe.title}`);
+        
+        const imagePrompt = `Professional food photography of ${recipe.title}. ${recipe.description || ''} 
+Beautiful plated dish, overhead angle, natural lighting, appetizing presentation, high-quality food photography style, 16:9 aspect ratio.`;
+
+        const imageResponse = await fetch(LOVABLE_API_URL, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-flash-image-preview',
+            messages: [
+              {
+                role: 'user',
+                content: imagePrompt
+              }
+            ],
+            modalities: ['image', 'text']
+          }),
+        });
+
+        if (imageResponse.ok) {
+          const imageData = await imageResponse.json();
+          const generatedImageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+          
+          if (generatedImageUrl) {
+            // Update recipe with the generated image
+            await supabase.from('recipes').update({
+              image_url: generatedImageUrl
+            }).eq('id', newRecipe.id);
+            
+            console.log(`Image generated and saved for recipe: ${recipe.title}`);
+          }
+        } else {
+          console.error('Failed to generate image:', await imageResponse.text());
+        }
+      } catch (imgError) {
+        console.error('Error generating recipe image:', imgError);
+        // Continue without image - not a critical failure
+      }
     }
 
     // Update upload status
