@@ -49,7 +49,6 @@ const MyRecipes = () => {
   const [uploads, setUploads] = useState<UploadedItem[]>([]);
   const [showLinkInput, setShowLinkInput] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
 
   // Load existing uploads from database
   const loadUploads = useCallback(async () => {
@@ -124,7 +123,9 @@ const MyRecipes = () => {
               ? { 
                   ...u, 
                   status: updatedUpload.status as UploadedItem['status'],
-                  recipeCount 
+                  recipeCount,
+                  // Update the name if it was renamed (single recipe case)
+                  name: updatedUpload.file_name || u.name,
                 } 
               : u
           ));
@@ -198,8 +199,7 @@ const MyRecipes = () => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    setIsUploading(true);
-    
+    // Don't block the UI - process files in background
     for (const file of Array.from(files)) {
       // Read file content
       let fileContent = '';
@@ -245,9 +245,9 @@ const MyRecipes = () => {
           setUploads(prev => [newUpload, ...prev]);
           toast.success(t('myRecipes.uploadSuccess', 'File added successfully'));
 
-          // Trigger parsing immediately with actual content
+          // Trigger parsing in background (don't await - let it process asynchronously)
           if (fileContent) {
-            await triggerParsing(uploadData.id, fileContent, undefined, isImage);
+            triggerParsing(uploadData.id, fileContent, undefined, isImage);
           }
         } catch (error) {
           toast.error(t('myRecipes.uploadError', 'Failed to save file'));
@@ -255,7 +255,6 @@ const MyRecipes = () => {
       }
     }
     
-    setIsUploading(false);
     if (event.target) {
       event.target.value = '';
     }
@@ -594,17 +593,6 @@ const MyRecipes = () => {
           </Button>
         </div>
       </div>
-
-      {isUploading && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">
-              {t('myRecipes.uploading', 'Uploading...')}
-            </p>
-          </div>
-        </div>
-      )}
 
       <BottomNav />
     </div>
