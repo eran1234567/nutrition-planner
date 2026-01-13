@@ -27,9 +27,62 @@ serve(async (req) => {
 
     const { uploadId, content, sourceUrl, fileType, isImage } = await req.json();
 
-    if (!uploadId) {
+    // ========== INPUT VALIDATION ==========
+    
+    // 1. Validate uploadId format (UUID)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uploadId || typeof uploadId !== 'string' || !uuidRegex.test(uploadId)) {
+      console.error('Invalid upload ID format:', uploadId);
       return new Response(
-        JSON.stringify({ success: false, error: 'Upload ID is required' }),
+        JSON.stringify({ success: false, error: 'Invalid upload ID format' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 2. Validate content size (max 10MB for base64 content)
+    const MAX_CONTENT_SIZE = 10_000_000; // 10MB
+    if (content && typeof content === 'string' && content.length > MAX_CONTENT_SIZE) {
+      console.error('Content too large:', content.length);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Content exceeds maximum size of 10MB' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 3. Validate image format if isImage flag is set
+    if (isImage && content) {
+      const validImagePattern = /^data:image\/(jpeg|jpg|png|gif|webp|heic);base64,/i;
+      if (typeof content !== 'string' || !validImagePattern.test(content)) {
+        console.error('Invalid image format');
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid image format. Supported: JPEG, PNG, GIF, WebP' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // 4. Validate sourceUrl format if provided
+    if (sourceUrl && typeof sourceUrl === 'string') {
+      try {
+        const url = new URL(sourceUrl);
+        if (!['http:', 'https:'].includes(url.protocol)) {
+          throw new Error('Invalid protocol');
+        }
+      } catch {
+        console.error('Invalid source URL:', sourceUrl);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid source URL format' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // 5. Validate text content length (max 100KB for text)
+    const MAX_TEXT_SIZE = 100_000; // 100KB
+    if (!isImage && content && typeof content === 'string' && content.length > MAX_TEXT_SIZE) {
+      console.error('Text content too large:', content.length);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Text content exceeds maximum size of 100KB' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -183,6 +236,16 @@ ${content || sourceUrl || 'No content provided'}`;
       throw new Error('Failed to parse AI response as JSON');
     }
 
+    // ========== VALIDATE AI OUTPUT STRUCTURE ==========
+    if (!parsedRecipes || typeof parsedRecipes !== 'object') {
+      throw new Error('Invalid AI response: not an object');
+    }
+    
+    if (!Array.isArray(parsedRecipes.recipes)) {
+      console.error('Invalid AI response structure:', JSON.stringify(parsedRecipes).substring(0, 200));
+      throw new Error('Invalid AI response: missing recipes array');
+    }
+
     // Get the upload to find owner
     const { data: upload } = await supabase
       .from('uploads')
@@ -196,20 +259,56 @@ ${content || sourceUrl || 'No content provided'}`;
 
     // Save recipes to database
     const createdRecipes = [];
-    for (const recipe of parsedRecipes.recipes || []) {
-      // Insert recipe
+    for (const recipe of parsedRecipes.recipes) {
+      // ========== VALIDATE AND SANITIZE EACH RECIPE ==========
+      
+      // Validate required title field
+      if (!recipe.title || typeof recipe.title !== 'string') {
+        console.warn('Skipping recipe with invalid title');
+        continue;
+      }
+      
+      // Sanitize string fields (max lengths)
+      const sanitizedTitle = recipe.title.trim().substring(0, 200);
+      const sanitizedDescription = typeof recipe.description === 'string' 
+        ? recipe.description.trim().substring(0, 1000) 
+        : null;
+      const sanitizedCuisine = typeof recipe.cuisine === 'string'
+        ? recipe.cuisine.trim().substring(0, 50)
+        : null;
+      
+      // Validate and sanitize numeric fields
+      const sanitizedServings = (typeof recipe.servings === 'number' && recipe.servings >= 1 && recipe.servings <= 100)
+        ? Math.round(recipe.servings)
+        : 4;
+      const sanitizedPrepTime = (typeof recipe.prep_time === 'number' && recipe.prep_time >= 0 && recipe.prep_time <= 1440)
+        ? Math.round(recipe.prep_time)
+        : null;
+      const sanitizedCookTime = (typeof recipe.cook_time === 'number' && recipe.cook_time >= 0 && recipe.cook_time <= 1440)
+        ? Math.round(recipe.cook_time)
+        : null;
+      const sanitizedTotalTime = (typeof recipe.total_time === 'number' && recipe.total_time >= 0 && recipe.total_time <= 2880)
+        ? Math.round(recipe.total_time)
+        : ((sanitizedPrepTime || 0) + (sanitizedCookTime || 0)) || null;
+      
+      // Validate difficulty
+      const validDifficulties = ['easy', 'medium', 'hard'];
+      const sanitizedDifficulty = validDifficulties.includes(recipe.difficulty) 
+        ? recipe.difficulty 
+        : 'medium';
+      // Insert recipe with sanitized data
       const { data: newRecipe, error: recipeError } = await supabase
         .from('recipes')
         .insert({
           owner_user_id: upload.owner_user_id,
-          title: recipe.title,
-          description: recipe.description,
-          prep_time: recipe.prep_time,
-          cook_time: recipe.cook_time,
-          total_time: recipe.total_time || ((recipe.prep_time || 0) + (recipe.cook_time || 0)),
-          servings: recipe.servings || 4,
-          difficulty: recipe.difficulty || 'medium',
-          cuisine: recipe.cuisine,
+          title: sanitizedTitle,
+          description: sanitizedDescription,
+          prep_time: sanitizedPrepTime,
+          cook_time: sanitizedCookTime,
+          total_time: sanitizedTotalTime,
+          servings: sanitizedServings,
+          difficulty: sanitizedDifficulty,
+          cuisine: sanitizedCuisine,
           scope: 'private',
         })
         .select()
@@ -222,60 +321,87 @@ ${content || sourceUrl || 'No content provided'}`;
 
       createdRecipes.push(newRecipe);
 
-      // Insert ingredients
-      if (recipe.ingredients?.length > 0) {
-        const ingredients = recipe.ingredients.map((ing: any, idx: number) => ({
-          recipe_id: newRecipe.id,
-          name: ing.name,
-          quantity: ing.quantity,
-          unit: ing.unit,
-          order_index: idx,
-        }));
-        console.log(`Inserting ${ingredients.length} ingredients for recipe ${newRecipe.id}:`, JSON.stringify(ingredients));
-        const { error: ingError } = await supabase.from('recipe_ingredients').insert(ingredients);
-        if (ingError) {
-          console.error('Error inserting ingredients:', ingError);
+      // Insert ingredients with validation
+      if (Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0) {
+        const validIngredients = recipe.ingredients
+          .filter((ing: any) => ing && typeof ing.name === 'string' && ing.name.trim())
+          .slice(0, 100) // Max 100 ingredients per recipe
+          .map((ing: any, idx: number) => ({
+            recipe_id: newRecipe.id,
+            name: ing.name.trim().substring(0, 200),
+            quantity: (typeof ing.quantity === 'number' && ing.quantity >= 0 && ing.quantity <= 10000) 
+              ? ing.quantity 
+              : null,
+            unit: typeof ing.unit === 'string' ? ing.unit.trim().substring(0, 50) : null,
+            order_index: idx,
+          }));
+        
+        if (validIngredients.length > 0) {
+          console.log(`Inserting ${validIngredients.length} ingredients for recipe ${newRecipe.id}`);
+          const { error: ingError } = await supabase.from('recipe_ingredients').insert(validIngredients);
+          if (ingError) {
+            console.error('Error inserting ingredients:', ingError);
+          }
         }
       } else {
-        console.warn(`No ingredients found for recipe ${newRecipe.title}`);
+        console.warn(`No valid ingredients found for recipe ${sanitizedTitle}`);
       }
 
-      // Insert steps
-      if (recipe.steps?.length > 0) {
-        const steps = recipe.steps.map((step: string, idx: number) => ({
-          recipe_id: newRecipe.id,
-          step_number: idx + 1,
-          instruction: step,
-        }));
-        await supabase.from('recipe_steps').insert(steps);
+      // Insert steps with validation
+      if (Array.isArray(recipe.steps) && recipe.steps.length > 0) {
+        const validSteps = recipe.steps
+          .filter((step: any) => typeof step === 'string' && step.trim())
+          .slice(0, 50) // Max 50 steps per recipe
+          .map((step: string, idx: number) => ({
+            recipe_id: newRecipe.id,
+            step_number: idx + 1,
+            instruction: step.trim().substring(0, 2000),
+          }));
+        
+        if (validSteps.length > 0) {
+          await supabase.from('recipe_steps').insert(validSteps);
+        }
       }
 
-      // Insert nutrition - always create a record even if values are partial
+      // Insert nutrition with validation - always create a record even if values are partial
+      const validateNutrition = (val: any, max: number): number | null => {
+        if (typeof val === 'number' && val >= 0 && val <= max) {
+          return Math.round(val * 10) / 10; // Round to 1 decimal
+        }
+        return null;
+      };
+      
       const nutritionData = {
         recipe_id: newRecipe.id,
-        calories: recipe.nutrition?.calories || null,
-        protein_g: recipe.nutrition?.protein_g || null,
-        carbs_g: recipe.nutrition?.carbs_g || null,
-        fat_g: recipe.nutrition?.fat_g || null,
-        fiber_g: recipe.nutrition?.fiber_g || null,
-        sodium_mg: recipe.nutrition?.sodium_mg || null,
+        calories: validateNutrition(recipe.nutrition?.calories, 10000),
+        protein_g: validateNutrition(recipe.nutrition?.protein_g, 1000),
+        carbs_g: validateNutrition(recipe.nutrition?.carbs_g, 1000),
+        fat_g: validateNutrition(recipe.nutrition?.fat_g, 1000),
+        fiber_g: validateNutrition(recipe.nutrition?.fiber_g, 500),
+        sodium_mg: validateNutrition(recipe.nutrition?.sodium_mg, 50000),
       };
       
       const { error: nutritionError } = await supabase.from('recipe_nutrition').insert(nutritionData);
       if (nutritionError) {
         console.error('Error inserting nutrition:', nutritionError);
       } else {
-        console.log('Nutrition inserted:', nutritionData);
+        console.log('Nutrition inserted for recipe:', sanitizedTitle);
       }
 
-      // Insert tags
-      if (recipe.tags?.length > 0) {
-        const tags = recipe.tags.map((tag: string) => ({
-          recipe_id: newRecipe.id,
-          tag_type: 'meal',
-          tag_value: tag,
-        }));
-        await supabase.from('recipe_tags').insert(tags);
+      // Insert tags with validation
+      if (Array.isArray(recipe.tags) && recipe.tags.length > 0) {
+        const validTags = recipe.tags
+          .filter((tag: any) => typeof tag === 'string' && tag.trim())
+          .slice(0, 20) // Max 20 tags per recipe
+          .map((tag: string) => ({
+            recipe_id: newRecipe.id,
+            tag_type: 'meal',
+            tag_value: tag.trim().substring(0, 50),
+          }));
+        
+        if (validTags.length > 0) {
+          await supabase.from('recipe_tags').insert(validTags);
+        }
       }
 
       // Link upload to recipe
