@@ -59,7 +59,27 @@ export default function Discover() {
   const { user, isAuthenticated } = useAuth();
   const { preferences } = useUserData();
   const { selectedMeals, addSelectedMeal, removeSelectedMeal } = useAppStore();
-  
+
+  // If the user isn't signed in yet, onboarding stores choices locally.
+  // Use those values to keep Discover filtering consistent for guests.
+  const pendingOnboarding = useMemo(() => {
+    try {
+      const raw = window.localStorage.getItem('pendingOnboarding');
+      if (!raw) return null;
+      return JSON.parse(raw) as {
+        dietType?: string;
+        allergies?: string[];
+        dislikes?: string[];
+      };
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const effectiveDietType = (pendingOnboarding?.dietType ?? preferences?.diet_type ?? 'none') as string;
+  const effectiveAllergies = pendingOnboarding?.allergies ?? preferences?.allergies ?? [];
+  const effectiveDislikes = pendingOnboarding?.dislikes ?? preferences?.dislikes ?? [];
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTime, setSelectedTime] = useState<number | null>(null);
   const [selectedMealType, setSelectedMealType] = useState<string | null>(null);
@@ -68,12 +88,21 @@ export default function Discover() {
   const [recipeSource, setRecipeSource] = useState<'all' | 'my' | 'app'>('all');
 
   // Get user diet type for filtering
-  const userDietType = preferences?.diet_type ?? 'none';
+  const userDietType = (effectiveDietType || 'none').toLowerCase();
 
   // Define ingredients/terms that are excluded for each diet type
   const dietExclusions: Record<string, string[]> = {
-    vegan: ['chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'lobster', 'crab', 'shellfish', 'seafood', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak', 'egg', 'eggs', 'dairy', 'milk', 'cheese', 'butter', 'cream', 'yogurt', 'honey'],
-    vegetarian: ['chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'lobster', 'crab', 'shellfish', 'seafood', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak'],
+    vegan: [
+      'chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'lobster', 'crab', 'shellfish', 'seafood',
+      'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak',
+      'egg', 'eggs',
+      'dairy', 'milk', 'cheese', 'butter', 'cream', 'yogurt',
+      'honey',
+    ],
+    vegetarian: [
+      'chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'lobster', 'crab', 'shellfish', 'seafood',
+      'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak',
+    ],
     pescatarian: ['chicken', 'beef', 'pork', 'lamb', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak'],
     keto: [], // Keto is about macros, not specific ingredients - handled differently
     paleo: ['bread', 'pasta', 'rice', 'grain', 'wheat', 'oat', 'corn', 'bean', 'lentil', 'peanut', 'soy', 'tofu', 'sugar', 'dairy', 'milk', 'cheese'],
@@ -89,11 +118,7 @@ export default function Discover() {
     // Start with diet-based exclusions
     const dietExcluded = dietExclusions[userDietType] || [];
 
-    const base = [
-      ...dietExcluded,
-      ...(preferences?.allergies ?? []),
-      ...(preferences?.dislikes ?? [])
-    ]
+    const base = [...dietExcluded, ...effectiveAllergies, ...effectiveDislikes]
       .filter(Boolean)
       .map(normalize)
       .filter(Boolean);
@@ -110,7 +135,7 @@ export default function Discover() {
     });
 
     return Array.from(new Set(expanded)).filter(Boolean);
-  }, [preferences?.allergies, preferences?.dislikes, userDietType]);
+  }, [effectiveAllergies, effectiveDislikes, userDietType]);
 
   // Debug: confirm preferences are present and the terms we're filtering
   useEffect(() => {
