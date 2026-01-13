@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { ChevronLeft, ChevronRight, Check, Globe, Ruler, User, Utensils, Target, Heart, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, User, Utensils, Target, Heart, Plus } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/input';
 import i18n from '@/lib/i18n';
@@ -14,7 +14,6 @@ import { useAuthStore } from '@/stores/authStore';
 import { toast } from 'sonner';
 
 const STEPS = [
-  { id: 'locale', icon: Globe, titleKey: 'onboarding.settings.title' },
   { id: 'profile', icon: User, titleKey: 'onboarding.profile.title' },
   { id: 'diet', icon: Utensils, titleKey: 'onboarding.diet.title' },
   { id: 'goals', icon: Target, titleKey: 'onboarding.macros.title' },
@@ -227,62 +226,6 @@ const Onboarding = () => {
 
   const renderStep = () => {
     switch (STEPS[currentStep].id) {
-      case 'locale':
-        return (
-          <div className="space-y-6">
-            <div>
-              <label className="text-sm font-medium text-foreground mb-3 block">{t('onboarding.settings.units', 'Units')}</label>
-              <div className="grid grid-cols-2 gap-3">
-                {(['imperial', 'metric'] as const).map(unit => (
-                  <button
-                    key={unit}
-                    onClick={() => setFormData(prev => ({ ...prev, units: unit }))}
-                    className={`p-4 rounded-xl border-2 transition-all ${
-                      formData.units === unit
-                        ? 'border-primary bg-primary/10'
-                        : 'border-border bg-card'
-                    }`}
-                  >
-                    <Ruler className={`w-6 h-6 mx-auto mb-2 ${formData.units === unit ? 'text-primary' : 'text-muted-foreground'}`} />
-                    <p className="font-medium capitalize">{unit}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {unit === 'imperial' ? 'oz, cups, °F' : 'g, ml, °C'}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-foreground mb-3 block">{t('onboarding.settings.language', 'Language')}</label>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { code: 'en', label: 'English', flag: '🇺🇸' },
-                  { code: 'es', label: 'Español', flag: '🇪🇸' },
-                  { code: 'he', label: 'עברית', flag: '🇮🇱' },
-                  { code: 'pt', label: 'Português', flag: '🇧🇷' },
-                ].map(lang => (
-                  <button
-                    key={lang.code}
-                    onClick={() => {
-                      setFormData(prev => ({ ...prev, language: lang.code }));
-                      window.localStorage.setItem('i18nextLng', lang.code);
-                      i18n.changeLanguage(lang.code);
-                    }}
-                    className={`p-4 rounded-xl border-2 transition-all ${
-                      formData.language === lang.code
-                        ? 'border-primary bg-primary/10'
-                        : 'border-border bg-card'
-                    }`}
-                  >
-                    <span className="text-2xl mb-2 block">{lang.flag}</span>
-                    <p className="font-medium">{lang.label}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
-
       case 'profile':
         return (
           <div className="space-y-6">
