@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Plus, Upload, Link, Camera, PenLine, BookOpen, Loader2 } from 'lucide-react';
+import { Plus, Upload, Link, Camera, PenLine, BookOpen, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
@@ -48,6 +48,8 @@ export default function Recipes() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [recipeToDelete, setRecipeToDelete] = useState<UserRecipe | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
 
   const addOptions = [
     { icon: Upload, label: 'Upload file', desc: 'PDF, image, or doc' },
@@ -127,6 +129,32 @@ export default function Recipes() {
     setRecipeToDelete(null);
   };
 
+  const handleDeleteAllConfirm = async () => {
+    setIsDeletingAll(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error(t('common.error', 'An error occurred'));
+      setIsDeletingAll(false);
+      return;
+    }
+
+    const { error } = await supabase
+      .from('recipes')
+      .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+      .eq('owner_user_id', user.id)
+      .is('is_deleted', false);
+
+    if (error) {
+      toast.error(t('recipes.deleteAllError', 'Failed to delete all recipes'));
+    } else {
+      setUserRecipes([]);
+      toast.success(t('recipes.deleteAllSuccess', 'All recipes deleted'));
+    }
+
+    setIsDeletingAll(false);
+    setDeleteAllDialogOpen(false);
+  };
+
   return (
     <div className="min-h-screen bg-background pb-24">
       <div className="page-container">
@@ -184,41 +212,53 @@ export default function Recipes() {
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
-            {userRecipes.map((recipe) => (
-              <RecipeCard 
-                key={recipe.id} 
-                recipe={{
-                  id: recipe.id,
-                  title: recipe.title,
-                  scope: 'private',
-                  image_url: recipe.image_url || undefined,
-                  prep_time: recipe.prep_time || undefined,
-                  cook_time: recipe.cook_time || undefined,
-                  total_time: recipe.total_time || undefined,
-                  servings: recipe.servings || 4,
-                  difficulty: 'medium',
-                  is_kid_friendly: recipe.is_kid_friendly || false,
-                  is_meal_prep_friendly: recipe.is_meal_prep_friendly || false,
-                  is_budget_friendly: false,
-                  is_deleted: false,
-                  created_at: '',
-                  updated_at: '',
-                  nutrition: recipe.nutrition ? {
-                    id: '',
-                    recipe_id: recipe.id,
-                    calories: recipe.nutrition.calories || undefined,
-                    protein_g: recipe.nutrition.protein_g || undefined,
-                    carbs_g: recipe.nutrition.carbs_g || undefined,
-                    fat_g: recipe.nutrition.fat_g || undefined,
-                  } : undefined,
-                }} 
-                onClick={() => navigate(`/recipe/${recipe.id}`)}
-                onDelete={() => handleDeleteClick(recipe)}
-                compact 
-              />
-            ))}
-          </div>
+          <>
+            <div className="flex justify-end mb-4">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setDeleteAllDialogOpen(true)}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                {t('recipes.deleteAll', 'Delete All Recipes')}
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {userRecipes.map((recipe) => (
+                <RecipeCard 
+                  key={recipe.id} 
+                  recipe={{
+                    id: recipe.id,
+                    title: recipe.title,
+                    scope: 'private',
+                    image_url: recipe.image_url || undefined,
+                    prep_time: recipe.prep_time || undefined,
+                    cook_time: recipe.cook_time || undefined,
+                    total_time: recipe.total_time || undefined,
+                    servings: recipe.servings || 4,
+                    difficulty: 'medium',
+                    is_kid_friendly: recipe.is_kid_friendly || false,
+                    is_meal_prep_friendly: recipe.is_meal_prep_friendly || false,
+                    is_budget_friendly: false,
+                    is_deleted: false,
+                    created_at: '',
+                    updated_at: '',
+                    nutrition: recipe.nutrition ? {
+                      id: '',
+                      recipe_id: recipe.id,
+                      calories: recipe.nutrition.calories || undefined,
+                      protein_g: recipe.nutrition.protein_g || undefined,
+                      carbs_g: recipe.nutrition.carbs_g || undefined,
+                      fat_g: recipe.nutrition.fat_g || undefined,
+                    } : undefined,
+                  }} 
+                  onClick={() => navigate(`/recipe/${recipe.id}`)}
+                  onDelete={() => handleDeleteClick(recipe)}
+                  compact 
+                />
+              ))}
+            </div>
+          </>
         )}
       </div>
 
@@ -241,6 +281,28 @@ export default function Recipes() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {isDeleting ? t('common.deleting', 'Deleting...') : t('common.delete', 'Delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete All Confirmation Dialog */}
+      <AlertDialog open={deleteAllDialogOpen} onOpenChange={setDeleteAllDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('recipes.deleteAllTitle', 'Delete All Recipes')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('recipes.deleteAllConfirm', 'Are you sure you want to delete all {{count}} recipes? This action cannot be undone.', { count: userRecipes.length })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingAll}>{t('common.cancel', 'Cancel')}</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteAllConfirm} 
+              disabled={isDeletingAll}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingAll ? t('common.deleting', 'Deleting...') : t('recipes.deleteAll', 'Delete All')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
