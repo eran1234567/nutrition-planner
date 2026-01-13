@@ -8,6 +8,17 @@ import { BottomNav } from '@/components/layout/BottomNav';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
 import { supabase } from '@/integrations/supabase/client';
 import { motion } from 'framer-motion';
+import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface UserRecipe {
   id: string;
@@ -34,6 +45,9 @@ export default function Recipes() {
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [userRecipes, setUserRecipes] = useState<UserRecipe[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [recipeToDelete, setRecipeToDelete] = useState<UserRecipe | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const addOptions = [
     { icon: Upload, label: 'Upload file', desc: 'PDF, image, or doc' },
@@ -86,6 +100,32 @@ export default function Recipes() {
 
     fetchUserRecipes();
   }, []);
+
+  const handleDeleteClick = (recipe: UserRecipe) => {
+    setRecipeToDelete(recipe);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!recipeToDelete) return;
+    
+    setIsDeleting(true);
+    const { error } = await supabase
+      .from('recipes')
+      .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+      .eq('id', recipeToDelete.id);
+
+    if (error) {
+      toast.error(t('recipes.deleteError', 'Failed to delete recipe'));
+    } else {
+      setUserRecipes(prev => prev.filter(r => r.id !== recipeToDelete.id));
+      toast.success(t('recipes.deleteSuccess', 'Recipe deleted'));
+    }
+    
+    setIsDeleting(false);
+    setDeleteDialogOpen(false);
+    setRecipeToDelete(null);
+  };
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -174,6 +214,7 @@ export default function Recipes() {
                   } : undefined,
                 }} 
                 onClick={() => navigate(`/recipe/${recipe.id}`)}
+                onDelete={() => handleDeleteClick(recipe)}
                 compact 
               />
             ))}
@@ -182,6 +223,28 @@ export default function Recipes() {
       </div>
 
       <BottomNav />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('recipes.deleteTitle', 'Delete Recipe')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('recipes.deleteConfirm', 'Are you sure you want to delete "{{title}}"? This action cannot be undone.', { title: recipeToDelete?.title })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>{t('common.cancel', 'Cancel')}</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteConfirm} 
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? t('common.deleting', 'Deleting...') : t('common.delete', 'Delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

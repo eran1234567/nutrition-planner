@@ -1,4 +1,4 @@
-import { Clock, Flame, Users, Check, Plus } from 'lucide-react';
+import { Clock, Flame, Users, Check, Plus, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import type { Recipe } from '@/types';
@@ -8,6 +8,7 @@ interface RecipeCardProps {
   isSelected?: boolean;
   onSelect?: () => void;
   onClick?: () => void;
+  onDelete?: () => void;
   compact?: boolean;
 }
 
@@ -16,6 +17,7 @@ export function RecipeCard({
   isSelected = false, 
   onSelect, 
   onClick,
+  onDelete,
   compact = false 
 }: RecipeCardProps) {
   const nutrition = recipe.nutrition;
@@ -60,6 +62,19 @@ export function RecipeCard({
             )}
           >
             {isSelected ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+          </button>
+        )}
+
+        {/* Delete button */}
+        {onDelete && !onSelect && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center bg-destructive/90 text-destructive-foreground hover:bg-destructive transition-all"
+          >
+            <Trash2 className="w-4 h-4" />
           </button>
         )}
 
