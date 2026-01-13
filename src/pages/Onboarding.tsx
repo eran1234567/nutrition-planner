@@ -135,7 +135,14 @@ const Onboarding = () => {
         setAuthProfile(savedProfile as any);
       }
 
-      // Save preferences (creates row if missing)
+      // Get the profile ID from saved profile for preferences
+      const profileIdForPrefs = (savedProfile as any)?.id;
+      if (!profileIdForPrefs) {
+        console.error('No profile ID available after saving profile');
+        throw new Error('Failed to get profile ID');
+      }
+
+      // Save preferences (creates row if missing) - pass explicit profile ID
       await savePreferences({
         diet_type: formData.dietType as any,
         allergies: formData.allergies,
@@ -153,7 +160,7 @@ const Onboarding = () => {
         cuisines_preferred: formData.cuisines,
         budget_level: formData.budgetLevel,
         max_cook_time: formData.maxCookTime,
-      });
+      }, profileIdForPrefs);
 
       // Refetch to ensure local state is up to date
       await refetch();

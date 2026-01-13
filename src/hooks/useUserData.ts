@@ -93,35 +93,46 @@ export function useUserData() {
     fetchUserData();
   }, [fetchUserData]);
 
-  const saveProfile = async (data: Partial<UserProfile>) => {
+  const saveProfile = async (data: Partial<UserProfile>): Promise<UserProfile | null> => {
     if (!user) return null;
 
     try {
-      // Prefer update (most users will already have a profile from the signup trigger)
-      const { data: updated, error: updateError } = await supabase
+      // First check if profile exists
+      const { data: existing } = await supabase
         .from('profiles')
-        .update(data)
+        .select('id')
         .eq('user_id', user.id)
-        .select('*')
         .maybeSingle();
 
-      if (updateError) throw updateError;
+      let result: UserProfile | null = null;
 
-      if (updated) {
-        setProfile(updated as UserProfile);
-        return updated;
+      if (existing) {
+        // Update existing profile
+        const { data: updated, error: updateError } = await supabase
+          .from('profiles')
+          .update(data)
+          .eq('user_id', user.id)
+          .select('*')
+          .single();
+
+        if (updateError) throw updateError;
+        result = updated as UserProfile;
+      } else {
+        // Create new profile
+        const { data: created, error: insertError } = await supabase
+          .from('profiles')
+          .insert({ user_id: user.id, ...(data as any) })
+          .select('*')
+          .single();
+
+        if (insertError) throw insertError;
+        result = created as UserProfile;
       }
 
-      // Fallback: create profile if missing
-      const { data: created, error: insertError } = await supabase
-        .from('profiles')
-        .insert({ user_id: user.id, ...(data as any) })
-        .select('*')
-        .single();
-
-      if (insertError) throw insertError;
-      setProfile(created as UserProfile);
-      return created;
+      if (result) {
+        setProfile(result);
+      }
+      return result;
     } catch (error) {
       console.error('Error saving profile:', error);
       toast.error('Failed to save profile');
@@ -143,12 +154,19 @@ export function useUserData() {
     return data?.id ?? null;
   };
 
-  const savePreferences = async (data: Partial<Omit<UserPreferences, 'id' | 'profile_id'>>) => {
+  const savePreferences = async (
+    data: Partial<Omit<UserPreferences, 'id' | 'profile_id'>>,
+    explicitProfileId?: string
+  ) => {
     if (!user) return null;
 
     try {
-      const profileId = await resolveProfileId();
-      if (!profileId) return null;
+      // Use explicit profile ID if provided, otherwise resolve it
+      const profileId = explicitProfileId || await resolveProfileId();
+      if (!profileId) {
+        console.error('No profile ID available for saving preferences');
+        return null;
+      }
 
       const { data: existing, error: existingError } = await supabase
         .from('preferences')
