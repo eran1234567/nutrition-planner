@@ -330,11 +330,27 @@ Beautiful plated dish, overhead angle, natural lighting, appetizing presentation
       }
     }
 
-    // Update upload status
-    await supabase.from('uploads').update({
-      status: 'parsed',
-      parsed_text: aiContent,
-    }).eq('id', uploadId);
+    // Rename upload file based on parsed recipes
+    // If single recipe: rename to recipe title
+    // If multiple recipes: keep original file name
+    const recipesCount = createdRecipes.length;
+    if (recipesCount === 1 && createdRecipes[0]?.title) {
+      // Single recipe - rename file to recipe title
+      const recipeTitle = createdRecipes[0].title;
+      await supabase.from('uploads').update({
+        status: 'parsed',
+        parsed_text: aiContent,
+        file_name: recipeTitle,
+      }).eq('id', uploadId);
+      console.log(`Renamed upload to single recipe title: "${recipeTitle}"`);
+    } else {
+      // Multiple recipes or no recipes - keep original file name
+      await supabase.from('uploads').update({
+        status: 'parsed',
+        parsed_text: aiContent,
+      }).eq('id', uploadId);
+      console.log(`Kept original file name (${recipesCount} recipes extracted)`);
+    }
 
     console.log(`Successfully parsed ${createdRecipes.length} recipes`);
 
