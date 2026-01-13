@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Clock, Flame, Users, Check, Plus, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -21,6 +22,7 @@ export function RecipeCard({
   compact = false 
 }: RecipeCardProps) {
   const nutrition = recipe.nutrition;
+  const [imageError, setImageError] = useState(false);
 
   return (
     <motion.article
@@ -34,12 +36,13 @@ export function RecipeCard({
     >
       {/* Image */}
       <div className="relative aspect-[4/3] overflow-hidden bg-muted">
-        {recipe.image_url ? (
+        {recipe.image_url && !imageError ? (
           <img
             src={recipe.image_url}
             alt={recipe.title}
             className="w-full h-full object-cover"
             loading="lazy"
+            onError={() => setImageError(true)}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-primary-soft">
