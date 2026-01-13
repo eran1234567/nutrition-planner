@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, 
@@ -42,6 +43,7 @@ interface UploadedItem {
 const MyRecipes = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -132,6 +134,9 @@ const MyRecipes = () => {
 
           // Show toast notification on status change
           if (updatedUpload.status === 'parsed') {
+            // Invalidate recipes cache so it's ready when user goes to Recipes tab
+            queryClient.invalidateQueries({ queryKey: ['user-recipes', user.id] });
+            
             toast.success(
               t('myRecipes.recipeReady', `"${updatedUpload.file_name || 'Recipe'}" is ready to use!`),
               { duration: 5000 }
