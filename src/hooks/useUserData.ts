@@ -48,36 +48,40 @@ export function useUserData() {
       return;
     }
 
+    setLoading(true);
+
     try {
       // Fetch profile
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (profileError && profileError.code !== 'PGRST116') {
+      if (profileError) {
         console.error('Error fetching profile:', profileError);
       }
 
-      if (profileData) {
-        setProfile(profileData as UserProfile);
-
-        // Fetch preferences using profile_id
-        const { data: prefsData, error: prefsError } = await supabase
-          .from('preferences')
-          .select('*')
-          .eq('profile_id', profileData.id)
-          .single();
-
-        if (prefsError && prefsError.code !== 'PGRST116') {
-          console.error('Error fetching preferences:', prefsError);
-        }
-
-        if (prefsData) {
-          setPreferences(prefsData as UserPreferences);
-        }
+      if (!profileData) {
+        setProfile(null);
+        setPreferences(null);
+        return;
       }
+
+      setProfile(profileData as UserProfile);
+
+      // Fetch preferences using profile_id
+      const { data: prefsData, error: prefsError } = await supabase
+        .from('preferences')
+        .select('*')
+        .eq('profile_id', profileData.id)
+        .maybeSingle();
+
+      if (prefsError) {
+        console.error('Error fetching preferences:', prefsError);
+      }
+
+      setPreferences((prefsData as UserPreferences) ?? null);
     } catch (error) {
       console.error('Error fetching user data:', error);
     } finally {
@@ -93,26 +97,31 @@ export function useUserData() {
     if (!user) return null;
 
     try {
-      const { data: existing } = await supabase
+      // Prefer update (most users will already have a profile from the signup trigger)
+      const { data: updated, error: updateError } = await supabase
         .from('profiles')
-        .select('id')
+        .update(data)
         .eq('user_id', user.id)
-        .single();
+        .select('*')
+        .maybeSingle();
 
-      if (existing) {
-        const { data: updated, error } = await supabase
-          .from('profiles')
-          .update(data)
-          .eq('user_id', user.id)
-          .select()
-          .single();
+      if (updateError) throw updateError;
 
-        if (error) throw error;
+      if (updated) {
         setProfile(updated as UserProfile);
         return updated;
       }
 
-      return null;
+      // Fallback: create profile if missing
+      const { data: created, error: insertError } = await supabase
+        .from('profiles')
+        .insert({ user_id: user.id, ...(data as any) })
+        .select('*')
+        .single();
+
+      if (insertError) throw insertError;
+      setProfile(created as UserProfile);
+      return created;
     } catch (error) {
       console.error('Error saving profile:', error);
       toast.error('Failed to save profile');
@@ -120,39 +129,58 @@ export function useUserData() {
     }
   };
 
+  const resolveProfileId = async (): Promise<string | null> => {
+    if (!user) return null;
+    if (profile?.id) return profile.id;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data?.id ?? null;
+  };
+
   const savePreferences = async (data: Partial<Omit<UserPreferences, 'id' | 'profile_id'>>) => {
-    if (!user || !profile) return null;
+    if (!user) return null;
 
     try {
-      const { data: existing } = await supabase
+      const profileId = await resolveProfileId();
+      if (!profileId) return null;
+
+      const { data: existing, error: existingError } = await supabase
         .from('preferences')
         .select('id')
-        .eq('profile_id', profile.id)
-        .single();
+        .eq('profile_id', profileId)
+        .maybeSingle();
+
+      if (existingError) throw existingError;
 
       if (existing) {
         const { data: updated, error } = await supabase
           .from('preferences')
           .update(data as any)
-          .eq('profile_id', profile.id)
-          .select()
+          .eq('profile_id', profileId)
+          .select('*')
           .single();
 
         if (error) throw error;
         setPreferences(updated as UserPreferences);
         return updated;
-      } else {
-        // Create new preferences
-        const { data: created, error } = await supabase
-          .from('preferences')
-          .insert({ ...(data as any), profile_id: profile.id })
-          .select()
-          .single();
-
-        if (error) throw error;
-        setPreferences(created as UserPreferences);
-        return created;
       }
+
+      // Create new preferences
+      const { data: created, error } = await supabase
+        .from('preferences')
+        .insert({ ...(data as any), profile_id: profileId })
+        .select('*')
+        .single();
+
+      if (error) throw error;
+      setPreferences(created as UserPreferences);
+      return created;
     } catch (error) {
       console.error('Error saving preferences:', error);
       toast.error('Failed to save preferences');
