@@ -67,12 +67,33 @@ export default function Discover() {
   const [userRecipes, setUserRecipes] = useState<UserRecipe[]>([]);
   const [recipeSource, setRecipeSource] = useState<'all' | 'my' | 'app'>('all');
 
+  // Get user diet type for filtering
+  const userDietType = preferences?.diet_type ?? 'none';
+
+  // Define ingredients/terms that are excluded for each diet type
+  const dietExclusions: Record<string, string[]> = {
+    vegan: ['chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'lobster', 'crab', 'shellfish', 'seafood', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak', 'egg', 'eggs', 'dairy', 'milk', 'cheese', 'butter', 'cream', 'yogurt', 'honey'],
+    vegetarian: ['chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'lobster', 'crab', 'shellfish', 'seafood', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak'],
+    pescatarian: ['chicken', 'beef', 'pork', 'lamb', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak'],
+    keto: [], // Keto is about macros, not specific ingredients - handled differently
+    paleo: ['bread', 'pasta', 'rice', 'grain', 'wheat', 'oat', 'corn', 'bean', 'lentil', 'peanut', 'soy', 'tofu', 'sugar', 'dairy', 'milk', 'cheese'],
+    mediterranean: [], // Mediterranean is a style, not exclusionary
+    none: [],
+  };
+
   // Get user allergies + dislikes for filtering
   // Note: we expand simple singular/plural variants (e.g., "eggs" -> "egg") to catch common cases.
   const blockedTerms = useMemo(() => {
     const normalize = (v: string) => v.trim().toLowerCase();
 
-    const base = [...(preferences?.allergies ?? []), ...(preferences?.dislikes ?? [])]
+    // Start with diet-based exclusions
+    const dietExcluded = dietExclusions[userDietType] || [];
+
+    const base = [
+      ...dietExcluded,
+      ...(preferences?.allergies ?? []),
+      ...(preferences?.dislikes ?? [])
+    ]
       .filter(Boolean)
       .map(normalize)
       .filter(Boolean);
@@ -89,12 +110,13 @@ export default function Discover() {
     });
 
     return Array.from(new Set(expanded)).filter(Boolean);
-  }, [preferences?.allergies, preferences?.dislikes]);
+  }, [preferences?.allergies, preferences?.dislikes, userDietType]);
 
   // Debug: confirm preferences are present and the terms we're filtering
   useEffect(() => {
+    console.log('[Discover] userDietType:', userDietType);
     console.log('[Discover] blockedTerms:', blockedTerms);
-  }, [blockedTerms]);
+  }, [blockedTerms, userDietType]);
 
   // Fetch global recipes from database
   const { data: globalRecipes = [], isLoading: isLoadingGlobal } = useGlobalRecipes();
