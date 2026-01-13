@@ -201,13 +201,22 @@ const MyRecipes = () => {
 
     // Don't block the UI - process files in background
     for (const file of Array.from(files)) {
-      // Read file content
-      let fileContent = '';
+      // Determine file type
       const isImage = file.type.startsWith('image/');
+      const isDocument = file.type === 'application/pdf' || 
+                         file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+                         file.type === 'application/msword' ||
+                         file.name.endsWith('.docx') || 
+                         file.name.endsWith('.doc') || 
+                         file.name.endsWith('.pdf');
+      const isText = file.type.startsWith('text/') || file.type === 'application/json';
       
-      if (isImage) {
-        // Convert image to base64 for AI processing
-        const base64 = await new Promise<string>((resolve) => {
+      // Read file content based on type
+      let fileContent = '';
+      
+      if (isImage || isDocument) {
+        // Convert image/document to base64 for AI processing
+        fileContent = await new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => {
             const result = reader.result as string;
@@ -215,8 +224,7 @@ const MyRecipes = () => {
           };
           reader.readAsDataURL(file);
         });
-        fileContent = base64;
-      } else if (file.type.startsWith('text/') || file.type === 'application/json') {
+      } else if (isText) {
         fileContent = await file.text();
       }
       
@@ -226,7 +234,7 @@ const MyRecipes = () => {
           const { data: uploadData, error } = await supabase.from('uploads').insert({
             owner_user_id: user.id,
             file_name: file.name,
-            file_type: file.type,
+            file_type: file.type || (file.name.endsWith('.docx') ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/octet-stream'),
             status: 'pending',
             scope: 'private'
           }).select().single();
@@ -248,6 +256,11 @@ const MyRecipes = () => {
           // Trigger parsing in background (don't await - let it process asynchronously)
           if (fileContent) {
             triggerParsing(uploadData.id, fileContent, undefined, isImage);
+          } else {
+            // If we couldn't read the file content, mark as failed
+            toast.error(t('myRecipes.unsupportedFile', 'Unsupported file type'));
+            await supabase.from('uploads').update({ status: 'failed', error_message: 'Unsupported file type' }).eq('id', uploadData.id);
+            setUploads(prev => prev.map(u => u.id === uploadData.id ? { ...u, status: 'failed' as const } : u));
           }
         } catch (error) {
           toast.error(t('myRecipes.uploadError', 'Failed to save file'));
