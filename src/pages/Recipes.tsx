@@ -31,12 +31,7 @@ interface UserRecipe {
   servings: number | null;
   is_kid_friendly: boolean | null;
   is_meal_prep_friendly: boolean | null;
-  nutrition?: {
-    calories: number | null;
-    protein_g: number | null;
-    carbs_g: number | null;
-    fat_g: number | null;
-  } | null;
+  // nutrition fetched on detail page (avoid heavy joins on list view)
 }
 
 export default function Recipes() {
@@ -66,36 +61,19 @@ export default function Recipes() {
         return;
       }
 
-      const { data: recipes, error } = await supabase
+       const { data: recipes, error } = await supabase
         .from('recipes')
-        .select(`
-          id,
-          title,
-          description,
-          image_url,
-          prep_time,
-          cook_time,
-          total_time,
-          servings,
-          is_kid_friendly,
-          is_meal_prep_friendly,
-          recipe_nutrition (
-            calories,
-            protein_g,
-            carbs_g,
-            fat_g
-          )
-        `)
+        .select('id,title,description,image_url,prep_time,cook_time,total_time,servings,is_kid_friendly,is_meal_prep_friendly')
         .eq('owner_user_id', user.id)
-        .is('is_deleted', false)
-        .order('created_at', { ascending: false });
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false })
+        .limit(200);
 
-      if (!error && recipes) {
-        const formattedRecipes = recipes.map(r => ({
-          ...r,
-          nutrition: r.recipe_nutrition?.[0] || null
-        }));
-        setUserRecipes(formattedRecipes);
+      if (error) {
+        console.error('Failed to fetch recipes:', error);
+        toast.error(t('recipes.loadError', 'Failed to load recipes'));
+      } else if (recipes) {
+        setUserRecipes(recipes);
       }
       setLoading(false);
     };
@@ -142,7 +120,7 @@ export default function Recipes() {
       .from('recipes')
       .update({ is_deleted: true, deleted_at: new Date().toISOString() })
       .eq('owner_user_id', user.id)
-      .is('is_deleted', false);
+      .eq('is_deleted', false);
 
     if (error) {
       toast.error(t('recipes.deleteAllError', 'Failed to delete all recipes'));
@@ -243,14 +221,7 @@ export default function Recipes() {
                     is_deleted: false,
                     created_at: '',
                     updated_at: '',
-                    nutrition: recipe.nutrition ? {
-                      id: '',
-                      recipe_id: recipe.id,
-                      calories: recipe.nutrition.calories || undefined,
-                      protein_g: recipe.nutrition.protein_g || undefined,
-                      carbs_g: recipe.nutrition.carbs_g || undefined,
-                      fat_g: recipe.nutrition.fat_g || undefined,
-                    } : undefined,
+                  // nutrition loaded on detail page
                   }} 
                   onClick={() => navigate(`/recipe/${recipe.id}`)}
                   onDelete={() => handleDeleteClick(recipe)}
