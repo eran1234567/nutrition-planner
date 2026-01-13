@@ -141,22 +141,22 @@ serve(async (req) => {
       );
     }
 
-    // Create a client with user's token to validate JWT
+    // Create a client with user's token to validate authentication
     const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } }
     });
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: claims, error: claimsError } = await supabaseAuth.auth.getClaims(token);
-    if (claimsError || !claims?.claims) {
-      console.error('JWT validation failed:', claimsError?.message);
+    // Use getUser() to validate the token and get user info
+    const { data: userData, error: userError } = await supabaseAuth.auth.getUser();
+    if (userError || !userData?.user) {
+      console.error('Authentication failed:', userError?.message || 'No user found');
       return new Response(
         JSON.stringify({ success: false, error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const userId = claims.claims.sub;
+    const userId = userData.user.id;
     console.log(`Authenticated user: ${userId}`);
 
     // Create service role client for database operations
