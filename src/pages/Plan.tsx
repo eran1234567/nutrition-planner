@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Plus, ShoppingCart, ListChecks, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -59,7 +59,7 @@ const inferMealType = (meal: Pick<Recipe, 'title' | 'tags'>): MealType => {
     title.includes('crepe') ||
     title.includes('french toast') ||
     title.includes('waffle') ||
-    // important: handles “Avocado Deviled Eggs” better than classifying as lunch
+    // important: handles "Avocado Deviled Eggs" better than classifying as lunch
     title.includes('egg') ||
     title.includes('eggs')
   ) {
@@ -125,9 +125,21 @@ export default function Plan() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { selectedMeals, onboardingState } = useAppStore();
-  const { preferences } = useUserData();
+  const { preferences, loading: preferencesLoading } = useUserData();
   const [selectedDay, setSelectedDay] = useState(0);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
+  const [hasShownInitialModal, setHasShownInitialModal] = useState(false);
+
+  // Show nutrition goals modal on first visit if no goals are set
+  useEffect(() => {
+    if (preferencesLoading || hasShownInitialModal) return;
+    
+    const hasNutritionGoals = preferences?.calorie_target || preferences?.meals_per_day;
+    if (!hasNutritionGoals) {
+      setShowGoalsModal(true);
+      setHasShownInitialModal(true);
+    }
+  }, [preferences, preferencesLoading, hasShownInitialModal]);
 
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
