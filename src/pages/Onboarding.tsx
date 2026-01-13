@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { ChevronLeft, ChevronRight, Check, Globe, Ruler, User, Utensils, Target, Heart, ChefHat, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Globe, Ruler, User, Utensils, Target, Heart, Plus } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/input';
 import i18n from '@/lib/i18n';
@@ -19,7 +19,6 @@ const STEPS = [
   { id: 'diet', icon: Utensils, titleKey: 'onboarding.diet.title' },
   { id: 'goals', icon: Target, titleKey: 'onboarding.macros.title' },
   { id: 'medical', icon: Heart, titleKey: 'onboarding.medical.title' },
-  { id: 'cuisine', icon: ChefHat, titleKey: 'onboarding.cuisine.title' },
 ];
 
 const Onboarding = () => {
@@ -56,9 +55,6 @@ const Onboarding = () => {
     kidneyFriendly: false,
     heartHealthy: false,
     lowSodium: false,
-    cuisines: [] as string[],
-    budgetLevel: 'medium',
-    maxCookTime: 45,
   }));
 
   // Track if initial data has been loaded
@@ -92,9 +88,6 @@ const Onboarding = () => {
           kidneyFriendly: preferences?.medical_kidney_friendly ?? prev.kidneyFriendly,
           heartHealthy: preferences?.medical_heart_healthy ?? prev.heartHealthy,
           lowSodium: preferences?.medical_low_sodium ?? prev.lowSodium,
-          cuisines: preferences?.cuisines_preferred ?? prev.cuisines,
-          budgetLevel: preferences?.budget_level ?? prev.budgetLevel,
-          maxCookTime: preferences?.max_cook_time ?? prev.maxCookTime,
         };
       });
 
@@ -158,9 +151,6 @@ const Onboarding = () => {
           medical_kidney_friendly: formData.kidneyFriendly,
           medical_heart_healthy: formData.heartHealthy,
           medical_low_sodium: formData.lowSodium,
-          cuisines_preferred: formData.cuisines,
-          budget_level: formData.budgetLevel,
-          max_cook_time: formData.maxCookTime,
         },
         profileIdForPrefs
       );
@@ -207,7 +197,7 @@ const Onboarding = () => {
     }
   };
 
-  const toggleArrayItem = (key: 'allergies' | 'dislikes' | 'cuisines', item: string) => {
+  const toggleArrayItem = (key: 'allergies' | 'dislikes', item: string) => {
     setFormData(prev => ({
       ...prev,
       [key]: prev[key].includes(item)
@@ -559,67 +549,6 @@ const Onboarding = () => {
                 ))}
               </motion.div>
             )}
-          </div>
-        );
-
-      case 'cuisine':
-        return (
-          <div className="space-y-6">
-            <div>
-              <label className="text-sm font-medium text-foreground mb-3 block">{t('onboarding.cuisine.preferred', 'Preferred Cuisines')}</label>
-              <div className="flex flex-wrap gap-2">
-                {['American', 'Italian', 'Mexican', 'Asian', 'Mediterranean', 'Indian', 'Japanese', 'Thai', 'French', 'Greek'].map(cuisine => (
-                  <Chip
-                    key={cuisine}
-                    selected={formData.cuisines.includes(cuisine)}
-                    onClick={() => toggleArrayItem('cuisines', cuisine)}
-                  >
-                    {t(`cuisines.${cuisine.toLowerCase()}`, cuisine)}
-                  </Chip>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-foreground mb-3 block">{t('onboarding.cuisine.budget', 'Budget Level')}</label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { value: 'budget', labelKey: 'onboarding.cuisine.budgetLow', icon: '$' },
-                  { value: 'medium', labelKey: 'onboarding.cuisine.budgetMedium', icon: '$$' },
-                  { value: 'premium', labelKey: 'onboarding.cuisine.budgetHigh', icon: '$$$' },
-                ].map(budget => (
-                  <button
-                    key={budget.value}
-                    onClick={() => setFormData(prev => ({ ...prev, budgetLevel: budget.value }))}
-                    className={`p-3 rounded-xl border-2 transition-all ${
-                      formData.budgetLevel === budget.value
-                        ? 'border-primary bg-primary/10'
-                        : 'border-border bg-card'
-                    }`}
-                  >
-                    <span className="text-lg font-bold block">{budget.icon}</span>
-                    <span className="text-sm">{t(budget.labelKey, budget.value)}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-foreground mb-3 block">
-                {t('onboarding.cuisine.maxCookTime', 'Max Cook Time')}: {formData.maxCookTime} {t('common.min', 'min')}
-              </label>
-              <input
-                type="range"
-                min={15}
-                max={120}
-                step={15}
-                value={formData.maxCookTime}
-                onChange={(e) => setFormData(prev => ({ ...prev, maxCookTime: parseInt(e.target.value) }))}
-                className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                <span>15 {t('common.min', 'min')}</span>
-                <span>2 {t('common.hours', 'hours')}</span>
-              </div>
-            </div>
           </div>
         );
 
