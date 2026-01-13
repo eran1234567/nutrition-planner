@@ -378,6 +378,17 @@ export default function Discover() {
         if (matchesAgeRestrictedIngredients()) return false;
       }
 
+      // Health preference filtering - ONLY show recipes that match ALL active health preferences
+      if (!recipe.isUserRecipe && healthPreferences.length > 0) {
+        const recipeMedicalTags = (recipe.tags || [])
+          .filter(t => t.tag_type === 'medical')
+          .map(t => t.tag_value);
+        
+        // Recipe must have ALL the user's health preferences
+        const hasAllHealthTags = healthPreferences.every(pref => recipeMedicalTags.includes(pref));
+        if (!hasAllHealthTags) return false;
+      }
+
       return true;
     });
 
@@ -385,19 +396,6 @@ export default function Discover() {
     recipes = recipes.sort((a, b) => {
       let aScore = 0;
       let bScore = 0;
-
-      // Health preference matching - check if recipe has matching medical tags
-      if (healthPreferences.length > 0) {
-        const aTags = (a.tags || []).filter(t => t.tag_type === 'medical').map(t => t.tag_value);
-        const bTags = (b.tags || []).filter(t => t.tag_type === 'medical').map(t => t.tag_value);
-        
-        const aHealthMatches = healthPreferences.filter(pref => aTags.includes(pref)).length;
-        const bHealthMatches = healthPreferences.filter(pref => bTags.includes(pref)).length;
-        
-        // Give significant weight to health matches (10 points per match)
-        aScore += aHealthMatches * 10;
-        bScore += bHealthMatches * 10;
-      }
 
       // Kid-friendly priority for young children
       if (userAgeGroup === 'toddler' || userAgeGroup === 'child') {
