@@ -112,6 +112,10 @@ export default function Discover() {
         dietType?: string;
         allergies?: string[];
         dislikes?: string[];
+        diabetesFriendly?: boolean;
+        kidneyFriendly?: boolean;
+        heartHealthy?: boolean;
+        lowSodium?: boolean;
       };
     } catch {
       return null;
@@ -121,6 +125,34 @@ export default function Discover() {
   const effectiveDietType = (pendingOnboarding?.dietType ?? preferences?.diet_type ?? 'none') as string;
   const effectiveAllergies = pendingOnboarding?.allergies ?? preferences?.allergies ?? [];
   const effectiveDislikes = pendingOnboarding?.dislikes ?? preferences?.dislikes ?? [];
+
+  // Health-conscious preferences
+  const healthPreferences = useMemo(() => {
+    const prefs: string[] = [];
+    
+    // Check database preferences first, then pending onboarding
+    if (preferences?.medical_diabetes_friendly || pendingOnboarding?.diabetesFriendly) {
+      prefs.push('diabetes-friendly');
+    }
+    if (preferences?.medical_kidney_friendly || pendingOnboarding?.kidneyFriendly) {
+      prefs.push('kidney-friendly');
+    }
+    if (preferences?.medical_heart_healthy || pendingOnboarding?.heartHealthy) {
+      prefs.push('heart-healthy');
+    }
+    if (preferences?.medical_low_sodium || pendingOnboarding?.lowSodium) {
+      prefs.push('low-sodium');
+    }
+    
+    return prefs;
+  }, [preferences, pendingOnboarding]);
+
+  // Debug: log health preferences
+  useEffect(() => {
+    if (healthPreferences.length > 0) {
+      console.log('[Discover] User health preferences:', healthPreferences);
+    }
+  }, [healthPreferences]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTime, setSelectedTime] = useState<number | null>(null);
@@ -349,17 +381,35 @@ export default function Discover() {
       return true;
     });
 
-    // For young children (toddler/child), prioritize kid-friendly recipes by sorting them first
-    if (userAgeGroup === 'toddler' || userAgeGroup === 'child') {
-      recipes = recipes.sort((a, b) => {
-        const aKidFriendly = (a as any).is_kid_friendly ? 1 : 0;
-        const bKidFriendly = (b as any).is_kid_friendly ? 1 : 0;
-        return bKidFriendly - aKidFriendly; // Kid-friendly first
-      });
-    }
+    // Prioritize recipes based on user preferences
+    recipes = recipes.sort((a, b) => {
+      let aScore = 0;
+      let bScore = 0;
+
+      // Health preference matching - check if recipe has matching medical tags
+      if (healthPreferences.length > 0) {
+        const aTags = (a.tags || []).filter(t => t.tag_type === 'medical').map(t => t.tag_value);
+        const bTags = (b.tags || []).filter(t => t.tag_type === 'medical').map(t => t.tag_value);
+        
+        const aHealthMatches = healthPreferences.filter(pref => aTags.includes(pref)).length;
+        const bHealthMatches = healthPreferences.filter(pref => bTags.includes(pref)).length;
+        
+        // Give significant weight to health matches (10 points per match)
+        aScore += aHealthMatches * 10;
+        bScore += bHealthMatches * 10;
+      }
+
+      // Kid-friendly priority for young children
+      if (userAgeGroup === 'toddler' || userAgeGroup === 'child') {
+        if ((a as any).is_kid_friendly) aScore += 5;
+        if ((b as any).is_kid_friendly) bScore += 5;
+      }
+
+      return bScore - aScore; // Higher score first
+    });
 
     return recipes;
-  }, [allRecipes, searchQuery, selectedTime, selectedMealType, selectedCuisine, blockedTerms, ageBlockedTerms, userAgeGroup]);
+  }, [allRecipes, searchQuery, selectedTime, selectedMealType, selectedCuisine, blockedTerms, ageBlockedTerms, userAgeGroup, healthPreferences]);
 
   const isSelected = (recipeId: string) => selectedMeals.some(r => r.id === recipeId);
 
@@ -406,6 +456,27 @@ export default function Discover() {
                     ? t('discover.toddlerFiltering', 'Showing safe, mild recipes for toddlers')
                     : t('discover.childFiltering', 'Prioritizing kid-approved meals')
                   }
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Health preferences indicator */}
+        {healthPreferences.length > 0 && (
+          <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+                <Sparkles className="w-4 h-4 text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                  {t('discover.healthMode', 'Health-Conscious Mode')}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {t('discover.healthFiltering', 'Prioritizing {{prefs}} recipes', { 
+                    prefs: healthPreferences.map(p => p.replace('-', ' ')).join(', ') 
+                  })}
                 </p>
               </div>
             </div>
