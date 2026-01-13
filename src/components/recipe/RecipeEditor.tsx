@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, GripVertical, Save, X, Loader2 } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Save, X, Loader2, Camera, Upload, ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import type { Recipe, RecipeIngredient, RecipeStep } from '@/types';
+import type { Recipe } from '@/types';
 
 interface RecipeEditorProps {
   recipe: Recipe;
@@ -35,6 +35,10 @@ interface EditableStep {
 export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
   const { t } = useTranslation();
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageUrl, setImageUrl] = useState<string | undefined>(recipe.image_url);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   
   const [ingredients, setIngredients] = useState<EditableIngredient[]>(
     (recipe.ingredients || []).map((ing, idx) => ({
@@ -53,6 +57,100 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
       instruction: step.instruction,
     }))
   );
+
+  const handleImageUpload = async (file: File) => {
+    if (!file) return;
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error(t('recipes.invalidImageType', 'Please select an image file'));
+      return;
+    }
+    
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(t('recipes.imageTooLarge', 'Image must be less than 5MB'));
+      return;
+    }
+    
+    setIsUploadingImage(true);
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error(t('auth.notAuthenticated', 'You must be logged in'));
+        return;
+      }
+      
+      // Generate unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${recipe.id}-${Date.now()}.${fileExt}`;
+      
+      // Delete old image if exists and is from our storage
+      if (imageUrl && imageUrl.includes('recipe-images')) {
+        const oldPath = imageUrl.split('/recipe-images/')[1];
+        if (oldPath) {
+          await supabase.storage.from('recipe-images').remove([oldPath]);
+        }
+      }
+      
+      // Upload new image
+      const { data, error } = await supabase.storage
+        .from('recipe-images')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: true,
+        });
+      
+      if (error) throw error;
+      
+      // Get public URL
+      const { data: publicUrlData } = supabase.storage
+        .from('recipe-images')
+        .getPublicUrl(data.path);
+      
+      setImageUrl(publicUrlData.publicUrl);
+      toast.success(t('recipes.imageUploaded', 'Image uploaded'));
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast.error(t('recipes.imageUploadError', 'Failed to upload image'));
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleDeleteImage = async () => {
+    if (!imageUrl) return;
+    
+    setIsUploadingImage(true);
+    
+    try {
+      // Delete from storage if it's our image
+      if (imageUrl.includes('recipe-images')) {
+        const path = imageUrl.split('/recipe-images/')[1];
+        if (path) {
+          await supabase.storage.from('recipe-images').remove([path]);
+        }
+      }
+      
+      setImageUrl(undefined);
+      toast.success(t('recipes.imageDeleted', 'Image removed'));
+    } catch (error) {
+      console.error('Error deleting image:', error);
+      toast.error(t('recipes.imageDeleteError', 'Failed to remove image'));
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const onFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleImageUpload(file);
+    }
+    // Reset input so the same file can be selected again
+    e.target.value = '';
+  };
 
   const addIngredient = () => {
     setIngredients([
@@ -273,8 +371,17 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
           });
       }
 
+      // Update recipe image_url if changed
+      if (imageUrl !== recipe.image_url) {
+        await supabase
+          .from('recipes')
+          .update({ image_url: imageUrl || null })
+          .eq('id', recipe.id);
+      }
+
       // Fetch updated recipe data
-      const [ingredientsRes, stepsRes, nutritionRes] = await Promise.all([
+      const [recipeRes, ingredientsRes, stepsRes, nutritionRes] = await Promise.all([
+        supabase.from('recipes').select('*').eq('id', recipe.id).single(),
         supabase.from('recipe_ingredients').select('*').eq('recipe_id', recipe.id).order('order_index'),
         supabase.from('recipe_steps').select('*').eq('recipe_id', recipe.id).order('step_number'),
         supabase.from('recipe_nutrition').select('*').eq('recipe_id', recipe.id).single(),
@@ -282,6 +389,7 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
 
       const updatedRecipe: Recipe = {
         ...recipe,
+        ...(recipeRes.data || {}),
         ingredients: ingredientsRes.data || [],
         steps: stepsRes.data || [],
         nutrition: nutritionRes.data || undefined,
@@ -302,6 +410,96 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
 
   return (
     <div className="space-y-6">
+      {/* Hidden file inputs */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={onFileSelect}
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={onFileSelect}
+      />
+
+      {/* Photo Section */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3">{t('recipes.photo', 'Recipe Photo')}</h3>
+        <div className="relative">
+          {imageUrl ? (
+            <div className="relative aspect-video rounded-xl overflow-hidden bg-muted">
+              <img
+                src={imageUrl}
+                alt={recipe.title}
+                className="w-full h-full object-cover"
+              />
+              {isUploadingImage && (
+                <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                </div>
+              )}
+              <div className="absolute bottom-2 right-2 flex gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-8 bg-card/90 backdrop-blur"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingImage}
+                >
+                  <Upload className="w-4 h-4 mr-1" />
+                  {t('recipes.replace', 'Replace')}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="h-8"
+                  onClick={handleDeleteImage}
+                  disabled={isUploadingImage}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="aspect-video rounded-xl border-2 border-dashed border-border bg-muted/50 flex flex-col items-center justify-center gap-4">
+              {isUploadingImage ? (
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              ) : (
+                <>
+                  <ImageIcon className="w-12 h-12 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    {t('recipes.addPhoto', 'Add a photo of your recipe')}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => cameraInputRef.current?.click()}
+                    >
+                      <Camera className="w-4 h-4 mr-2" />
+                      {t('recipes.takePhoto', 'Camera')}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      {t('recipes.uploadPhoto', 'Upload')}
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Ingredients Section */}
       <div>
         <div className="flex items-center justify-between mb-3">
