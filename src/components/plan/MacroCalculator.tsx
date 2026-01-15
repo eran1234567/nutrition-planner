@@ -168,7 +168,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg max-h-[95vh]">
+      <DialogContent className="w-[min(44rem,calc(100vw-2rem))] max-w-lg max-h-[95vh] overflow-x-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calculator className="w-5 h-5" />
@@ -183,13 +183,13 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
             </p>
 
             {/* Unit Toggle - Imperial first (left), Metric second (right) */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 min-w-0">
               {(['imperial', 'metric'] as const).map((unit) => (
                 <button
                   key={unit}
                   type="button"
                   onClick={() => setFormData(prev => ({ ...prev, unit }))}
-                  className={`flex-1 h-10 rounded-lg border-2 text-sm font-medium transition-all ${
+                  className={`flex-1 min-w-0 h-10 rounded-lg border-2 text-sm font-medium transition-all ${
                     formData.unit === unit
                       ? 'border-primary bg-primary text-primary-foreground'
                       : 'border-border bg-card hover:bg-muted'
@@ -203,13 +203,13 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
             {/* Sex */}
             <div>
               <label className="text-sm font-medium mb-2 block">Sex</label>
-              <div className="flex gap-2">
+              <div className="flex gap-2 min-w-0">
                 {(['male', 'female'] as const).map((sex) => (
                   <button
                     key={sex}
                     type="button"
                     onClick={() => setFormData(prev => ({ ...prev, sex }))}
-                    className={`flex-1 h-10 rounded-lg border-2 text-sm font-medium capitalize transition-all ${
+                    className={`flex-1 min-w-0 h-10 rounded-lg border-2 text-sm font-medium capitalize transition-all ${
                       formData.sex === sex
                         ? 'border-primary bg-primary text-primary-foreground'
                         : 'border-border bg-card hover:bg-muted'
@@ -304,7 +304,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
               
               {/* Direct entry option */}
               <div 
-                className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all mb-2 ${
+                className={`flex items-center gap-3 min-w-0 p-2.5 rounded-lg border cursor-pointer transition-all mb-2 ${
                   formData.bodyFatMethod === 'direct' 
                     ? 'border-primary bg-primary/5' 
                     : 'border-border hover:bg-muted/50'
@@ -326,7 +326,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                     onChange={(e) => setFormData(prev => ({ ...prev, bodyFatPercent: e.target.value }))}
                     placeholder="25"
                     onClick={(e) => e.stopPropagation()}
-                    className="flex-1 h-8 px-2 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    className="flex-1 min-w-0 h-8 px-2 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                   />
                 )}
               </div>
@@ -340,7 +340,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                 }`}
                 onClick={() => setFormData(prev => ({ ...prev, bodyFatMethod: 'navy' }))}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 min-w-0">
                   <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
                     formData.bodyFatMethod === 'navy' ? 'border-primary' : 'border-muted-foreground'
                   }`}>
@@ -350,7 +350,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                   </div>
                   <span className="font-medium text-sm flex-shrink-0">US Navy</span>
                   {formData.bodyFatMethod === 'navy' && (
-                    <div className="flex-1 flex gap-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex-1 min-w-0 flex gap-2" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="number"
                         value={formData.waist}
@@ -384,7 +384,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
             {/* Goal */}
             <div>
               <label className="text-sm font-medium mb-2 block">Goal</label>
-              <div className="flex gap-2">
+              <div className="flex gap-2 min-w-0">
                 {([
                   { value: 'lose', label: 'Lose Weight' },
                   { value: 'maintain', label: 'Maintain' },
@@ -394,7 +394,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                     key={goal.value}
                     type="button"
                     onClick={() => setFormData(prev => ({ ...prev, goal: goal.value }))}
-                    className={`flex-1 h-10 rounded-lg border-2 text-sm font-medium transition-all ${
+                    className={`flex-1 min-w-0 h-10 rounded-lg border-2 text-sm font-medium transition-all ${
                       formData.goal === goal.value
                         ? 'border-primary bg-primary text-primary-foreground'
                         : 'border-border bg-card hover:bg-muted'
