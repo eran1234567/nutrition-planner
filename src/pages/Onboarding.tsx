@@ -14,7 +14,6 @@ import { useAuthStore } from '@/stores/authStore';
 import { toast } from 'sonner';
 
 const STEPS = [
-  { id: 'profile', icon: User, titleKey: 'onboarding.profile.title' },
   { id: 'diet', icon: Utensils, titleKey: 'onboarding.diet.title' },
 ];
 
@@ -224,32 +223,6 @@ const Onboarding = () => {
 
   const renderStep = () => {
     switch (STEPS[currentStep].id) {
-      case 'profile':
-        return (
-          <div className="space-y-6">
-            <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">{t('onboarding.profile.name', 'Your Name')}</label>
-              <input
-                type="text"
-                value={formData.displayName}
-                onChange={(e) => setFormData(prev => ({ ...prev, displayName: e.target.value }))}
-                placeholder={t('onboarding.profile.namePlaceholder', 'Enter your name')}
-                className="w-full h-14 px-4 rounded-xl border border-border bg-card text-foreground text-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">{t('onboarding.profile.age', 'Age')} ({t('common.optional', 'optional')})</label>
-              <input
-                type="number"
-                value={formData.age}
-                onChange={(e) => setFormData(prev => ({ ...prev, age: e.target.value }))}
-                placeholder={t('onboarding.profile.agePlaceholder', 'Your age')}
-                className="w-full h-14 px-4 rounded-xl border border-border bg-card text-foreground text-lg focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-          </div>
-        );
-
       case 'diet':
         return (
           <div className="space-y-6">
