@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { StickyActions } from '@/components/ui/StickyActions';
 import { NutritionGoalsModal } from '@/components/plan/NutritionGoalsModal';
+import { DailyTargets } from '@/components/plan/DailyTargets';
 import { useAppStore } from '@/stores/appStore';
 import { useUserData } from '@/hooks/useUserData';
 import { useNavigate } from 'react-router-dom';
@@ -218,6 +219,16 @@ export default function Plan() {
             </button>
           ))}
         </div>
+
+        {/* Daily Targets */}
+        {preferences?.calorie_target && preferences?.protein_target && preferences?.carbs_target && preferences?.fat_target && (
+          <DailyTargets
+            calorieTarget={preferences.calorie_target}
+            proteinTarget={preferences.protein_target}
+            carbsTarget={preferences.carbs_target}
+            fatTarget={preferences.fat_target}
+          />
+        )}
 
         {/* Daily View */}
         <div className="space-y-3">
