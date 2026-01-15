@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Calculator } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserData } from '@/hooks/useUserData';
+import { MacroCalculator } from './MacroCalculator';
 import { toast } from 'sonner';
 
 interface NutritionGoalsModalProps {
@@ -16,6 +18,7 @@ export function NutritionGoalsModal({ open, onOpenChange }: NutritionGoalsModalP
   const { user } = useAuth();
   const { preferences, savePreferences, profile } = useUserData();
   const [isSaving, setIsSaving] = useState(false);
+  const [showCalculator, setShowCalculator] = useState(false);
   
   const [formData, setFormData] = useState({
     calorieTarget: '',
@@ -37,6 +40,16 @@ export function NutritionGoalsModal({ open, onOpenChange }: NutritionGoalsModalP
       });
     }
   }, [preferences]);
+
+  const handleApplyCalculatedMacros = (macros: { calories: number; protein: number; carbs: number; fat: number }) => {
+    setFormData(prev => ({
+      ...prev,
+      calorieTarget: macros.calories.toString(),
+      proteinTarget: macros.protein.toString(),
+      carbsTarget: macros.carbs.toString(),
+      fatTarget: macros.fat.toString(),
+    }));
+  };
 
   const handleSave = async () => {
     if (!user || !profile) {
@@ -72,9 +85,19 @@ export function NutritionGoalsModal({ open, onOpenChange }: NutritionGoalsModalP
         </DialogHeader>
         
         <div className="space-y-6 pt-4">
-          <p className="text-sm text-muted-foreground">
-            {t('onboarding.macros.hint', 'Optional: Set daily macro targets. Leave blank for balanced recommendations.')}
-          </p>
+          <div>
+            <p className="text-sm text-muted-foreground">
+              {t('onboarding.macros.hint', 'Optional: Set daily macro targets. Leave blank for balanced recommendations.')}
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowCalculator(true)}
+              className="mt-2 text-sm text-primary hover:underline flex items-center gap-1"
+            >
+              <Calculator className="w-4 h-4" />
+              {t('macroCalculator.dontKnow', "Not sure? Calculate your macros")}
+            </button>
+          </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -158,6 +181,12 @@ export function NutritionGoalsModal({ open, onOpenChange }: NutritionGoalsModalP
           </Button>
         </div>
       </DialogContent>
+
+      <MacroCalculator
+        open={showCalculator}
+        onOpenChange={setShowCalculator}
+        onApply={handleApplyCalculatedMacros}
+      />
     </Dialog>
   );
 }
