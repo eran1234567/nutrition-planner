@@ -383,18 +383,6 @@ const Onboarding = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Simple header with just Skip button */}
-      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border">
-        <div className="px-4 py-3 flex items-center justify-end">
-          <button
-            onClick={() => editMode ? navigate('/settings') : navigate('/discover')}
-            className="text-sm text-muted-foreground"
-          >
-            {editMode ? t('common.cancel', 'Cancel') : t('common.skip', 'Skip')}
-          </button>
-        </div>
-      </div>
-
       {/* Content */}
       <div className="px-6 py-6 pb-28">
         <AnimatePresence mode="wait">
