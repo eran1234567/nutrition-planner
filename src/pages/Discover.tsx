@@ -533,7 +533,6 @@ export default function Discover() {
                 onSelect={() => handleSelect(recipe)}
                 onClick={() => navigate(`/recipe/${recipe.id}`)}
                 compact
-                showMacros={isPlanMode}
               />
             ))}
           </div>

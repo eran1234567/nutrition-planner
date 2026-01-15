@@ -1,193 +1,160 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, ShoppingCart, ListChecks, Settings } from 'lucide-react';
+import { Plus, ShoppingCart, RefreshCw, Settings, Sparkles, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { StickyActions } from '@/components/ui/StickyActions';
 import { NutritionGoalsModal } from '@/components/plan/NutritionGoalsModal';
 import { DailyTargets } from '@/components/plan/DailyTargets';
+import { PlanSlotCard } from '@/components/plan/PlanSlotCard';
+import { DayTotalsSummary } from '@/components/plan/DayTotalsSummary';
 import { useAppStore } from '@/stores/appStore';
+import { useMealPlanStore } from '@/stores/mealPlanStore';
 import { useUserData } from '@/hooks/useUserData';
+import { useGlobalRecipes } from '@/hooks/useGlobalRecipes';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { format, addDays, startOfWeek } from 'date-fns';
-import type { Recipe } from '@/types';
-
-type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
-
-type MealSlot = {
-  slotType: MealType;
-  meal: Recipe | null;
-};
-
-// Maps meals_per_day count to which meal types to show
-const getMealTypesForCount = (count: number): MealType[] => {
-  switch (count) {
-    case 1:
-      return ['lunch'];
-    case 2:
-      return ['breakfast', 'lunch'];
-    case 3:
-      return ['breakfast', 'lunch', 'dinner'];
-    case 4:
-      return ['breakfast', 'lunch', 'dinner', 'snack'];
-    case 5:
-      return ['breakfast', 'snack', 'lunch', 'snack', 'dinner'] as MealType[];
-    case 6:
-      return ['breakfast', 'snack', 'lunch', 'snack', 'dinner', 'snack'] as MealType[];
-    default:
-      return ['breakfast', 'lunch', 'dinner'];
-  }
-};
-
-const inferMealType = (meal: Pick<Recipe, 'title' | 'tags'>): MealType => {
-  // 1) Explicit tag wins
-  const mealTypeTag = meal.tags?.find(
-    (tag) => tag.tag_type === 'meal_type' && ['breakfast', 'lunch', 'dinner', 'snack'].includes(tag.tag_value)
-  );
-  if (mealTypeTag) return mealTypeTag.tag_value as MealType;
-
-  const title = (meal.title || '').toLowerCase();
-
-  // 2) Breakfast indicators
-  if (
-    title.includes('breakfast') ||
-    title.includes('oatmeal') ||
-    title.includes('omelet') ||
-    title.includes('pancake') ||
-    title.includes('egg muffin') ||
-    title.includes('crepe') ||
-    title.includes('french toast') ||
-    title.includes('waffle') ||
-    // important: handles "Avocado Deviled Eggs" better than classifying as lunch
-    title.includes('egg') ||
-    title.includes('eggs')
-  ) {
-    return 'breakfast';
-  }
-
-  // 3) Snack indicators
-  if (
-    title.includes('snack') ||
-    title.includes('shake') ||
-    title.includes('smoothie') ||
-    title.includes('hummus') ||
-    title.includes('dip') ||
-    title.includes('pudding') ||
-    title.includes('protein shake')
-  ) {
-    return 'snack';
-  }
-
-  // 4) Lunch indicators (lighter meals, salads, sandwiches, soups)
-  if (
-    title.includes('salad') ||
-    title.includes('sandwich') ||
-    title.includes('wrap') ||
-    title.includes('soup') ||
-    title.includes('spring roll')
-  ) {
-    return 'lunch';
-  }
-
-  // 5) Default
-  return 'dinner';
-};
-
-const slotPreferenceOrder: Record<MealType, MealType[]> = {
-  breakfast: ['breakfast', 'snack', 'lunch', 'dinner'],
-  lunch: ['lunch', 'dinner', 'snack', 'breakfast'],
-  dinner: ['dinner', 'lunch', 'snack', 'breakfast'],
-  snack: ['snack', 'breakfast', 'lunch', 'dinner'],
-};
-
-function pickRotatingUnique(
-  candidates: Recipe[],
-  dayIndex: number,
-  slotIndex: number,
-  used: Set<string>
-): Recipe | null {
-  if (candidates.length === 0) return null;
-
-  // deterministic but varied across days/slots
-  const start = (dayIndex + slotIndex) % candidates.length;
-  for (let i = 0; i < candidates.length; i++) {
-    const idx = (start + i) % candidates.length;
-    const candidate = candidates[idx];
-    if (!used.has(candidate.id)) return candidate;
-  }
-
-  // if we must repeat, return the rotating one
-  return candidates[start] ?? null;
-}
+import { generateMealPlan, validatePlanInputs } from '@/lib/mealPlanGenerator';
+import { SERVING_MULTIPLIERS } from '@/types/mealPlan';
+import { toast } from 'sonner';
+import type { GlobalRecipe } from '@/hooks/useGlobalRecipes';
 
 export default function Plan() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { selectedMeals, onboardingState } = useAppStore();
   const { preferences, loading: preferencesLoading, refetch: refetchPreferences } = useUserData();
+  const { data: allRecipes = [] } = useGlobalRecipes();
+  
+  const {
+    dailyTargets,
+    selectedMealSlots,
+    numberOfDays,
+    recipePoolsBySlot,
+    exactAssignments,
+    generatedPlan,
+    lockedSlots,
+    isPlanMode,
+    setGeneratedPlan,
+    updateSlotMultiplier,
+    toggleSlotLock,
+    swapRecipe,
+    setIsPlanMode,
+    setCurrentSlotFilter,
+  } = useMealPlanStore();
+  
   const [selectedDay, setSelectedDay] = useState(0);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [hasShownInitialModal, setHasShownInitialModal] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Show nutrition goals modal on first visit if no goals are set
   useEffect(() => {
     if (preferencesLoading || hasShownInitialModal) return;
     
-    const hasNutritionGoals = preferences?.calorie_target || preferences?.meals_per_day;
+    const hasNutritionGoals = preferences?.calorie_target || selectedMealSlots.length > 0;
     if (!hasNutritionGoals) {
       setShowGoalsModal(true);
       setHasShownInitialModal(true);
     }
-  }, [preferences, preferencesLoading, hasShownInitialModal]);
+  }, [preferences, preferencesLoading, hasShownInitialModal, selectedMealSlots.length]);
+
+  // Build recipe map for quick lookup
+  const recipeMap = useMemo(() => {
+    const map = new Map<string, GlobalRecipe>();
+    allRecipes.forEach(r => map.set(r.id, r));
+    return map;
+  }, [allRecipes]);
+
+  // Validate plan inputs
+  const validation = useMemo(() => {
+    if (!dailyTargets || selectedMealSlots.length === 0) {
+      return { isValid: false, errors: ['Set up your nutrition goals first'], missingSlots: [] };
+    }
+    return validatePlanInputs({
+      dailyTargets,
+      selectedMealSlots,
+      recipePoolsBySlot,
+      exactAssignments,
+      recipes: allRecipes,
+      numberOfDays,
+    });
+  }, [dailyTargets, selectedMealSlots, recipePoolsBySlot, exactAssignments, allRecipes, numberOfDays]);
+
+  // Generate plan
+  const handleGeneratePlan = useCallback(() => {
+    if (!dailyTargets || !validation.isValid) return;
+
+    setIsGenerating(true);
+    
+    // Small delay for UX
+    setTimeout(() => {
+      try {
+        const plan = generateMealPlan({
+          dailyTargets,
+          selectedMealSlots,
+          recipePoolsBySlot,
+          exactAssignments,
+          recipes: allRecipes,
+          numberOfDays,
+          lockedSlots,
+          existingPlan: generatedPlan,
+        });
+        
+        setGeneratedPlan(plan);
+        setIsPlanMode(false);
+        toast.success('Meal plan generated!');
+      } catch (error) {
+        console.error('Error generating plan:', error);
+        toast.error('Failed to generate plan');
+      } finally {
+        setIsGenerating(false);
+      }
+    }, 300);
+  }, [dailyTargets, validation.isValid, selectedMealSlots, recipePoolsBySlot, exactAssignments, allRecipes, numberOfDays, lockedSlots, generatedPlan, setGeneratedPlan, setIsPlanMode]);
+
+  // Auto-generate when coming from Discover with valid recipes
+  useEffect(() => {
+    if (isPlanMode && validation.isValid && !generatedPlan) {
+      handleGeneratePlan();
+    }
+  }, [isPlanMode, validation.isValid, generatedPlan, handleGeneratePlan]);
+
+  // Handle multiplier adjustment
+  const handleAdjustMultiplier = (dayIndex: number, slotId: string, delta: number) => {
+    const currentSlot = generatedPlan?.days[dayIndex]?.slots.find(s => s.slotId === slotId);
+    if (!currentSlot) return;
+
+    const currentIndex = SERVING_MULTIPLIERS.indexOf(currentSlot.servingMultiplier as typeof SERVING_MULTIPLIERS[number]);
+    const newIndex = Math.max(0, Math.min(SERVING_MULTIPLIERS.length - 1, currentIndex + delta));
+    const newMultiplier = SERVING_MULTIPLIERS[newIndex];
+
+    updateSlotMultiplier(dayIndex, slotId, newMultiplier);
+  };
+
+  // Handle swap - navigate to Discover with slot filter
+  const handleSwapRecipe = (slotId: string) => {
+    setCurrentSlotFilter(slotId as any);
+    setIsPlanMode(true);
+    navigate('/discover');
+  };
+
+  // Regenerate unlocked slots for current day
+  const handleRegenerateDay = () => {
+    if (!dailyTargets || !validation.isValid) return;
+    handleGeneratePlan();
+  };
 
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const days = Array.from({ length: numberOfDays }, (_, i) => addDays(weekStart, i));
 
-  const mealsPerDay = preferences?.meals_per_day ?? onboardingState?.diet?.mealsPerDay ?? 3;
-  const activeMealTypes = useMemo(() => getMealTypesForCount(mealsPerDay), [mealsPerDay]);
+  const currentDayPlan = generatedPlan?.days[selectedDay];
+  const currentDayLocks = lockedSlots[selectedDay] || [];
 
-  const currentDaySlots: MealSlot[] = useMemo(() => {
-    if (selectedMeals.length === 0) {
-      return activeMealTypes.map((slotType) => ({ slotType, meal: null }));
-    }
-
-    const mealsByType: Record<MealType, Recipe[]> = {
-      breakfast: [],
-      lunch: [],
-      dinner: [],
-      snack: [],
-    };
-
-    // bucket all selected meals
-    for (const meal of selectedMeals) {
-      mealsByType[inferMealType(meal)].push(meal);
-    }
-
-    const used = new Set<string>();
-
-    // build slots; if a slot type has no matching meals, fallback to best available type
-    return activeMealTypes.map((slotType, slotIndex) => {
-      let chosen = pickRotatingUnique(mealsByType[slotType], selectedDay, slotIndex, used);
-
-      if (!chosen) {
-        const prefOrder = slotPreferenceOrder[slotType];
-        for (const fallbackType of prefOrder) {
-          chosen = pickRotatingUnique(mealsByType[fallbackType], selectedDay, slotIndex, used);
-          if (chosen) break;
-        }
-      }
-
-      if (chosen) used.add(chosen.id);
-
-      return { slotType, meal: chosen };
-    });
-  }, [activeMealTypes, selectedDay, selectedMeals]);
-
-  const totalCalories = useMemo(() => {
-    return currentDaySlots.reduce((acc, slot) => acc + (slot.meal?.nutrition?.calories || 0), 0);
-  }, [currentDaySlots]);
+  // Check if we have a plan to show
+  const hasPlan = generatedPlan && generatedPlan.days.length > 0;
+  const hasRecipesInPools = Object.values(recipePoolsBySlot).some(pool => pool.length > 0);
 
   return (
     <div className="min-h-screen bg-background pb-40">
@@ -222,106 +189,146 @@ export default function Plan() {
 
         {/* Daily Targets */}
         <DailyTargets
-          calorieTarget={preferences?.calorie_target ?? null}
-          proteinTarget={preferences?.protein_target ?? null}
-          carbsTarget={preferences?.carbs_target ?? null}
-          fatTarget={preferences?.fat_target ?? null}
+          calorieTarget={dailyTargets?.calories ?? preferences?.calorie_target ?? null}
+          proteinTarget={dailyTargets?.protein ?? preferences?.protein_target ?? null}
+          carbsTarget={dailyTargets?.carbs ?? preferences?.carbs_target ?? null}
+          fatTarget={dailyTargets?.fat ?? preferences?.fat_target ?? null}
           onSetGoals={() => setShowGoalsModal(true)}
         />
 
-        {/* Daily View */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold">{format(days[selectedDay], 'EEEE, MMM d')}</h2>
-            {totalCalories > 0 && <span className="text-sm text-muted-foreground">{totalCalories} cal</span>}
+        {/* Validation errors */}
+        {!validation.isValid && selectedMealSlots.length > 0 && (
+          <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 mb-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-amber-700 dark:text-amber-400">
+                  Missing recipes
+                </p>
+                <p className="text-sm text-amber-600 dark:text-amber-500 mt-1">
+                  Add recipes for: {validation.missingSlots.join(', ')}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => {
+                    setIsPlanMode(true);
+                    navigate('/discover');
+                  }}
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Select Recipes
+                </Button>
+              </div>
+            </div>
           </div>
+        )}
 
-          {selectedMeals.length === 0 ? (
-            <div className="py-12 text-center">
-              <p className="text-muted-foreground mb-4">{t('plan.noMeals')}</p>
-              <Button variant="outline" onClick={() => navigate('/discover')} type="button">
-                <Plus className="w-4 h-4 mr-2" />
-                Add meals
+        {/* Generated Plan View */}
+        {hasPlan && currentDayPlan && dailyTargets ? (
+          <div className="space-y-4">
+            {/* Day header */}
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">{format(days[selectedDay], 'EEEE, MMM d')}</h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRegenerateDay}
+                disabled={isGenerating}
+              >
+                <RefreshCw className={cn('w-4 h-4 mr-1', isGenerating && 'animate-spin')} />
+                Regenerate
               </Button>
             </div>
-          ) : (
+
+            {/* Day totals summary */}
+            <DayTotalsSummary
+              dayTotals={currentDayPlan.dayTotals}
+              dailyTargets={dailyTargets}
+            />
+
+            {/* Meal slots */}
             <div className="space-y-3">
-              {currentDaySlots.map(({ slotType, meal }, index) => {
-                const isEmpty = !meal;
+              {currentDayPlan.slots.map((slot) => {
+                const slotDef = selectedMealSlots.find(s => s.id === slot.slotId);
+                const recipe = recipeMap.get(slot.recipeId) || null;
+                const isLocked = currentDayLocks.includes(slot.slotId);
 
                 return (
-                  <div
-                    key={`${slotType}-${index}`}
-                    className={cn('p-3 rounded-xl border', `meal-${slotType} border`, isEmpty && 'cursor-pointer')}
-                    onClick={isEmpty ? () => navigate('/discover') : undefined}
-                    role={isEmpty ? 'button' : undefined}
-                    tabIndex={isEmpty ? 0 : undefined}
-                    onKeyDown={
-                      isEmpty
-                        ? (e) => {
-                            if (e.key === 'Enter' || e.key === ' ') navigate('/discover');
-                          }
-                        : undefined
-                    }
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium capitalize">{t(`mealTypes.${slotType}`)}</span>
-                      {isEmpty && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate('/discover');
-                          }}
-                          aria-label={`Add ${slotType}`}
-                        >
-                          <Plus className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </div>
-
-                    {meal && (
-                      <div className="flex gap-3">
-                        <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-                          {meal.image_url ? (
-                            <img
-                              src={meal.image_url}
-                              alt={meal.title}
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-2xl">🍽️</div>
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{meal.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {meal.nutrition?.calories} cal · {meal.nutrition?.protein_g}g protein
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <PlanSlotCard
+                    key={slot.slotId}
+                    slot={slot}
+                    slotLabel={slotDef?.label || slot.slotId}
+                    recipe={recipe}
+                    isLocked={isLocked}
+                    onToggleLock={() => toggleSlotLock(selectedDay, slot.slotId)}
+                    onAdjustMultiplier={(delta) => handleAdjustMultiplier(selectedDay, slot.slotId, delta)}
+                    onSwap={() => handleSwapRecipe(slot.slotId)}
+                  />
                 );
               })}
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          /* Empty state - no plan yet */
+          <div className="py-12 text-center">
+            {selectedMealSlots.length === 0 ? (
+              <>
+                <p className="text-muted-foreground mb-4">Set up your nutrition goals to get started</p>
+                <Button onClick={() => setShowGoalsModal(true)}>
+                  <Settings className="w-4 h-4 mr-2" />
+                  Set Goals
+                </Button>
+              </>
+            ) : !hasRecipesInPools ? (
+              <>
+                <p className="text-muted-foreground mb-4">Select recipes for your meal plan</p>
+                <Button onClick={() => {
+                  setIsPlanMode(true);
+                  navigate('/discover');
+                }}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Select Recipes
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-muted-foreground mb-4">Generate your meal plan</p>
+                <Button 
+                  onClick={handleGeneratePlan}
+                  disabled={!validation.isValid || isGenerating}
+                >
+                  <Sparkles className={cn('w-4 h-4 mr-2', isGenerating && 'animate-pulse')} />
+                  {isGenerating ? 'Generating...' : 'Generate Plan'}
+                </Button>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Sticky Actions */}
       <StickyActions>
         <div className="flex gap-2">
-          <Button variant="outline" className="flex-1" onClick={() => navigate('/grocery')} type="button">
+          <Button 
+            variant="outline" 
+            className="flex-1" 
+            onClick={() => navigate('/grocery')}
+            disabled={!hasPlan}
+          >
             <ShoppingCart className="w-4 h-4 mr-2" />
             {t('grocery.title')}
           </Button>
-          <Button variant="outline" className="flex-1" type="button">
-            <ListChecks className="w-4 h-4 mr-2" />
-            Meal Prep
+          <Button 
+            className="flex-1"
+            onClick={() => {
+              setIsPlanMode(true);
+              navigate('/discover');
+            }}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Recipes
           </Button>
         </div>
       </StickyActions>

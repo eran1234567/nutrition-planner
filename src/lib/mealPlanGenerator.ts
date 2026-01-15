@@ -5,9 +5,8 @@ import type {
   GeneratedPlan, 
   GeneratedDay, 
   GeneratedSlot,
-  SERVING_MULTIPLIERS,
 } from '@/types/mealPlan';
-import type { Recipe } from '@/types';
+import type { GlobalRecipe } from '@/hooks/useGlobalRecipes';
 
 const MULTIPLIERS = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 
@@ -18,7 +17,7 @@ interface RecipeMacros {
   fat: number;
 }
 
-function getRecipeMacros(recipe: Recipe): RecipeMacros | null {
+function getRecipeMacros(recipe: GlobalRecipe): RecipeMacros | null {
   if (!recipe.nutrition) return null;
   
   return {
@@ -83,7 +82,7 @@ function findBestMultiplier(
 
 function selectRecipeFromPool(
   pool: string[],
-  recipes: Map<string, Recipe>,
+  recipes: Map<string, GlobalRecipe>,
   dayIndex: number,
   slotIndex: number,
   recentlyUsed: Map<string, number[]> // recipeId -> [dayIndices where used for this slot]
@@ -109,7 +108,7 @@ export interface GeneratePlanInput {
   selectedMealSlots: MealSlot[];
   recipePoolsBySlot: Record<string, string[]>;
   exactAssignments: Record<number, Record<string, { recipeId: string; servingMultiplier: number }>>;
-  recipes: Recipe[];
+  recipes: GlobalRecipe[];
   numberOfDays: number;
   lockedSlots?: Record<number, string[]>;
   existingPlan?: GeneratedPlan | null;
@@ -176,7 +175,7 @@ export function generateMealPlan(input: GeneratePlanInput): GeneratedPlan {
   } = input;
   
   // Create recipe lookup
-  const recipeMap = new Map<string, Recipe>();
+  const recipeMap = new Map<string, GlobalRecipe>();
   for (const recipe of recipes) {
     recipeMap.set(recipe.id, recipe);
   }
@@ -308,9 +307,9 @@ export function generateMealPlan(input: GeneratePlanInput): GeneratedPlan {
 
 export function recalculateDayTotals(
   day: GeneratedDay,
-  recipes: Recipe[]
+  recipes: GlobalRecipe[]
 ): GeneratedDay {
-  const recipeMap = new Map<string, Recipe>();
+  const recipeMap = new Map<string, GlobalRecipe>();
   for (const recipe of recipes) {
     recipeMap.set(recipe.id, recipe);
   }
