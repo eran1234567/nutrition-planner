@@ -733,49 +733,124 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
           </div>
         )}
 
-        {step === 'result' && (
-          <div className="space-y-5 pt-2">
-            <div className="text-center py-4">
-              <p className="text-sm text-muted-foreground mb-4">Your recommended daily targets:</p>
+        {step === 'result' && (() => {
+          const proteinCals = calculatedMacros.protein * 4;
+          const carbsCals = calculatedMacros.carbs * 4;
+          const fatCals = calculatedMacros.fat * 9;
+          const totalCals = calculatedMacros.calories;
+          
+          const proteinPct = Math.round((proteinCals / totalCals) * 100);
+          const carbsPct = Math.round((carbsCals / totalCals) * 100);
+          const fatPct = 100 - proteinPct - carbsPct;
+          
+          const dailyDeficit = Math.round(tdee - totalCals);
+          const weeklyDeficit = dailyDeficit * 7;
+          const expectedLossPerWeek = (weeklyDeficit / 3500).toFixed(2); // 3500 cal = 1 lb
+          
+          return (
+            <div className="space-y-4 pt-2 overflow-y-auto max-h-[70vh]">
+              <h3 className="font-semibold text-lg">Macro Breakdown</h3>
               
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-4 rounded-xl bg-primary/10 border border-primary/20">
-                  <p className="text-2xl font-bold text-primary">{calculatedMacros.calories}</p>
-                  <p className="text-sm text-muted-foreground">Calories</p>
+              {/* Macro percentage bar */}
+              <div className="flex h-8 rounded-full overflow-hidden">
+                <div 
+                  className="flex items-center justify-center text-white text-xs font-semibold"
+                  style={{ width: `${proteinPct}%`, backgroundColor: '#3B82F6' }}
+                >
+                  {proteinPct}%
                 </div>
-                <div className="p-4 rounded-xl bg-muted border border-border">
-                  <p className="text-2xl font-bold">{calculatedMacros.protein}g</p>
-                  <p className="text-sm text-muted-foreground">Protein</p>
+                <div 
+                  className="flex items-center justify-center text-white text-xs font-semibold"
+                  style={{ width: `${carbsPct}%`, backgroundColor: '#F59E0B' }}
+                >
+                  {carbsPct}%
                 </div>
-                <div className="p-4 rounded-xl bg-muted border border-border">
-                  <p className="text-2xl font-bold">{calculatedMacros.carbs}g</p>
-                  <p className="text-sm text-muted-foreground">Carbs</p>
-                </div>
-                <div className="p-4 rounded-xl bg-muted border border-border">
-                  <p className="text-2xl font-bold">{calculatedMacros.fat}g</p>
-                  <p className="text-sm text-muted-foreground">Fat</p>
+                <div 
+                  className="flex items-center justify-center text-white text-xs font-semibold"
+                  style={{ width: `${fatPct}%`, backgroundColor: '#EC4899' }}
+                >
+                  {fatPct}%
                 </div>
               </div>
-            </div>
 
-            <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                className="flex-1"
-                onClick={handleBack}
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back
-              </Button>
-              <Button 
-                className="flex-1" 
-                onClick={handleApply}
-              >
-                Apply These
-              </Button>
+              {/* Macro cards */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-xl border border-border overflow-hidden">
+                  <div className="h-1" style={{ backgroundColor: '#3B82F6' }} />
+                  <div className="p-3 text-center">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Protein</p>
+                    <p className="text-xl font-bold">{calculatedMacros.protein}g</p>
+                    <p className="text-xs text-muted-foreground">{proteinCals} cal</p>
+                    <p className="text-xs font-medium" style={{ color: '#3B82F6' }}>{proteinPct}%</p>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border overflow-hidden">
+                  <div className="h-1" style={{ backgroundColor: '#F59E0B' }} />
+                  <div className="p-3 text-center">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Carbs</p>
+                    <p className="text-xl font-bold">{calculatedMacros.carbs}g</p>
+                    <p className="text-xs text-muted-foreground">{carbsCals} cal</p>
+                    <p className="text-xs font-medium" style={{ color: '#F59E0B' }}>{carbsPct}%</p>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border overflow-hidden">
+                  <div className="h-1" style={{ backgroundColor: '#EC4899' }} />
+                  <div className="p-3 text-center">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Fat</p>
+                    <p className="text-xl font-bold">{calculatedMacros.fat}g</p>
+                    <p className="text-xs text-muted-foreground">{fatCals} cal</p>
+                    <p className="text-xs font-medium" style={{ color: '#EC4899' }}>{fatPct}%</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Deficit cards */}
+              {formData.goal !== 'maintain' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="p-3 rounded-xl border border-border text-center">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Daily {formData.goal === 'lose' ? 'Deficit' : 'Surplus'}</p>
+                    <p className={`text-lg font-bold ${formData.goal === 'lose' ? 'text-destructive' : 'text-primary'}`}>
+                      {formData.goal === 'lose' ? '-' : '+'}{Math.abs(dailyDeficit).toLocaleString()} cal
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-xl border border-border text-center">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Weekly {formData.goal === 'lose' ? 'Deficit' : 'Surplus'}</p>
+                    <p className={`text-lg font-bold ${formData.goal === 'lose' ? 'text-destructive' : 'text-primary'}`}>
+                      {formData.goal === 'lose' ? '-' : '+'}{Math.abs(weeklyDeficit).toLocaleString()} cal
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Expected weight change */}
+              {formData.goal !== 'maintain' && (
+                <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center gap-2">
+                  <span className="text-lg">📉</span>
+                  <span className="text-sm font-medium">
+                    Expected {formData.goal === 'lose' ? 'loss' : 'gain'}: <span className={formData.goal === 'lose' ? 'text-destructive' : 'text-primary'}>{formData.goal === 'lose' ? '-' : '+'}{Math.abs(parseFloat(expectedLossPerWeek))} lb/week</span>
+                  </span>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={handleBack}
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back
+                </Button>
+                <Button 
+                  className="flex-1" 
+                  onClick={handleApply}
+                >
+                  Apply These
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </DialogContent>
     </Dialog>
   );
