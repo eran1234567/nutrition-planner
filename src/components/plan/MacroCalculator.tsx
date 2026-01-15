@@ -12,6 +12,7 @@ interface MacroCalculatorProps {
 
 type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'veryActive';
 type Goal = 'lose' | 'maintain' | 'gain';
+type BodyFatMethod = 'direct' | 'navy';
 
 const activityMultipliers: Record<ActivityLevel, number> = {
   sedentary: 1.2,
@@ -38,7 +39,12 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     sex: 'male' as 'male' | 'female',
     activityLevel: 'moderate' as ActivityLevel,
     goal: 'maintain' as Goal,
-    unit: 'metric' as 'metric' | 'imperial',
+    unit: 'imperial' as 'metric' | 'imperial',
+    bodyFatMethod: 'direct' as BodyFatMethod,
+    bodyFatPercent: '',
+    waist: '',
+    neck: '',
+    hip: '', // For females only in Navy method
   });
 
   const [calculatedMacros, setCalculatedMacros] = useState({
@@ -47,6 +53,34 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     carbs: 0,
     fat: 0,
   });
+
+  // Calculate body fat using US Navy method
+  const calculateNavyBodyFat = (): number | null => {
+    let waist = parseFloat(formData.waist);
+    let neck = parseFloat(formData.neck);
+    let height = parseFloat(formData.height);
+    let hip = parseFloat(formData.hip);
+
+    if (!waist || !neck || !height) return null;
+    if (formData.sex === 'female' && !hip) return null;
+
+    // Convert to cm if imperial
+    if (formData.unit === 'imperial') {
+      waist = waist * 2.54;
+      neck = neck * 2.54;
+      height = height * 2.54;
+      hip = hip * 2.54;
+    }
+
+    let bodyFat: number;
+    if (formData.sex === 'male') {
+      bodyFat = 495 / (1.0324 - 0.19077 * Math.log10(waist - neck) + 0.15456 * Math.log10(height)) - 450;
+    } else {
+      bodyFat = 495 / (1.29579 - 0.35004 * Math.log10(waist + hip - neck) + 0.22100 * Math.log10(height)) - 450;
+    }
+
+    return Math.max(0, Math.min(60, bodyFat)); // Clamp between 0-60%
+  };
 
   const calculateMacros = () => {
     const age = parseInt(formData.age);
@@ -59,12 +93,27 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
       height = height * 2.54; // inches to cm
     }
 
-    // Mifflin-St Jeor Equation for BMR
+    // Get body fat percentage
+    let bodyFat: number | null = null;
+    if (formData.bodyFatMethod === 'direct' && formData.bodyFatPercent) {
+      bodyFat = parseFloat(formData.bodyFatPercent);
+    } else if (formData.bodyFatMethod === 'navy') {
+      bodyFat = calculateNavyBodyFat();
+    }
+
+    // Calculate BMR using Katch-McArdle if body fat is available, otherwise Mifflin-St Jeor
     let bmr: number;
-    if (formData.sex === 'male') {
-      bmr = 10 * weight + 6.25 * height - 5 * age + 5;
+    if (bodyFat !== null && bodyFat > 0) {
+      // Katch-McArdle formula (more accurate with body fat)
+      const leanMass = weight * (1 - bodyFat / 100);
+      bmr = 370 + 21.6 * leanMass;
     } else {
-      bmr = 10 * weight + 6.25 * height - 5 * age - 161;
+      // Mifflin-St Jeor Equation
+      if (formData.sex === 'male') {
+        bmr = 10 * weight + 6.25 * height - 5 * age + 5;
+      } else {
+        bmr = 10 * weight + 6.25 * height - 5 * age - 161;
+      }
     }
 
     // Calculate TDEE
@@ -118,9 +167,9 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
               {t('macroCalculator.description', 'Enter your details to calculate your recommended daily macros.')}
             </p>
 
-            {/* Unit Toggle */}
+            {/* Unit Toggle - Imperial first (left), Metric second (right) */}
             <div className="flex gap-2">
-              {(['metric', 'imperial'] as const).map((unit) => (
+              {(['imperial', 'metric'] as const).map((unit) => (
                 <button
                   key={unit}
                   type="button"
@@ -131,7 +180,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                       : 'border-border bg-card hover:bg-muted'
                   }`}
                 >
-                  {unit === 'metric' ? 'Metric (kg/cm)' : 'Imperial (lb/in)'}
+                  {unit === 'imperial' ? 'Imperial (lb/in)' : 'Metric (kg/cm)'}
                 </button>
               ))}
             </div>
@@ -209,6 +258,113 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                 <option value="active">Active (6-7 days/week)</option>
                 <option value="veryActive">Very Active (intense daily)</option>
               </select>
+            </div>
+
+            {/* Body Fat % */}
+            <div>
+              <label className="text-sm font-medium mb-3 block">Body Fat %</label>
+              
+              {/* Method selection */}
+              <div className="space-y-2 mb-3">
+                <label 
+                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                    formData.bodyFatMethod === 'direct' 
+                      ? 'border-primary bg-primary/5' 
+                      : 'border-border hover:bg-muted/50'
+                  }`}
+                  onClick={() => setFormData(prev => ({ ...prev, bodyFatMethod: 'direct' }))}
+                >
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                    formData.bodyFatMethod === 'direct' ? 'border-primary' : 'border-muted-foreground'
+                  }`}>
+                    {formData.bodyFatMethod === 'direct' && (
+                      <div className="w-2.5 h-2.5 rounded-full bg-primary" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">Enter directly</p>
+                    <p className="text-xs text-muted-foreground">If you know your body fat percentage</p>
+                  </div>
+                </label>
+                
+                <label 
+                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                    formData.bodyFatMethod === 'navy' 
+                      ? 'border-primary bg-primary/5' 
+                      : 'border-border hover:bg-muted/50'
+                  }`}
+                  onClick={() => setFormData(prev => ({ ...prev, bodyFatMethod: 'navy' }))}
+                >
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                    formData.bodyFatMethod === 'navy' ? 'border-primary' : 'border-muted-foreground'
+                  }`}>
+                    {formData.bodyFatMethod === 'navy' && (
+                      <div className="w-2.5 h-2.5 rounded-full bg-primary" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">US Navy method</p>
+                    <p className="text-xs text-muted-foreground">Estimate using body measurements</p>
+                  </div>
+                </label>
+              </div>
+
+              {/* Body fat input based on method */}
+              {formData.bodyFatMethod === 'direct' ? (
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Body Fat %</label>
+                  <input
+                    type="number"
+                    value={formData.bodyFatPercent}
+                    onChange={(e) => setFormData(prev => ({ ...prev, bodyFatPercent: e.target.value }))}
+                    placeholder="25"
+                    className="w-full h-10 px-3 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">
+                        Waist ({formData.unit === 'metric' ? 'cm' : 'in'})
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.waist}
+                        onChange={(e) => setFormData(prev => ({ ...prev, waist: e.target.value }))}
+                        placeholder={formData.unit === 'metric' ? '85' : '34'}
+                        className="w-full h-10 px-3 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">
+                        Neck ({formData.unit === 'metric' ? 'cm' : 'in'})
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.neck}
+                        onChange={(e) => setFormData(prev => ({ ...prev, neck: e.target.value }))}
+                        placeholder={formData.unit === 'metric' ? '38' : '15'}
+                        className="w-full h-10 px-3 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                      />
+                    </div>
+                  </div>
+                  {formData.sex === 'female' && (
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">
+                        Hip ({formData.unit === 'metric' ? 'cm' : 'in'})
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.hip}
+                        onChange={(e) => setFormData(prev => ({ ...prev, hip: e.target.value }))}
+                        placeholder={formData.unit === 'metric' ? '100' : '40'}
+                        className="w-full h-10 px-3 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Goal */}
