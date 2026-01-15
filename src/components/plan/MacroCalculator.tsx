@@ -244,25 +244,34 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
 
   // Check if macros are valid (don't exceed calories)
   const getMacroWarning = (): { title: string; detail: string } | null => {
-    const macros = calculateFinalMacros();
     const targetCalories = getTargetCalories();
     
-    // Calculate what percentage of calories protein takes
-    const proteinCalories = macros.protein * 4;
+    // Calculate protein calories and percentage
+    const proteinGrams = Math.round(leanBodyMass * proteinPerLb);
+    const proteinCalories = proteinGrams * 4;
     const proteinPercent = Math.round((proteinCalories / targetCalories) * 100);
-    const totalPercent = proteinPercent + fatPercent;
     
-    if (macros.carbs < 0 || totalPercent > 100) {
+    // Calculate fat calories
+    const fatCalories = Math.round(targetCalories * (fatPercent / 100));
+    
+    // Check if protein + fat exceed target calories
+    const totalUsedCalories = proteinCalories + fatCalories;
+    const totalPercent = proteinPercent + fatPercent;
+    const remainingCalories = targetCalories - totalUsedCalories;
+    
+    if (remainingCalories < 0 || totalPercent >= 100) {
       return {
         title: 'Macro settings exceed calorie target',
         detail: `Protein (${proteinPercent}%) + Fat (${fatPercent}%) = ${totalPercent}% of calories. Reduce protein factor or fat percentage so total ≤ 100%.`
       };
     }
     
-    if (dietType === 'keto' && macros.carbs > 50) {
+    // For keto, check if remaining carbs are too high (shouldn't happen with keto settings)
+    const carbGrams = Math.round(remainingCalories / 4);
+    if (dietType === 'keto' && carbGrams > 50) {
       return {
         title: 'Carbs exceed keto limit',
-        detail: `Net carbs (${macros.carbs}g) exceed the 20-50g keto limit. Consider reducing protein or increasing fat.`
+        detail: `Net carbs (${carbGrams}g) exceed the 20-50g keto limit. Consider reducing protein or increasing fat.`
       };
     }
     
