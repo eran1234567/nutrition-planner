@@ -28,6 +28,11 @@ const MEAL_OPTIONS: MealOption[] = [
   { id: 'snack-3', label: 'Snack', type: 'snack' },
 ];
 
+const PLAN_DURATION_OPTIONS = [
+  { value: 5, label: '5 Days' },
+  { value: 7, label: '7 Days' },
+];
+
 export function NutritionGoalsModal({ open, onOpenChange }: NutritionGoalsModalProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -36,6 +41,7 @@ export function NutritionGoalsModal({ open, onOpenChange }: NutritionGoalsModalP
   const [showCalculator, setShowCalculator] = useState(false);
   const [step, setStep] = useState<'macros' | 'meals'>('macros');
   const [selectedMeals, setSelectedMeals] = useState<string[]>(['breakfast', 'lunch', 'dinner']);
+  const [planDays, setPlanDays] = useState<number>(7);
   
   const [formData, setFormData] = useState({
     calorieTarget: '',
@@ -210,28 +216,54 @@ export function NutritionGoalsModal({ open, onOpenChange }: NutritionGoalsModalP
           </div>
         ) : (
           <div className="space-y-6 pt-4">
-            <p className="text-sm text-muted-foreground">
-              {t('onboarding.meals.hint', 'Select which meals you want to plan for each day.')}
-            </p>
-            
-            <div className="space-y-2">
-              {MEAL_OPTIONS.map((meal) => (
-                <button
-                  key={meal.id}
-                  type="button"
-                  onClick={() => toggleMeal(meal.id)}
-                  className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
-                    selectedMeals.includes(meal.id)
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border bg-card hover:border-muted-foreground/50'
-                  }`}
-                >
-                  <span className="font-medium text-foreground">{meal.label}</span>
-                  {selectedMeals.includes(meal.id) && (
-                    <Check className="w-5 h-5 text-primary" />
-                  )}
-                </button>
-              ))}
+            <div>
+              <p className="text-sm font-medium text-foreground mb-2">
+                {t('onboarding.meals.planDuration', 'Plan Duration')}
+              </p>
+              <div className="flex gap-3">
+                {PLAN_DURATION_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setPlanDays(option.value)}
+                    className={`flex-1 p-3 rounded-xl border-2 transition-all ${
+                      planDays === option.value
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border bg-card hover:border-muted-foreground/50'
+                    }`}
+                  >
+                    <span className="font-medium text-foreground">{option.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm font-medium text-foreground mb-2">
+                {t('onboarding.meals.title', 'Meals Per Day')}
+              </p>
+              <p className="text-sm text-muted-foreground mb-3">
+                {t('onboarding.meals.hint', 'Select which meals you want to plan for each day.')}
+              </p>
+              <div className="space-y-2">
+                {MEAL_OPTIONS.map((meal) => (
+                  <button
+                    key={meal.id}
+                    type="button"
+                    onClick={() => toggleMeal(meal.id)}
+                    className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
+                      selectedMeals.includes(meal.id)
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border bg-card hover:border-muted-foreground/50'
+                    }`}
+                  >
+                    <span className="font-medium text-foreground">{meal.label}</span>
+                    {selectedMeals.includes(meal.id) && (
+                      <Check className="w-5 h-5 text-primary" />
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
             
             <div className="flex gap-3">
