@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { ChevronLeft, ChevronRight, Check, User, Utensils, Heart, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, User, Utensils, Plus } from 'lucide-react';
 import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/input';
 import i18n from '@/lib/i18n';
@@ -16,7 +16,6 @@ import { toast } from 'sonner';
 const STEPS = [
   { id: 'profile', icon: User, titleKey: 'onboarding.profile.title' },
   { id: 'diet', icon: Utensils, titleKey: 'onboarding.diet.title' },
-  { id: 'medical', icon: Heart, titleKey: 'onboarding.medical.title' },
 ];
 
 const Onboarding = () => {
@@ -370,58 +369,29 @@ const Onboarding = () => {
                 </Button>
               </div>
             </div>
-          </div>
-        );
-      case 'medical':
-        return (
-          <div className="space-y-6">
-            <div className="p-4 rounded-xl bg-warning/10 border border-warning/20">
-              <p className="text-sm text-warning-foreground">
-                ⚠️ {t('onboarding.medical.disclaimer', 'This is general nutrition planning, not medical advice. Always consult your healthcare provider.')}
-              </p>
-            </div>
             <div>
-              <label className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card">
-                <input
-                  type="checkbox"
-                  checked={formData.medicalDisclaimer}
-                  onChange={(e) => setFormData(prev => ({ ...prev, medicalDisclaimer: e.target.checked }))}
-                  className="w-5 h-5 rounded border-border text-primary focus:ring-primary"
-                />
-                <span className="text-sm">{t('onboarding.medical.understand', 'I understand this is not medical advice')}</span>
-              </label>
-            </div>
-            {formData.medicalDisclaimer && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="space-y-3"
-              >
-                <p className="text-sm font-medium text-foreground">{t('onboarding.medical.options', 'Health-conscious options')}:</p>
+              <label className="text-sm font-medium text-foreground mb-3 block">{t('onboarding.medical.options', 'Health Considerations')}</label>
+              <div className="flex flex-wrap gap-2">
                 {[
-                  { key: 'diabetesFriendly', labelKey: 'onboarding.medical.diabetes', descKey: 'onboarding.medical.diabetesDesc' },
-                  { key: 'kidneyFriendly', labelKey: 'onboarding.medical.kidney', descKey: 'onboarding.medical.kidneyDesc' },
-                  { key: 'heartHealthy', labelKey: 'onboarding.medical.heart', descKey: 'onboarding.medical.heartDesc' },
-                  { key: 'lowSodium', labelKey: 'onboarding.medical.lowSodium', descKey: 'onboarding.medical.lowSodiumDesc' },
+                  { key: 'diabetesFriendly', label: t('onboarding.medical.diabetes', 'Diabetes-friendly') },
+                  { key: 'kidneyFriendly', label: t('onboarding.medical.kidney', 'Kidney-friendly') },
+                  { key: 'heartHealthy', label: t('onboarding.medical.heart', 'Heart-healthy') },
+                  { key: 'lowSodium', label: t('onboarding.medical.lowSodium', 'Low sodium') },
                 ].map(option => (
-                  <label
+                  <button
                     key={option.key}
-                    className="flex items-center gap-3 p-4 rounded-xl border border-border bg-card"
+                    onClick={() => setFormData(prev => ({ ...prev, [option.key]: !prev[option.key as keyof typeof prev] }))}
+                    className={`px-4 py-2 rounded-full border-2 transition-all text-sm font-medium ${
+                      formData[option.key as keyof typeof formData]
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border bg-card'
+                    }`}
                   >
-                    <input
-                      type="checkbox"
-                      checked={formData[option.key as keyof typeof formData] as boolean}
-                      onChange={(e) => setFormData(prev => ({ ...prev, [option.key]: e.target.checked }))}
-                      className="w-5 h-5 rounded border-border text-primary focus:ring-primary"
-                    />
-                    <div>
-                      <p className="font-medium">{t(option.labelKey, option.key)}</p>
-                      <p className="text-xs text-muted-foreground">{t(option.descKey, '')}</p>
-                    </div>
-                  </label>
+                    {option.label}
+                  </button>
                 ))}
-              </motion.div>
-            )}
+              </div>
+            </div>
           </div>
         );
 

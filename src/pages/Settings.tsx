@@ -4,11 +4,8 @@ import { motion } from 'framer-motion';
 import { 
   ArrowLeft, 
   User, 
-  Globe, 
   Utensils, 
   Target, 
-  AlertTriangle, 
-  Heart,
   LogOut,
   ChevronRight,
   Upload
@@ -31,13 +28,6 @@ const settingsItems = [
     icon: User,
     labelKey: 'settings.profile',
     descKey: 'settings.profileDesc',
-    step: 1,
-  },
-  {
-    id: 'locale',
-    icon: Globe,
-    labelKey: 'settings.locale',
-    descKey: 'settings.localeDesc',
     step: 0,
   },
   {
@@ -45,28 +35,14 @@ const settingsItems = [
     icon: Utensils,
     labelKey: 'settings.diet',
     descKey: 'settings.dietDesc',
-    step: 2,
+    step: 1,
   },
   {
     id: 'goals',
     icon: Target,
     labelKey: 'settings.goals',
     descKey: 'settings.goalsDesc',
-    step: 3,
-  },
-  {
-    id: 'allergies',
-    icon: AlertTriangle,
-    labelKey: 'settings.allergies',
-    descKey: 'settings.allergiesDesc',
-    step: 2,
-  },
-  {
-    id: 'medical',
-    icon: Heart,
-    labelKey: 'settings.medical',
-    descKey: 'settings.medicalDesc',
-    step: 4,
+    path: '/plan',
   },
 ];
 
