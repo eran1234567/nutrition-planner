@@ -350,20 +350,20 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                   </div>
                   <span className="font-medium text-sm flex-shrink-0">US Navy</span>
                   {formData.bodyFatMethod === 'navy' && (
-                    <div className="flex-1 flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex-1 flex gap-2" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="number"
                         value={formData.waist}
                         onChange={(e) => setFormData(prev => ({ ...prev, waist: e.target.value }))}
                         placeholder="Waist"
-                        className="w-16 h-7 px-1.5 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-xs"
+                        className="w-20 h-7 px-2 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-xs"
                       />
                       <input
                         type="number"
                         value={formData.neck}
                         onChange={(e) => setFormData(prev => ({ ...prev, neck: e.target.value }))}
                         placeholder="Neck"
-                        className="w-16 h-7 px-1.5 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-xs"
+                        className="w-20 h-7 px-2 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-xs"
                       />
                       {formData.sex === 'female' && (
                         <input
@@ -371,7 +371,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                           value={formData.hip}
                           onChange={(e) => setFormData(prev => ({ ...prev, hip: e.target.value }))}
                           placeholder="Hip"
-                          className="w-16 h-7 px-1.5 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-xs"
+                          className="w-20 h-7 px-2 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-xs"
                         />
                       )}
                       <span className="text-xs text-muted-foreground self-center">({formData.unit === 'metric' ? 'cm' : 'in'})</span>
