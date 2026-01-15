@@ -256,18 +256,18 @@ const Onboarding = () => {
           <div className="space-y-6">
             <div>
               <label className="text-sm font-medium text-foreground mb-3 block">{t('onboarding.diet.dietType', 'Diet Type')}</label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-wrap gap-2">
                 {['none', 'vegetarian', 'vegan', 'pescatarian', 'keto', 'paleo', 'mediterranean'].map(diet => (
                   <button
                     key={diet}
                     onClick={() => setFormData(prev => ({ ...prev, dietType: diet }))}
-                    className={`p-3 rounded-xl border-2 transition-all capitalize ${
+                    className={`px-4 py-2 rounded-full border-2 transition-all text-sm font-medium ${
                       formData.dietType === diet
                         ? 'border-primary bg-primary/10'
                         : 'border-border bg-card'
                     }`}
                   >
-                    {diet === 'none' ? t('onboarding.diet.noRestrictions', 'No restrictions') : t(`diet.${diet}`, diet)}
+                    {diet === 'none' ? t('onboarding.diet.noRestrictions', 'None') : t(`diet.${diet}`, diet)}
                   </button>
                 ))}
               </div>
