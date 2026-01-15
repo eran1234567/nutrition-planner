@@ -362,20 +362,26 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
               <div className="flex-1">
                 <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Sex</label>
                 <div className="flex gap-1.5">
-                  {(['male', 'female'] as const).map((sex) => (
-                    <button
-                      key={sex}
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, sex }))}
-                      className={`flex-1 h-8 rounded-md border text-xs font-medium capitalize transition-all ${
-                        formData.sex === sex
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-border bg-card hover:bg-muted'
-                      }`}
-                    >
-                      {sex}
-                    </button>
-                  ))}
+                  {(['male', 'female'] as const).map((sex) => {
+                    const age = parseInt(formData.age) || 0;
+                    const label = age > 0 && age < 18 
+                      ? (sex === 'male' ? 'Boy' : 'Girl')
+                      : (sex === 'male' ? 'Male' : 'Female');
+                    return (
+                      <button
+                        key={sex}
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, sex }))}
+                        className={`flex-1 h-8 rounded-md border text-xs font-medium capitalize transition-all ${
+                          formData.sex === sex
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-border bg-card hover:bg-muted'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
