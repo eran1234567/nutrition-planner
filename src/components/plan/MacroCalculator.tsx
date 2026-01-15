@@ -315,7 +315,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[95vh] overflow-hidden">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[98vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {step === 'dietary' ? (
@@ -773,7 +773,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
           const expectedLossPerWeek = (weeklyDeficit / 3500).toFixed(2); // 3500 cal = 1 lb
           
           return (
-            <div className="space-y-4 pt-2 overflow-y-auto max-h-[70vh]">
+            <div className="space-y-4 pt-2 overflow-y-auto max-h-[85vh]">
               {/* Daily Targets Header */}
               <div className="bg-primary/5 rounded-2xl p-4">
                 <div className="flex items-center justify-center gap-2 mb-3">
