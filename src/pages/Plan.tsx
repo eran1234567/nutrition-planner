@@ -126,7 +126,7 @@ export default function Plan() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { selectedMeals, onboardingState } = useAppStore();
-  const { preferences, loading: preferencesLoading } = useUserData();
+  const { preferences, loading: preferencesLoading, refetch: refetchPreferences } = useUserData();
   const [selectedDay, setSelectedDay] = useState(0);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [hasShownInitialModal, setHasShownInitialModal] = useState(false);
@@ -330,7 +330,8 @@ export default function Plan() {
       
       <NutritionGoalsModal 
         open={showGoalsModal} 
-        onOpenChange={setShowGoalsModal} 
+        onOpenChange={setShowGoalsModal}
+        onSave={refetchPreferences}
       />
     </div>
   );
