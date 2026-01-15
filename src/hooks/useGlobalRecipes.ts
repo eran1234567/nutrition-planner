@@ -92,54 +92,38 @@ function getSeedFallback(): GlobalRecipe[] {
     }));
 }
 
-async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  let timer: number | undefined;
-  const timeoutPromise = new Promise<T>((_, reject) => {
-    timer = window.setTimeout(() => reject(new Error('Request timeout')), ms);
-  });
-
-  try {
-    return await Promise.race([promise, timeoutPromise]);
-  } finally {
-    if (timer) window.clearTimeout(timer);
-  }
-}
-
 export function useGlobalRecipes() {
   return useQuery({
     queryKey: ['global-recipes'],
     queryFn: async (): Promise<GlobalRecipe[]> => {
       try {
-        const { data, error } = await withTimeout(
-          supabase
-            .from('recipes')
-            .select(
-              `
-              id,
-              title,
-              description,
-              image_url,
-              prep_time,
-              cook_time,
-              total_time,
-              servings,
-              difficulty,
-              cuisine,
-              is_kid_friendly,
-              is_meal_prep_friendly,
-              is_budget_friendly,
-              scope,
-              recipe_nutrition(calories, protein_g, carbs_g, fat_g, fiber_g, sodium_mg),
-              recipe_ingredients(name, quantity, unit, normalized_name, aisle, order_index),
-              recipe_steps(step_number, instruction),
-              recipe_tags(tag_type, tag_value)
+        const { data, error } = await supabase
+          .from('recipes')
+          .select(
             `
-            )
-            .eq('scope', 'global')
-            .or('is_deleted.is.null,is_deleted.eq.false')
-            .order('title'),
-          12_000
-        );
+            id,
+            title,
+            description,
+            image_url,
+            prep_time,
+            cook_time,
+            total_time,
+            servings,
+            difficulty,
+            cuisine,
+            is_kid_friendly,
+            is_meal_prep_friendly,
+            is_budget_friendly,
+            scope,
+            recipe_nutrition(calories, protein_g, carbs_g, fat_g, fiber_g, sodium_mg),
+            recipe_ingredients(name, quantity, unit, normalized_name, aisle, order_index),
+            recipe_steps(step_number, instruction),
+            recipe_tags(tag_type, tag_value)
+          `
+          )
+          .eq('scope', 'global')
+          .or('is_deleted.is.null,is_deleted.eq.false')
+          .order('title');
 
         if (error) {
           console.warn('[useGlobalRecipes] backend error, using seed fallback:', error);
