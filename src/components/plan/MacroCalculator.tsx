@@ -182,42 +182,45 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
               {t('macroCalculator.description', 'Enter your details to calculate your recommended daily macros.')}
             </p>
 
-            {/* Unit Toggle - Imperial first (left), Metric second (right) */}
-            <div className="flex gap-2 min-w-0">
-              {(['imperial', 'metric'] as const).map((unit) => (
-                <button
-                  key={unit}
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, unit }))}
-                  className={`flex-1 min-w-0 h-10 rounded-lg border-2 text-sm font-medium transition-all ${
-                    formData.unit === unit
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border bg-card hover:bg-muted'
-                  }`}
-                >
-                  {unit === 'imperial' ? 'Imperial (lb/in)' : 'Metric (kg/cm)'}
-                </button>
-              ))}
-            </div>
-
-            {/* Sex */}
-            <div>
-              <label className="text-sm font-medium mb-2 block">Sex</label>
-              <div className="flex gap-2 min-w-0">
-                {(['male', 'female'] as const).map((sex) => (
-                  <button
-                    key={sex}
-                    type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, sex }))}
-                    className={`flex-1 min-w-0 h-10 rounded-lg border-2 text-sm font-medium capitalize transition-all ${
-                      formData.sex === sex
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-border bg-card hover:bg-muted'
-                    }`}
-                  >
-                    {sex}
-                  </button>
-                ))}
+            {/* Unit Toggle + Sex - combined row */}
+            <div className="flex gap-4 items-end">
+              <div className="flex-1">
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Units</label>
+                <div className="flex gap-1.5">
+                  {(['imperial', 'metric'] as const).map((unit) => (
+                    <button
+                      key={unit}
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, unit }))}
+                      className={`flex-1 h-8 rounded-md border text-xs font-medium transition-all ${
+                        formData.unit === unit
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border bg-card hover:bg-muted'
+                      }`}
+                    >
+                      {unit === 'imperial' ? 'lb/in' : 'kg/cm'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex-1">
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Sex</label>
+                <div className="flex gap-1.5">
+                  {(['male', 'female'] as const).map((sex) => (
+                    <button
+                      key={sex}
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, sex }))}
+                      className={`flex-1 h-8 rounded-md border text-xs font-medium capitalize transition-all ${
+                        formData.sex === sex
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border bg-card hover:bg-muted'
+                      }`}
+                    >
+                      {sex}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
