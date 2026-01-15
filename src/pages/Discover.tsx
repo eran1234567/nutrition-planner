@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { Search, Clock, Sparkles, BookOpen, ChefHat, Baby } from 'lucide-react';
+import { Search, Clock, Sparkles, BookOpen, ChefHat, Baby, Plus, Check, Target } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -10,12 +10,16 @@ import { RecipeCard } from '@/components/recipe/RecipeCard';
 import { StickyActions } from '@/components/ui/StickyActions';
 import { Chip } from '@/components/ui/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PlanModeHeader } from '@/components/plan/PlanModeHeader';
+import { AddToPlanModal } from '@/components/plan/AddToPlanModal';
 import { useGlobalRecipes } from '@/hooks/useGlobalRecipes';
 import { useAppStore } from '@/stores/appStore';
+import { useMealPlanStore } from '@/stores/mealPlanStore';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserData } from '@/hooks/useUserData';
 import { supabase } from '@/integrations/supabase/client';
+import type { MealSlotId } from '@/types/mealPlan';
 
 // Age-based meal suitability
 type AgeGroup = 'toddler' | 'child' | 'teen' | 'adult';
@@ -30,33 +34,25 @@ const getAgeGroup = (age: number | null | undefined): AgeGroup => {
 // Ingredients/terms not suitable for young children (safety, texture, spice)
 const ageRestrictedTerms: Record<AgeGroup, string[]> = {
   toddler: [
-    // Choking hazards
     'whole nut', 'peanut', 'almond', 'walnut', 'cashew', 'pistachio', 'macadamia',
     'popcorn', 'hard candy', 'gum', 'marshmallow',
-    // Spicy foods
     'jalapeño', 'jalapeno', 'habanero', 'ghost pepper', 'cayenne', 'hot sauce', 'sriracha', 'wasabi', 'horseradish',
     'extra spicy', 'very spicy', 'fiery', 'blazing',
-    // Raw/undercooked items
     'raw fish', 'sashimi', 'tartare', 'rare steak', 'runny egg', 'soft boiled',
-    // High sodium/processed
     'cured meat', 'prosciutto', 'salami', 'pepperoni',
-    // Alcohol-based
     'wine sauce', 'beer batter', 'bourbon', 'rum', 'whiskey', 'brandy',
-    // Tough textures
     'jerky', 'beef jerky', 'dried meat',
   ],
   child: [
-    // Less restrictive - mainly spicy and raw items
     'jalapeño', 'jalapeno', 'habanero', 'ghost pepper', 'cayenne',
     'extra spicy', 'very spicy', 'fiery', 'blazing',
     'raw fish', 'sashimi', 'tartare',
     'wine sauce', 'beer batter', 'bourbon', 'rum', 'whiskey', 'brandy',
   ],
   teen: [
-    // Only alcohol-based items
     'wine sauce', 'beer batter', 'bourbon', 'rum sauce', 'whiskey glaze', 'brandy',
   ],
-  adult: [], // No restrictions
+  adult: [],
 };
 
 const timeFilters = [
@@ -101,9 +97,20 @@ export default function Discover() {
   const { user, isAuthenticated } = useAuth();
   const { profile, preferences } = useUserData();
   const { selectedMeals, addSelectedMeal, removeSelectedMeal } = useAppStore();
+  const { 
+    isPlanMode, 
+    setIsPlanMode, 
+    currentSlotFilter,
+    selectedMealSlots,
+    recipePoolsBySlot,
+    numberOfDays,
+    dailyTargets,
+  } = useMealPlanStore();
 
-  // If the user isn't signed in yet, onboarding stores choices locally.
-  // Use those values to keep Discover filtering consistent for guests.
+  // Modal state for adding to plan
+  const [addToPlanModal, setAddToPlanModal] = useState<{ open: boolean; recipeId: string; recipeName: string } | null>(null);
+
+  // Pending onboarding data
   const pendingOnboarding = useMemo(() => {
     try {
       const raw = window.localStorage.getItem('pendingOnboarding');
@@ -126,33 +133,14 @@ export default function Discover() {
   const effectiveAllergies = pendingOnboarding?.allergies ?? preferences?.allergies ?? [];
   const effectiveDislikes = pendingOnboarding?.dislikes ?? preferences?.dislikes ?? [];
 
-  // Health-conscious preferences
   const healthPreferences = useMemo(() => {
     const prefs: string[] = [];
-    
-    // Check database preferences first, then pending onboarding
-    if (preferences?.medical_diabetes_friendly || pendingOnboarding?.diabetesFriendly) {
-      prefs.push('diabetes-friendly');
-    }
-    if (preferences?.medical_kidney_friendly || pendingOnboarding?.kidneyFriendly) {
-      prefs.push('kidney-friendly');
-    }
-    if (preferences?.medical_heart_healthy || pendingOnboarding?.heartHealthy) {
-      prefs.push('heart-healthy');
-    }
-    if (preferences?.medical_low_sodium || pendingOnboarding?.lowSodium) {
-      prefs.push('low-sodium');
-    }
-    
+    if (preferences?.medical_diabetes_friendly || pendingOnboarding?.diabetesFriendly) prefs.push('diabetes-friendly');
+    if (preferences?.medical_kidney_friendly || pendingOnboarding?.kidneyFriendly) prefs.push('kidney-friendly');
+    if (preferences?.medical_heart_healthy || pendingOnboarding?.heartHealthy) prefs.push('heart-healthy');
+    if (preferences?.medical_low_sodium || pendingOnboarding?.lowSodium) prefs.push('low-sodium');
     return prefs;
   }, [preferences, pendingOnboarding]);
-
-  // Debug: log health preferences
-  useEffect(() => {
-    if (healthPreferences.length > 0) {
-      console.log('[Discover] User health preferences:', healthPreferences);
-    }
-  }, [healthPreferences]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTime, setSelectedTime] = useState<number | null>(null);
@@ -161,57 +149,32 @@ export default function Discover() {
   const [userRecipes, setUserRecipes] = useState<UserRecipe[]>([]);
   const [recipeSource, setRecipeSource] = useState<'all' | 'my' | 'app'>('all');
 
-  // Get user diet type for filtering
   const userDietType = (effectiveDietType || 'none').toLowerCase();
 
-  // Define ingredients/terms that are excluded for each diet type
   const dietExclusions: Record<string, string[]> = {
-    vegan: [
-      'chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'lobster', 'crab', 'shellfish', 'seafood',
-      'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak',
-      'egg', 'eggs',
-      'dairy', 'milk', 'cheese', 'butter', 'cream', 'yogurt',
-      'honey',
-    ],
-    vegetarian: [
-      'chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'lobster', 'crab', 'shellfish', 'seafood',
-      'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak',
-    ],
+    vegan: ['chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'lobster', 'crab', 'shellfish', 'seafood', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak', 'egg', 'eggs', 'dairy', 'milk', 'cheese', 'butter', 'cream', 'yogurt', 'honey'],
+    vegetarian: ['chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'lobster', 'crab', 'shellfish', 'seafood', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak'],
     pescatarian: ['chicken', 'beef', 'pork', 'lamb', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak'],
-    keto: [], // Keto is about macros, not specific ingredients - handled differently
+    keto: [],
     paleo: ['bread', 'pasta', 'rice', 'grain', 'wheat', 'oat', 'corn', 'bean', 'lentil', 'peanut', 'soy', 'tofu', 'sugar', 'dairy', 'milk', 'cheese'],
-    mediterranean: [], // Mediterranean is a style, not exclusionary
+    mediterranean: [],
     none: [],
   };
 
-  // Get user allergies + dislikes for filtering
-  // Note: we expand simple singular/plural variants (e.g., "eggs" -> "egg") to catch common cases.
   const blockedTerms = useMemo(() => {
     const normalize = (v: string) => v.trim().toLowerCase();
-
-    // Start with diet-based exclusions
     const dietExcluded = dietExclusions[userDietType] || [];
-
-    const base = [...dietExcluded, ...effectiveAllergies, ...effectiveDislikes]
-      .filter(Boolean)
-      .map(normalize)
-      .filter(Boolean);
-
+    const base = [...dietExcluded, ...effectiveAllergies, ...effectiveDislikes].filter(Boolean).map(normalize).filter(Boolean);
     const expanded = base.flatMap((term) => {
       const variants = new Set<string>();
       variants.add(term);
-
-      // naive singular/plural handling
       if (term.endsWith('s') && term.length > 1) variants.add(term.slice(0, -1));
       else variants.add(`${term}s`);
-
       return Array.from(variants);
     });
-
     return Array.from(new Set(expanded)).filter(Boolean);
   }, [effectiveAllergies, effectiveDislikes, userDietType]);
 
-  // Get user age from profile or pending onboarding
   const pendingAge = useMemo(() => {
     try {
       const raw = window.localStorage.getItem('pendingOnboarding');
@@ -226,10 +189,8 @@ export default function Discover() {
   const userAge = pendingAge ?? profile?.age ?? null;
   const userAgeGroup = getAgeGroup(userAge);
 
-  // Get age-restricted terms based on user's age
   const ageBlockedTerms = useMemo(() => {
     const restricted = ageRestrictedTerms[userAgeGroup] || [];
-    // Expand with singular/plural variants
     return restricted.flatMap(term => {
       const variants = new Set<string>();
       variants.add(term.toLowerCase());
@@ -239,17 +200,8 @@ export default function Discover() {
     });
   }, [userAgeGroup]);
 
-  // Debug: confirm preferences are present and the terms we're filtering
-  useEffect(() => {
-    console.log('[Discover] userDietType:', userDietType);
-    console.log('[Discover] userAge:', userAge, 'ageGroup:', userAgeGroup);
-    console.log('[Discover] blockedTerms:', blockedTerms);
-    console.log('[Discover] ageBlockedTerms:', ageBlockedTerms);
-  }, [blockedTerms, userDietType, userAge, userAgeGroup, ageBlockedTerms]);
-
-  // Fetch global recipes from database
   const { data: globalRecipes = [], isLoading: isLoadingGlobal } = useGlobalRecipes();
-  // Load user's recipes from database
+
   useEffect(() => {
     if (!user) return;
 
@@ -257,16 +209,7 @@ export default function Discover() {
       const { data, error } = await supabase
         .from('recipes')
         .select(`
-          id,
-          title,
-          description,
-          image_url,
-          prep_time,
-          cook_time,
-          total_time,
-          servings,
-          difficulty,
-          cuisine,
+          id, title, description, image_url, prep_time, cook_time, total_time, servings, difficulty, cuisine,
           recipe_nutrition(calories, protein_g, carbs_g, fat_g),
           recipe_ingredients(name, normalized_name),
           recipe_tags(tag_type, tag_value)
@@ -304,128 +247,139 @@ export default function Discover() {
   }, [user]);
 
   const allRecipes = useMemo(() => {
-    // Filter based on recipe source
     switch (recipeSource) {
-      case 'my':
-        return userRecipes;
-      case 'app':
-        return globalRecipes;
-      default: // 'all'
-        return [...userRecipes, ...globalRecipes];
+      case 'my': return userRecipes;
+      case 'app': return globalRecipes;
+      default: return [...userRecipes, ...globalRecipes];
     }
   }, [userRecipes, globalRecipes, recipeSource]);
 
+  // Apply slot-based filtering when in plan mode
   const filteredRecipes = useMemo(() => {
     let recipes = allRecipes.filter(recipe => {
-      // Filter out recipes without valid images (only for app recipes)
-      // Allow http URLs and relative paths starting with /
       if (!recipe.isUserRecipe && (!recipe.image_url || recipe.image_url.includes('undefined') || (!recipe.image_url.startsWith('http') && !recipe.image_url.startsWith('/')))) {
         return false;
       }
-
-      // Search filter
       if (searchQuery && !recipe.title.toLowerCase().includes(searchQuery.toLowerCase())) {
         return false;
       }
-
-      // Time filter (manual selection from chips)
       if (selectedTime && recipe.total_time && recipe.total_time > selectedTime) {
         return false;
       }
-
-      // Meal type filter
-      if (selectedMealType && !recipe.tags.some(t => t.tag_type === 'meal' && t.tag_value === selectedMealType)) {
+      
+      // In plan mode, use currentSlotFilter for meal type
+      const effectiveMealType = isPlanMode && currentSlotFilter 
+        ? getMealTypeForSlot(currentSlotFilter)
+        : selectedMealType;
+      
+      if (effectiveMealType && !recipe.tags.some(t => t.tag_type === 'meal' && t.tag_value === effectiveMealType)) {
         return false;
       }
-
-      // Cuisine filter
       if (selectedCuisine && recipe.cuisine?.toLowerCase() !== selectedCuisine.toLowerCase()) {
         return false;
       }
-
-      // Filter based on user allergies, diet, and dislikes (only for global/app recipes, not user's own)
       if (!recipe.isUserRecipe && blockedTerms.length > 0) {
         const titleLower = recipe.title.toLowerCase();
-        const descLower = (recipe.description || '').toLowerCase();
-
-        // Get all ingredient names (use normalized_name if available, fallback to name)
-        const ingredientNames = (recipe.ingredients || []).map((ing) =>
-          (ing.normalized_name || ing.name || '').toLowerCase()
-        );
-
+        const ingredientNames = (recipe.ingredients || []).map((ing) => (ing.normalized_name || ing.name || '').toLowerCase());
         const matchesBlocked = (text: string) => blockedTerms.some((term) => text.includes(term));
-        const matchesBlockedIngredients = () =>
-          blockedTerms.some((term) => ingredientNames.some((name) => name.includes(term)));
-
+        const matchesBlockedIngredients = () => blockedTerms.some((term) => ingredientNames.some((name) => name.includes(term)));
         if (matchesBlocked(titleLower)) return false;
         if (matchesBlockedIngredients()) return false;
       }
-
-      // Age-based filtering (only for app recipes)
       if (!recipe.isUserRecipe && ageBlockedTerms.length > 0) {
         const titleLower = recipe.title.toLowerCase();
         const descLower = (recipe.description || '').toLowerCase();
-        const ingredientNames = (recipe.ingredients || []).map((ing) =>
-          (ing.normalized_name || ing.name || '').toLowerCase()
-        );
-
+        const ingredientNames = (recipe.ingredients || []).map((ing) => (ing.normalized_name || ing.name || '').toLowerCase());
         const matchesAgeRestricted = (text: string) => ageBlockedTerms.some((term) => text.includes(term));
-        const matchesAgeRestrictedIngredients = () =>
-          ageBlockedTerms.some((term) => ingredientNames.some((name) => name.includes(term)));
-
+        const matchesAgeRestrictedIngredients = () => ageBlockedTerms.some((term) => ingredientNames.some((name) => name.includes(term)));
         if (matchesAgeRestricted(titleLower)) return false;
         if (matchesAgeRestricted(descLower)) return false;
         if (matchesAgeRestrictedIngredients()) return false;
       }
-
-      // Health preference filtering - ONLY show recipes that match ALL active health preferences
       if (!recipe.isUserRecipe && healthPreferences.length > 0) {
-        const recipeMedicalTags = (recipe.tags || [])
-          .filter(t => t.tag_type === 'medical')
-          .map(t => t.tag_value);
-        
-        // Recipe must have ALL the user's health preferences
+        const recipeMedicalTags = (recipe.tags || []).filter(t => t.tag_type === 'medical').map(t => t.tag_value);
         const hasAllHealthTags = healthPreferences.every(pref => recipeMedicalTags.includes(pref));
         if (!hasAllHealthTags) return false;
       }
-
       return true;
     });
 
-    // Prioritize recipes based on user preferences
     recipes = recipes.sort((a, b) => {
       let aScore = 0;
       let bScore = 0;
-
-      // Kid-friendly priority for young children
       if (userAgeGroup === 'toddler' || userAgeGroup === 'child') {
         if ((a as any).is_kid_friendly) aScore += 5;
         if ((b as any).is_kid_friendly) bScore += 5;
       }
-
-      return bScore - aScore; // Higher score first
+      return bScore - aScore;
     });
 
     return recipes;
-  }, [allRecipes, searchQuery, selectedTime, selectedMealType, selectedCuisine, blockedTerms, ageBlockedTerms, userAgeGroup, healthPreferences]);
+  }, [allRecipes, searchQuery, selectedTime, selectedMealType, selectedCuisine, blockedTerms, ageBlockedTerms, userAgeGroup, healthPreferences, isPlanMode, currentSlotFilter]);
 
-  const isSelected = (recipeId: string) => selectedMeals.some(r => r.id === recipeId);
+  // Helper to get meal type from slot ID
+  function getMealTypeForSlot(slotId: MealSlotId): string {
+    const slot = selectedMealSlots.find(s => s.id === slotId);
+    return slot?.type || 'dinner';
+  }
+
+  // Check if recipe is in current pool
+  const isInPool = (recipeId: string) => {
+    if (!currentSlotFilter) {
+      return Object.values(recipePoolsBySlot).some(pool => pool.includes(recipeId));
+    }
+    return (recipePoolsBySlot[currentSlotFilter] || []).includes(recipeId);
+  };
+
+  const isSelected = (recipeId: string) => {
+    if (isPlanMode) {
+      return isInPool(recipeId);
+    }
+    return selectedMeals.some(r => r.id === recipeId);
+  };
 
   const handleSelect = (recipe: any) => {
-    if (isSelected(recipe.id)) {
-      removeSelectedMeal(recipe.id);
+    if (isPlanMode) {
+      // Open add to plan modal
+      setAddToPlanModal({
+        open: true,
+        recipeId: recipe.id,
+        recipeName: recipe.title,
+      });
     } else {
-      addSelectedMeal(recipe);
+      if (isSelected(recipe.id)) {
+        removeSelectedMeal(recipe.id);
+      } else {
+        addSelectedMeal(recipe);
+      }
     }
   };
+
+  const handleExitPlanMode = () => {
+    setIsPlanMode(false);
+  };
+
+  const totalPoolRecipes = useMemo(() => {
+    return Object.values(recipePoolsBySlot).reduce((sum, pool) => sum + pool.length, 0);
+  }, [recipePoolsBySlot]);
+
+  const canGeneratePlan = useMemo(() => {
+    if (!isPlanMode || selectedMealSlots.length === 0) return false;
+    return selectedMealSlots.every(slot => (recipePoolsBySlot[slot.id] || []).length > 0);
+  }, [isPlanMode, selectedMealSlots, recipePoolsBySlot]);
 
   return (
     <div className="min-h-screen bg-background pb-40">
       <div className="page-container">
         <PageHeader
-          title={t('discover.title')}
-          subtitle={t('discover.subtitle')}
+          title={isPlanMode ? t('plan.selectRecipes', 'Select Recipes') : t('discover.title')}
+          subtitle={isPlanMode ? undefined : t('discover.subtitle')}
         />
+
+        {/* Plan Mode Header */}
+        {isPlanMode && (
+          <PlanModeHeader onExit={handleExitPlanMode} />
+        )}
 
         {/* Search */}
         <div className="relative mb-4">
@@ -438,7 +392,7 @@ export default function Discover() {
           />
         </div>
 
-        {/* Age-based filtering indicator for young users */}
+        {/* Age-based filtering indicator */}
         {(userAgeGroup === 'toddler' || userAgeGroup === 'child') && userAge && (
           <div className="p-3 rounded-xl bg-warning/10 border border-warning/20 mb-4">
             <div className="flex items-center gap-3">
@@ -460,7 +414,6 @@ export default function Discover() {
           </div>
         )}
         
-        {/* Health preferences indicator */}
         {healthPreferences.length > 0 && (
           <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20 mb-4">
             <div className="flex items-center gap-3">
@@ -480,6 +433,7 @@ export default function Discover() {
             </div>
           </div>
         )}
+
         {userRecipes.length > 0 && (
           <div className="p-3 rounded-xl bg-card border border-border mb-4">
             <div className="flex items-center gap-3 mb-3">
@@ -487,53 +441,41 @@ export default function Discover() {
                 <BookOpen className="w-4 h-4 text-primary" />
               </div>
               <div>
-                <p className="text-sm font-medium">
-                  {t('discover.recipeSource', 'Recipe Source')}
-                </p>
+                <p className="text-sm font-medium">{t('discover.recipeSource', 'Recipe Source')}</p>
                 <p className="text-xs text-muted-foreground">
                   {t('discover.myRecipesCount', '{{count}} recipes uploaded', { count: userRecipes.length })}
                 </p>
               </div>
             </div>
             <div className="flex gap-2">
-              <Chip
-                selected={recipeSource === 'all'}
-                onClick={() => setRecipeSource('all')}
-                variant="outline"
-              >
+              <Chip selected={recipeSource === 'all'} onClick={() => setRecipeSource('all')} variant="outline">
                 {t('discover.allRecipes', 'All Recipes')}
               </Chip>
-              <Chip
-                selected={recipeSource === 'my'}
-                onClick={() => setRecipeSource('my')}
-                variant="outline"
-              >
+              <Chip selected={recipeSource === 'my'} onClick={() => setRecipeSource('my')} variant="outline">
                 {t('discover.onlyMyRecipes', 'My Recipes')}
               </Chip>
-              <Chip
-                selected={recipeSource === 'app'}
-                onClick={() => setRecipeSource('app')}
-                variant="outline"
-              >
+              <Chip selected={recipeSource === 'app'} onClick={() => setRecipeSource('app')} variant="outline">
                 {t('discover.onlyAppRecipes', 'App Recipes')}
               </Chip>
             </div>
           </div>
         )}
 
-        {/* Meal type filters */}
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 mb-2">
-          {mealFilters.map(meal => (
-            <Chip
-              key={meal}
-              selected={selectedMealType === meal}
-              onClick={() => setSelectedMealType(selectedMealType === meal ? null : meal)}
-              variant="outline"
-            >
-              {t(`mealTypes.${meal}`)}
-            </Chip>
-          ))}
-        </div>
+        {/* Meal type filters - hidden in plan mode when slot is selected */}
+        {(!isPlanMode || !currentSlotFilter) && (
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 mb-2">
+            {mealFilters.map(meal => (
+              <Chip
+                key={meal}
+                selected={selectedMealType === meal}
+                onClick={() => setSelectedMealType(selectedMealType === meal ? null : meal)}
+                variant="outline"
+              >
+                {t(`mealTypes.${meal}`)}
+              </Chip>
+            ))}
+          </div>
+        )}
 
         {/* Time filters */}
         <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 mb-2">
@@ -591,6 +533,7 @@ export default function Discover() {
                 onSelect={() => handleSelect(recipe)}
                 onClick={() => navigate(`/recipe/${recipe.id}`)}
                 compact
+                showMacros={isPlanMode}
               />
             ))}
           </div>
@@ -600,20 +543,12 @@ export default function Discover() {
           <div className="text-center py-12">
             <p className="text-muted-foreground">{t('discover.noRecipes', 'No recipes found')}</p>
             {recipeSource === 'my' && userRecipes.length === 0 && (
-              <Button
-                variant="link"
-                onClick={() => navigate('/my-recipes')}
-                className="mt-2"
-              >
+              <Button variant="link" onClick={() => navigate('/my-recipes')} className="mt-2">
                 {t('discover.addRecipes', 'Add your own recipes')}
               </Button>
             )}
             {recipeSource !== 'all' && (
-              <Button
-                variant="link"
-                onClick={() => setRecipeSource('all')}
-                className="mt-2"
-              >
+              <Button variant="link" onClick={() => setRecipeSource('all')} className="mt-2">
                 {t('discover.showAllRecipes', 'Show all recipes')}
               </Button>
             )}
@@ -623,23 +558,51 @@ export default function Discover() {
 
       {/* Sticky Actions */}
       <StickyActions show={true}>
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-sm">
-            <span className="font-semibold text-primary">{selectedMeals.length}</span>
-            <span className="text-muted-foreground"> {t('discover.selected', 'selected')}</span>
+        {isPlanMode ? (
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm">
+              <span className="font-semibold text-primary">{totalPoolRecipes}</span>
+              <span className="text-muted-foreground"> recipes added</span>
+            </div>
+            <Button
+              onClick={() => navigate('/plan')}
+              disabled={!canGeneratePlan}
+              className="gradient-primary"
+            >
+              <Sparkles className="w-4 h-4 mr-2" />
+              {t('plan.generatePlan', 'Generate Plan')}
+            </Button>
           </div>
-          <Button
-            onClick={() => navigate('/plan')}
-            disabled={selectedMeals.length === 0}
-            className="gradient-primary"
-          >
-            <Sparkles className="w-4 h-4 mr-2" />
-            {t('discover.generateWeek', 'Generate Week')}
-          </Button>
-        </div>
+        ) : (
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm">
+              <span className="font-semibold text-primary">{selectedMeals.length}</span>
+              <span className="text-muted-foreground"> {t('discover.selected', 'selected')}</span>
+            </div>
+            <Button
+              onClick={() => navigate('/plan')}
+              disabled={selectedMeals.length === 0}
+              className="gradient-primary"
+            >
+              <Sparkles className="w-4 h-4 mr-2" />
+              {t('discover.generateWeek', 'Generate Week')}
+            </Button>
+          </div>
+        )}
       </StickyActions>
 
       <BottomNav />
+
+      {/* Add to Plan Modal */}
+      {addToPlanModal && (
+        <AddToPlanModal
+          open={addToPlanModal.open}
+          onOpenChange={(open) => !open && setAddToPlanModal(null)}
+          recipeId={addToPlanModal.recipeId}
+          recipeName={addToPlanModal.recipeName}
+          defaultSlot={currentSlotFilter}
+        />
+      )}
     </div>
   );
 }
