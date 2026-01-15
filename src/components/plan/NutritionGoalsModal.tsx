@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Calculator, Check, ArrowLeft } from 'lucide-react';
+import { Calculator, Check, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserData } from '@/hooks/useUserData';
 import { MacroCalculator } from './MacroCalculator';
@@ -144,79 +144,122 @@ export function NutritionGoalsModal({ open, onOpenChange, onSave }: NutritionGoa
         </DialogHeader>
         
         {step === 'macros' ? (
-          <div className="space-y-6 pt-4">
-            <div>
-              <p className="text-sm text-muted-foreground">
-                {t('onboarding.macros.hint', 'Optional: Set daily macro targets. Leave blank for balanced recommendations.')}
-              </p>
-              <button
-                type="button"
-                onClick={() => setShowCalculator(true)}
-                className="mt-2 text-sm text-primary hover:underline flex items-center gap-1"
-              >
-                <Calculator className="w-4 h-4" />
-                {t('macroCalculator.dontKnow', "Not sure? Calculate your macros")}
-              </button>
-            </div>
+          (() => {
+            // Calculate calories from macros
+            const protein = parseInt(formData.proteinTarget) || 0;
+            const carbs = parseInt(formData.carbsTarget) || 0;
+            const fat = parseInt(formData.fatTarget) || 0;
+            const calories = parseInt(formData.calorieTarget) || 0;
             
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
-                  {t('onboarding.macros.calories', 'Daily Calories')}
-                </label>
-                <input
-                  type="number"
-                  value={formData.calorieTarget}
-                  onChange={(e) => setFormData(prev => ({ ...prev, calorieTarget: e.target.value }))}
-                  placeholder="e.g. 2000"
-                  className="w-full h-12 px-3 rounded-xl border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
-                  {t('onboarding.macros.protein', 'Protein')} (g)
-                </label>
-                <input
-                  type="number"
-                  value={formData.proteinTarget}
-                  onChange={(e) => setFormData(prev => ({ ...prev, proteinTarget: e.target.value }))}
-                  placeholder="e.g. 120"
-                  className="w-full h-12 px-3 rounded-xl border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
-                  {t('onboarding.macros.carbs', 'Carbs')} (g)
-                </label>
-                <input
-                  type="number"
-                  value={formData.carbsTarget}
-                  onChange={(e) => setFormData(prev => ({ ...prev, carbsTarget: e.target.value }))}
-                  placeholder="e.g. 250"
-                  className="w-full h-12 px-3 rounded-xl border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
-                  {t('onboarding.macros.fat', 'Fat')} (g)
-                </label>
-                <input
-                  type="number"
-                  value={formData.fatTarget}
-                  onChange={(e) => setFormData(prev => ({ ...prev, fatTarget: e.target.value }))}
-                  placeholder="e.g. 65"
-                  className="w-full h-12 px-3 rounded-xl border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-            </div>
+            const calculatedCalories = (protein * 4) + (carbs * 4) + (fat * 9);
+            const hasMacros = protein > 0 || carbs > 0 || fat > 0;
+            const hasCalories = calories > 0;
+            const hasMismatch = hasMacros && hasCalories && Math.abs(calculatedCalories - calories) > 50;
             
-            <Button 
-              className="w-full" 
-              onClick={() => setStep('meals')}
-            >
-              {t('common.next', 'Next')}
-            </Button>
-          </div>
+            return (
+              <div className="space-y-6 pt-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    {t('onboarding.macros.hint', 'Optional: Set daily macro targets. Leave blank for balanced recommendations.')}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowCalculator(true)}
+                    className="mt-2 text-sm text-primary hover:underline flex items-center gap-1"
+                  >
+                    <Calculator className="w-4 h-4" />
+                    {t('macroCalculator.dontKnow', "Not sure? Calculate your macros")}
+                  </button>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      {t('onboarding.macros.calories', 'Daily Calories')}
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.calorieTarget}
+                      onChange={(e) => setFormData(prev => ({ ...prev, calorieTarget: e.target.value }))}
+                      placeholder="e.g. 2000"
+                      className={`w-full h-12 px-3 rounded-xl border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
+                        hasMismatch ? 'border-amber-500' : 'border-border'
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      {t('onboarding.macros.protein', 'Protein')} (g)
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.proteinTarget}
+                      onChange={(e) => setFormData(prev => ({ ...prev, proteinTarget: e.target.value }))}
+                      placeholder="e.g. 120"
+                      className="w-full h-12 px-3 rounded-xl border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      {t('onboarding.macros.carbs', 'Carbs')} (g)
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.carbsTarget}
+                      onChange={(e) => setFormData(prev => ({ ...prev, carbsTarget: e.target.value }))}
+                      placeholder="e.g. 250"
+                      className="w-full h-12 px-3 rounded-xl border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      {t('onboarding.macros.fat', 'Fat')} (g)
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.fatTarget}
+                      onChange={(e) => setFormData(prev => ({ ...prev, fatTarget: e.target.value }))}
+                      placeholder="e.g. 65"
+                      className="w-full h-12 px-3 rounded-xl border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+
+                {/* Calorie validation message */}
+                {hasMacros && (
+                  <div className={`p-3 rounded-xl text-sm ${
+                    hasMismatch 
+                      ? 'bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800' 
+                      : 'bg-muted'
+                  }`}>
+                    <div className="flex items-start gap-2">
+                      {hasMismatch && <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />}
+                      <div>
+                        <p className={hasMismatch ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground'}>
+                          Macros total: <span className="font-semibold">{calculatedCalories.toLocaleString()} cal</span>
+                          <span className="text-xs ml-1">
+                            ({protein}g × 4 + {carbs}g × 4 + {fat}g × 9)
+                          </span>
+                        </p>
+                        {hasMismatch && (
+                          <p className="text-amber-600 dark:text-amber-500 text-xs mt-1">
+                            Differs from entered calories by {Math.abs(calculatedCalories - calories)} cal
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                <Button 
+                  className="w-full" 
+                  onClick={() => setStep('meals')}
+                >
+                  {t('common.next', 'Next')}
+                </Button>
+              </div>
+            );
+          })()
         ) : (
           <div className="space-y-6 pt-4">
             <div>
