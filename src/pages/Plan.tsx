@@ -221,14 +221,13 @@ export default function Plan() {
         </div>
 
         {/* Daily Targets */}
-        {preferences?.calorie_target && preferences?.protein_target && preferences?.carbs_target && preferences?.fat_target && (
-          <DailyTargets
-            calorieTarget={preferences.calorie_target}
-            proteinTarget={preferences.protein_target}
-            carbsTarget={preferences.carbs_target}
-            fatTarget={preferences.fat_target}
-          />
-        )}
+        <DailyTargets
+          calorieTarget={preferences?.calorie_target ?? null}
+          proteinTarget={preferences?.protein_target ?? null}
+          carbsTarget={preferences?.carbs_target ?? null}
+          fatTarget={preferences?.fat_target ?? null}
+          onSetGoals={() => setShowGoalsModal(true)}
+        />
 
         {/* Daily View */}
         <div className="space-y-3">

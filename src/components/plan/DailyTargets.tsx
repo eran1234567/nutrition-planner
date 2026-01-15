@@ -1,11 +1,13 @@
-import { Flame } from 'lucide-react';
+import { Flame, Settings } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 
 interface DailyTargetsProps {
-  calorieTarget: number;
-  proteinTarget: number;
-  carbsTarget: number;
-  fatTarget: number;
+  calorieTarget: number | null;
+  proteinTarget: number | null;
+  carbsTarget: number | null;
+  fatTarget: number | null;
+  onSetGoals?: () => void;
 }
 
 export function DailyTargets({
@@ -13,8 +15,36 @@ export function DailyTargets({
   proteinTarget,
   carbsTarget,
   fatTarget,
+  onSetGoals,
 }: DailyTargetsProps) {
   const { t } = useTranslation();
+
+  // Check if we have all required data
+  const hasAllData = calorieTarget && proteinTarget && carbsTarget && fatTarget;
+
+  if (!hasAllData) {
+    return (
+      <div className="bg-primary/5 rounded-2xl p-4 mb-6">
+        <div className="flex items-center justify-center gap-2 mb-3">
+          <Flame className="w-5 h-5 text-primary" />
+          <span className="font-semibold text-foreground">
+            {t('plan.dailyTargets', 'Your Daily Targets')}
+          </span>
+        </div>
+        <p className="text-center text-muted-foreground text-sm mb-4">
+          {t('plan.noTargetsSet', 'Set your nutrition goals to see daily calorie and macro targets.')}
+        </p>
+        {onSetGoals && (
+          <div className="flex justify-center">
+            <Button variant="outline" size="sm" onClick={onSetGoals}>
+              <Settings className="w-4 h-4 mr-2" />
+              {t('plan.setGoals', 'Set Goals')}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // Calculate calories from macros (protein: 4 cal/g, carbs: 4 cal/g, fat: 9 cal/g)
   const proteinCal = proteinTarget * 4;
