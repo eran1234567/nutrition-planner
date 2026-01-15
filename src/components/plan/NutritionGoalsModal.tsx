@@ -257,6 +257,7 @@ export function NutritionGoalsModal({ open, onOpenChange, onSave }: NutritionGoa
                 <Button 
                   className="w-full" 
                   onClick={() => setStep('meals')}
+                  disabled={hasMismatch}
                 >
                   {t('common.next', 'Next')}
                 </Button>
