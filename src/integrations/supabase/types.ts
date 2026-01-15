@@ -365,6 +365,7 @@ export type Database = {
           medical_kidney_friendly: boolean | null
           medical_low_sodium: boolean | null
           member_id: string | null
+          plan_duration: number | null
           profile_id: string | null
           protein_target: number | null
           updated_at: string | null
@@ -390,6 +391,7 @@ export type Database = {
           medical_kidney_friendly?: boolean | null
           medical_low_sodium?: boolean | null
           member_id?: string | null
+          plan_duration?: number | null
           profile_id?: string | null
           protein_target?: number | null
           updated_at?: string | null
@@ -415,6 +417,7 @@ export type Database = {
           medical_kidney_friendly?: boolean | null
           medical_low_sodium?: boolean | null
           member_id?: string | null
+          plan_duration?: number | null
           profile_id?: string | null
           protein_target?: number | null
           updated_at?: string | null

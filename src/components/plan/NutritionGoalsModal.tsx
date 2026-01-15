@@ -116,6 +116,7 @@ export function NutritionGoalsModal({ open, onOpenChange }: NutritionGoalsModalP
         carbs_target: formData.carbsTarget ? parseInt(formData.carbsTarget) : null,
         fat_target: formData.fatTarget ? parseInt(formData.fatTarget) : null,
         meals_per_day: selectedMeals.length,
+        plan_duration: planDays,
       }, profile.id);
       
       toast.success(t('common.saved', 'Settings saved!'));
