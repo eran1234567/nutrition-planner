@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Calculator, ArrowLeft } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { Calculator, ArrowLeft, Utensils } from 'lucide-react';
 
 interface MacroCalculatorProps {
   open: boolean;
@@ -13,6 +14,9 @@ interface MacroCalculatorProps {
 type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'veryActive';
 type Goal = 'lose' | 'maintain' | 'gain';
 type BodyFatMethod = 'direct' | 'navy';
+type DietType = 'none' | 'vegetarian' | 'vegan' | 'pescatarian' | 'keto' | 'paleo' | 'mediterranean';
+type DeficitType = 'standard' | 'custom_percent' | 'custom_calories';
+type Step = 'input' | 'dietary' | 'distribution' | 'result';
 
 const activityMultipliers: Record<ActivityLevel, number> = {
   sedentary: 1.2,
@@ -28,9 +32,19 @@ const goalMultipliers: Record<Goal, number> = {
   gain: 1.15,
 };
 
+const dietOptions: { value: DietType; label: string; description: string }[] = [
+  { value: 'none', label: 'No Restrictions', description: 'Standard balanced macros' },
+  { value: 'vegetarian', label: 'Vegetarian', description: 'No meat, includes dairy & eggs' },
+  { value: 'vegan', label: 'Vegan', description: 'Plant-based only' },
+  { value: 'pescatarian', label: 'Pescatarian', description: 'Fish & seafood, no meat' },
+  { value: 'keto', label: 'Keto', description: 'Very low carb, high fat' },
+  { value: 'paleo', label: 'Paleo', description: 'Whole foods, no processed' },
+  { value: 'mediterranean', label: 'Mediterranean', description: 'Olive oil, fish, whole grains' },
+];
+
 export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculatorProps) {
   const { t } = useTranslation();
-  const [step, setStep] = useState<'input' | 'result'>('input');
+  const [step, setStep] = useState<Step>('input');
   
   const [formData, setFormData] = useState({
     age: '',
@@ -46,9 +60,21 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     bodyFatPercent: '',
     waist: '',
     neck: '',
-    hip: '', // For females only in Navy method
+    hip: '',
   });
 
+  const [dietType, setDietType] = useState<DietType>('none');
+  const [deficitType, setDeficitType] = useState<DeficitType>('standard');
+  const [customDeficitPercent, setCustomDeficitPercent] = useState(20);
+  const [customCalories, setCustomCalories] = useState('');
+  
+  // Macro distribution sliders
+  const [proteinPerLb, setProteinPerLb] = useState(1.0); // g per lb LBM
+  const [fatPercent, setFatPercent] = useState(25); // % of calories
+
+  const [tdee, setTdee] = useState(0);
+  const [leanBodyMass, setLeanBodyMass] = useState(0); // in lbs
+  
   const [calculatedMacros, setCalculatedMacros] = useState({
     calories: 0,
     protein: 0,
@@ -63,7 +89,6 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     let height: number;
     let hip = parseFloat(formData.hip);
 
-    // Get height based on unit
     if (formData.unit === 'imperial') {
       const ft = parseFloat(formData.heightFt) || 0;
       const inches = parseFloat(formData.heightIn) || 0;
@@ -75,7 +100,6 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     if (!waist || !neck || !height) return null;
     if (formData.sex === 'female' && !hip) return null;
 
-    // Convert to cm if imperial
     if (formData.unit === 'imperial') {
       waist = waist * 2.54;
       neck = neck * 2.54;
@@ -89,25 +113,23 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
       bodyFat = 495 / (1.29579 - 0.35004 * Math.log10(waist + hip - neck) + 0.22100 * Math.log10(height)) - 450;
     }
 
-    return Math.max(0, Math.min(60, bodyFat)); // Clamp between 0-60%
+    return Math.max(0, Math.min(60, bodyFat));
   };
 
-  const calculateMacros = () => {
+  const calculateBaseTdee = () => {
     const age = parseInt(formData.age);
     let weight = parseFloat(formData.weight);
     let height: number;
 
-    // Get height based on unit
     if (formData.unit === 'imperial') {
       const ft = parseFloat(formData.heightFt) || 0;
       const inches = parseFloat(formData.heightIn) || 0;
-      height = (ft * 12 + inches) * 2.54; // Convert total inches to cm
-      weight = weight * 0.453592; // lbs to kg
+      height = (ft * 12 + inches) * 2.54;
+      weight = weight * 0.453592;
     } else {
       height = parseFloat(formData.height);
     }
 
-    // Get body fat percentage
     let bodyFat: number | null = null;
     if (formData.bodyFatMethod === 'direct' && formData.bodyFatPercent) {
       bodyFat = parseFloat(formData.bodyFatPercent);
@@ -115,39 +137,131 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
       bodyFat = calculateNavyBodyFat();
     }
 
-    // Calculate BMR using Katch-McArdle if body fat is available, otherwise Mifflin-St Jeor
     let bmr: number;
+    let lbm: number;
+    
     if (bodyFat !== null && bodyFat > 0) {
-      // Katch-McArdle formula (more accurate with body fat)
-      const leanMass = weight * (1 - bodyFat / 100);
-      bmr = 370 + 21.6 * leanMass;
+      const leanMassKg = weight * (1 - bodyFat / 100);
+      lbm = leanMassKg / 0.453592; // Convert to lbs
+      bmr = 370 + 21.6 * leanMassKg;
     } else {
-      // Mifflin-St Jeor Equation
       if (formData.sex === 'male') {
         bmr = 10 * weight + 6.25 * height - 5 * age + 5;
       } else {
         bmr = 10 * weight + 6.25 * height - 5 * age - 161;
       }
+      // Estimate LBM if no body fat provided (rough estimate: 75-80% of weight for males, 70-75% for females)
+      const estimatedLeanPercent = formData.sex === 'male' ? 0.78 : 0.72;
+      lbm = (parseFloat(formData.weight) || 0) * (formData.unit === 'imperial' ? estimatedLeanPercent : estimatedLeanPercent / 0.453592);
     }
 
-    // Calculate TDEE
-    const tdee = bmr * activityMultipliers[formData.activityLevel];
+    const calculatedTdee = bmr * activityMultipliers[formData.activityLevel];
     
-    // Apply goal modifier
-    const targetCalories = Math.round(tdee * goalMultipliers[formData.goal]);
+    setTdee(calculatedTdee);
+    setLeanBodyMass(lbm);
+    
+    return { tdee: calculatedTdee, lbm };
+  };
 
-    // Calculate macros (standard split: 30% protein, 40% carbs, 30% fat)
-    const proteinCalories = targetCalories * 0.3;
-    const carbCalories = targetCalories * 0.4;
-    const fatCalories = targetCalories * 0.3;
+  const handleCalculateClick = () => {
+    calculateBaseTdee();
+    setStep('dietary');
+  };
 
-    const macros = {
+  // When diet type changes, update defaults
+  useEffect(() => {
+    if (dietType === 'keto') {
+      setProteinPerLb(0.8);
+      setFatPercent(70);
+    } else {
+      setProteinPerLb(1.0);
+      setFatPercent(25);
+    }
+  }, [dietType]);
+
+  // Get protein slider range based on diet type
+  const getProteinRange = () => {
+    if (dietType === 'keto') {
+      return { min: 0.6, max: 1.0, step: 0.1 };
+    }
+    return { min: 0.8, max: 1.4, step: 0.1 };
+  };
+
+  // Get fat slider range based on diet type
+  const getFatRange = () => {
+    if (dietType === 'keto') {
+      return { min: 65, max: 80, step: 1 };
+    }
+    return { min: 20, max: 35, step: 1 };
+  };
+
+  // Calculate target calories based on deficit settings
+  const getTargetCalories = () => {
+    const baseMultiplier = goalMultipliers[formData.goal];
+    
+    if (deficitType === 'custom_calories' && customCalories) {
+      return parseInt(customCalories);
+    }
+    
+    if (deficitType === 'custom_percent') {
+      const multiplier = formData.goal === 'lose' 
+        ? (100 - customDeficitPercent) / 100 
+        : formData.goal === 'gain' 
+          ? (100 + customDeficitPercent) / 100 
+          : 1;
+      return Math.round(tdee * multiplier);
+    }
+    
+    return Math.round(tdee * baseMultiplier);
+  };
+
+  // Calculate macros from current settings
+  const calculateFinalMacros = () => {
+    const targetCalories = getTargetCalories();
+    
+    // Calculate protein
+    const proteinGrams = Math.round(leanBodyMass * proteinPerLb);
+    const proteinCalories = proteinGrams * 4;
+    
+    // Calculate fat
+    const fatCalories = Math.round(targetCalories * (fatPercent / 100));
+    const fatGrams = Math.round(fatCalories / 9);
+    
+    // Remaining goes to carbs
+    const remainingCalories = targetCalories - proteinCalories - fatCalories;
+    const carbGrams = Math.round(remainingCalories / 4);
+    
+    return {
       calories: targetCalories,
-      protein: Math.round(proteinCalories / 4), // 4 cal per gram
-      carbs: Math.round(carbCalories / 4), // 4 cal per gram
-      fat: Math.round(fatCalories / 9), // 9 cal per gram
+      protein: proteinGrams,
+      carbs: Math.max(0, carbGrams),
+      fat: fatGrams,
     };
+  };
 
+  // Check if macros are valid (don't exceed calories)
+  const getMacroWarning = () => {
+    const macros = calculateFinalMacros();
+    const actualCalories = macros.protein * 4 + macros.carbs * 4 + macros.fat * 9;
+    const targetCalories = getTargetCalories();
+    
+    if (macros.carbs < 0) {
+      return 'Protein and fat exceed target calories. Reduce protein or fat percentage.';
+    }
+    
+    if (dietType === 'keto' && macros.carbs > 50) {
+      return `Net carbs (${macros.carbs}g) exceed keto limit. Consider reducing protein or increasing fat.`;
+    }
+    
+    return null;
+  };
+
+  const handleContinueToDistribution = () => {
+    setStep('distribution');
+  };
+
+  const handleContinueToResult = () => {
+    const macros = calculateFinalMacros();
     setCalculatedMacros(macros);
     setStep('result');
   };
@@ -163,21 +277,41 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     setStep('input');
   };
 
+  const handleBack = () => {
+    if (step === 'dietary') setStep('input');
+    else if (step === 'distribution') setStep('dietary');
+    else if (step === 'result') setStep('distribution');
+  };
+
   const isFormValid = formData.age && formData.weight && 
     (formData.unit === 'imperial' ? (formData.heightFt || formData.heightIn) : formData.height);
+
+  const proteinRange = getProteinRange();
+  const fatRange = getFatRange();
+  const currentMacros = step === 'distribution' ? calculateFinalMacros() : calculatedMacros;
+  const warning = step === 'distribution' ? getMacroWarning() : null;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[95vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Calculator className="w-5 h-5" />
-            {t('macroCalculator.title', 'Macro Calculator')}
+            {step === 'dietary' ? (
+              <>
+                <Utensils className="w-5 h-5" />
+                Dietary Style
+              </>
+            ) : (
+              <>
+                <Calculator className="w-5 h-5" />
+                {t('macroCalculator.title', 'Macro Calculator')}
+              </>
+            )}
           </DialogTitle>
         </DialogHeader>
 
-        {step === 'input' ? (
-          <div className="space-y-5 pt-2">
+        {step === 'input' && (
+          <div className="space-y-5 pt-2 overflow-y-auto max-h-[70vh]">
             <p className="text-sm text-muted-foreground">
               {t('macroCalculator.description', 'Enter your details to calculate your recommended daily macros.')}
             </p>
@@ -411,13 +545,192 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
 
             <Button 
               className="w-full" 
-              onClick={calculateMacros}
+              onClick={handleCalculateClick}
               disabled={!isFormValid}
             >
               Calculate
             </Button>
           </div>
-        ) : (
+        )}
+
+        {step === 'dietary' && (
+          <div className="space-y-4 pt-2 overflow-y-auto max-h-[70vh]">
+            <p className="text-sm text-muted-foreground">Diet Type</p>
+            
+            <div className="grid grid-cols-2 gap-2">
+              {dietOptions.map((diet) => (
+                <button
+                  key={diet.value}
+                  type="button"
+                  onClick={() => setDietType(diet.value)}
+                  className={`p-3 rounded-xl border-2 text-left transition-all ${
+                    dietType === diet.value
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:bg-muted/50'
+                  } ${diet.value === 'mediterranean' ? 'col-span-1' : ''}`}
+                >
+                  <p className="font-semibold text-sm">{diet.label}</p>
+                  <p className="text-xs text-muted-foreground">{diet.description}</p>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1" onClick={handleBack}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back
+              </Button>
+              <Button className="flex-1" onClick={handleContinueToDistribution}>
+                Continue
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === 'distribution' && (
+          <div className="space-y-4 pt-2 overflow-y-auto max-h-[70vh]">
+            {/* Calorie Deficit Section */}
+            <div className="p-4 rounded-xl border border-border bg-card">
+              <h3 className="font-semibold mb-3">Calorie Deficit</h3>
+              
+              <div className="space-y-2">
+                <label 
+                  className={`flex items-center gap-2 cursor-pointer ${deficitType === 'standard' ? 'text-foreground' : 'text-muted-foreground'}`}
+                  onClick={() => setDeficitType('standard')}
+                >
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                    deficitType === 'standard' ? 'border-primary' : 'border-muted-foreground'
+                  }`}>
+                    {deficitType === 'standard' && <div className="w-2 h-2 rounded-full bg-primary" />}
+                  </div>
+                  <span className="text-sm">Standard (20% deficit)</span>
+                  <span className="text-xs text-muted-foreground">- Recommended</span>
+                </label>
+                
+                <label 
+                  className={`flex items-center gap-2 cursor-pointer ${deficitType === 'custom_percent' ? 'text-foreground' : 'text-muted-foreground'}`}
+                  onClick={() => setDeficitType('custom_percent')}
+                >
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                    deficitType === 'custom_percent' ? 'border-primary' : 'border-muted-foreground'
+                  }`}>
+                    {deficitType === 'custom_percent' && <div className="w-2 h-2 rounded-full bg-primary" />}
+                  </div>
+                  <span className="text-sm">Custom % deficit</span>
+                  {deficitType === 'custom_percent' && (
+                    <input
+                      type="number"
+                      value={customDeficitPercent}
+                      onChange={(e) => setCustomDeficitPercent(parseInt(e.target.value) || 0)}
+                      className="w-16 h-7 px-2 rounded border border-border bg-background text-sm"
+                      min={5}
+                      max={50}
+                    />
+                  )}
+                </label>
+                
+                <label 
+                  className={`flex items-center gap-2 cursor-pointer ${deficitType === 'custom_calories' ? 'text-foreground' : 'text-muted-foreground'}`}
+                  onClick={() => setDeficitType('custom_calories')}
+                >
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                    deficitType === 'custom_calories' ? 'border-primary' : 'border-muted-foreground'
+                  }`}>
+                    {deficitType === 'custom_calories' && <div className="w-2 h-2 rounded-full bg-primary" />}
+                  </div>
+                  <span className="text-sm">Custom daily calories</span>
+                  {deficitType === 'custom_calories' && (
+                    <input
+                      type="number"
+                      value={customCalories}
+                      onChange={(e) => setCustomCalories(e.target.value)}
+                      placeholder={String(getTargetCalories())}
+                      className="w-20 h-7 px-2 rounded border border-border bg-background text-sm"
+                    />
+                  )}
+                </label>
+              </div>
+            </div>
+
+            {/* Macro Distribution Section */}
+            <div className="p-4 rounded-xl border border-border bg-card">
+              <h3 className="font-semibold mb-4">Macro Distribution</h3>
+              
+              {/* Protein Slider */}
+              <div className="mb-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium">Protein: {proteinPerLb.toFixed(1)} g/lb LBM</span>
+                  <span className="text-sm text-muted-foreground">~{currentMacros.protein}g</span>
+                </div>
+                <Slider
+                  value={[proteinPerLb]}
+                  onValueChange={([val]) => setProteinPerLb(val)}
+                  min={proteinRange.min}
+                  max={proteinRange.max}
+                  step={proteinRange.step}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                  <span>{proteinRange.min} g/lb</span>
+                  <span>{proteinRange.max} g/lb</span>
+                </div>
+              </div>
+
+              {/* Fat Slider */}
+              <div className="mb-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium">Fat: {fatPercent}% of calories</span>
+                  <span className="text-sm text-muted-foreground">~{currentMacros.fat}g</span>
+                </div>
+                <Slider
+                  value={[fatPercent]}
+                  onValueChange={([val]) => setFatPercent(val)}
+                  min={fatRange.min}
+                  max={fatRange.max}
+                  step={fatRange.step}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                  <span>{fatRange.min}%</span>
+                  <span>{fatRange.max}%</span>
+                </div>
+              </div>
+
+              {/* Carbs info */}
+              <p className="text-sm text-muted-foreground">
+                Remaining calories will be allocated to carbohydrates (~{currentMacros.carbs}g, {Math.round((currentMacros.carbs * 4 / currentMacros.calories) * 100)}%)
+              </p>
+
+              {/* Keto info */}
+              {dietType === 'keto' && (
+                <div className="mt-3 p-3 rounded-lg bg-primary/10 border border-primary/20">
+                  <p className="text-sm">
+                    <span className="font-semibold">Keto:</span> Carbs are limited to 20-50g net carbs per day. Remaining calories after protein and fat are minimized.
+                  </p>
+                </div>
+              )}
+
+              {/* Warning */}
+              {warning && (
+                <div className="mt-3 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                  <p className="text-sm text-destructive">{warning}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1" onClick={handleBack}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back
+              </Button>
+              <Button className="flex-1" onClick={handleContinueToResult} disabled={!!warning}>
+                Continue
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === 'result' && (
           <div className="space-y-5 pt-2">
             <div className="text-center py-4">
               <p className="text-sm text-muted-foreground mb-4">Your recommended daily targets:</p>
@@ -446,7 +759,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
               <Button 
                 variant="outline" 
                 className="flex-1"
-                onClick={() => setStep('input')}
+                onClick={handleBack}
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back
