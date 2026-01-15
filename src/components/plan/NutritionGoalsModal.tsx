@@ -243,7 +243,10 @@ export function NutritionGoalsModal({ open, onOpenChange, onSave }: NutritionGoa
                         </p>
                         {hasMismatch && (
                           <p className="text-amber-600 dark:text-amber-500 text-xs mt-1">
-                            Differs from entered calories by {Math.abs(calculatedCalories - calories)} cal
+                            {calculatedCalories > calories 
+                              ? `Macros exceed entered calories by ${(calculatedCalories - calories).toLocaleString()} cal`
+                              : `Macros are ${(calories - calculatedCalories).toLocaleString()} cal less than entered calories`
+                            }
                           </p>
                         )}
                       </div>
