@@ -356,14 +356,14 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                         value={formData.waist}
                         onChange={(e) => setFormData(prev => ({ ...prev, waist: e.target.value }))}
                         placeholder="Waist"
-                        className="w-20 h-7 px-2 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-xs"
+                        className="flex-1 min-w-0 h-8 px-2 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                       />
                       <input
                         type="number"
                         value={formData.neck}
                         onChange={(e) => setFormData(prev => ({ ...prev, neck: e.target.value }))}
                         placeholder="Neck"
-                        className="w-20 h-7 px-2 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-xs"
+                        className="flex-1 min-w-0 h-8 px-2 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                       />
                       {formData.sex === 'female' && (
                         <input
@@ -371,10 +371,10 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                           value={formData.hip}
                           onChange={(e) => setFormData(prev => ({ ...prev, hip: e.target.value }))}
                           placeholder="Hip"
-                          className="w-20 h-7 px-2 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-xs"
+                          className="flex-1 min-w-0 h-8 px-2 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                         />
                       )}
-                      <span className="text-xs text-muted-foreground self-center">({formData.unit === 'metric' ? 'cm' : 'in'})</span>
+                      <span className="text-xs text-muted-foreground self-center flex-shrink-0">({formData.unit === 'metric' ? 'cm' : 'in'})</span>
                     </div>
                   )}
                 </div>
