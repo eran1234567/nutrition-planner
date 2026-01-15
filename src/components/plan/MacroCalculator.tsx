@@ -168,7 +168,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg max-h-[95vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calculator className="w-5 h-5" />
@@ -340,7 +340,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                 }`}
                 onClick={() => setFormData(prev => ({ ...prev, bodyFatMethod: 'navy' }))}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
                     formData.bodyFatMethod === 'navy' ? 'border-primary' : 'border-muted-foreground'
                   }`}>
@@ -348,32 +348,33 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                       <div className="w-2 h-2 rounded-full bg-primary" />
                     )}
                   </div>
-                  <span className="font-medium text-sm">US Navy method</span>
+                  <span className="font-medium text-sm flex-shrink-0">US Navy</span>
                   {formData.bodyFatMethod === 'navy' && (
-                    <div className="flex-1 flex gap-2" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex-1 flex gap-1.5" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="number"
                         value={formData.waist}
                         onChange={(e) => setFormData(prev => ({ ...prev, waist: e.target.value }))}
-                        placeholder={`Waist (${formData.unit === 'metric' ? 'cm' : 'in'})`}
-                        className="flex-1 h-8 px-2 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                        placeholder="Waist"
+                        className="w-16 h-7 px-1.5 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-xs"
                       />
                       <input
                         type="number"
                         value={formData.neck}
                         onChange={(e) => setFormData(prev => ({ ...prev, neck: e.target.value }))}
-                        placeholder={`Neck (${formData.unit === 'metric' ? 'cm' : 'in'})`}
-                        className="flex-1 h-8 px-2 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                        placeholder="Neck"
+                        className="w-16 h-7 px-1.5 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-xs"
                       />
                       {formData.sex === 'female' && (
                         <input
                           type="number"
                           value={formData.hip}
                           onChange={(e) => setFormData(prev => ({ ...prev, hip: e.target.value }))}
-                          placeholder={`Hip (${formData.unit === 'metric' ? 'cm' : 'in'})`}
-                          className="flex-1 h-8 px-2 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                          placeholder="Hip"
+                          className="w-16 h-7 px-1.5 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-xs"
                         />
                       )}
+                      <span className="text-xs text-muted-foreground self-center">({formData.unit === 'metric' ? 'cm' : 'in'})</span>
                     </div>
                   )}
                 </div>
