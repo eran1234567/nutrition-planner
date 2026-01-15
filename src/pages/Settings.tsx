@@ -61,8 +61,9 @@ export default function Settings() {
   };
 
   const handleSignOut = async () => {
-    await signOut();
+    // Navigate first for immediate feedback, then sign out
     navigate('/');
+    await signOut();
   };
 
   return (
