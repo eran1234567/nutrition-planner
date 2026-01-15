@@ -13,10 +13,73 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // Validate authentication
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      console.error("Missing or invalid Authorization header");
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - missing authentication" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verify the JWT token by getting user
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+    
+    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
+    
+    if (userError || !user) {
+      console.error("Invalid token:", userError);
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - invalid token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const userId = user.id;
+    console.log(`Authenticated user: ${userId}`);
+    console.log(`Authenticated user: ${userId}`);
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { recipeTitle, imageBase64, fileName } = await req.json();
+    const { recipeId, imageBase64, fileName } = await req.json();
+
+    // Validate required fields
+    if (!recipeId || !imageBase64 || !fileName) {
+      return new Response(
+        JSON.stringify({ error: "Missing required fields: recipeId, imageBase64, fileName" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verify the user owns this recipe
+    const { data: recipe, error: recipeError } = await supabase
+      .from("recipes")
+      .select("id, owner_user_id, scope")
+      .eq("id", recipeId)
+      .single();
+
+    if (recipeError || !recipe) {
+      console.error("Recipe not found:", recipeError);
+      return new Response(
+        JSON.stringify({ error: "Recipe not found" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Only allow updating if user owns the recipe (or it's a global recipe for admins)
+    if (recipe.owner_user_id !== userId && recipe.scope !== "global") {
+      console.error(`User ${userId} does not own recipe ${recipeId}`);
+      return new Response(
+        JSON.stringify({ error: "Forbidden - you do not own this recipe" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Decode base64 to binary
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
@@ -41,11 +104,11 @@ serve(async (req) => {
 
     const publicUrl = urlData.publicUrl;
 
-    // Update recipe with new image URL
+    // Update recipe with new image URL using ID (not title)
     const { error: updateError } = await supabase
       .from("recipes")
       .update({ image_url: publicUrl })
-      .eq("title", recipeTitle);
+      .eq("id", recipeId);
 
     if (updateError) {
       throw updateError;
