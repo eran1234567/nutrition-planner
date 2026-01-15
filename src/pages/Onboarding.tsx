@@ -383,32 +383,15 @@ const Onboarding = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* Simple header with just Skip button */}
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border">
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between mb-2">
-            <button
-              onClick={handleBack}
-              disabled={currentStep === 0 && !editMode}
-              className="p-2 -ml-2 text-muted-foreground disabled:opacity-30"
-            >
-              <ChevronLeft className="w-6 h-6" />
-            </button>
-            <span className="text-sm text-muted-foreground">
-              {editMode ? t('settings.editing', 'Editing') : t('onboarding.step', {
-                current: currentStep + 1,
-                total: STEPS.length,
-                defaultValue: `Step ${currentStep + 1} of ${STEPS.length}`,
-              })}
-            </span>
-            <button
-              onClick={() => editMode ? navigate('/settings') : navigate('/discover')}
-              className="text-sm text-muted-foreground"
-            >
-              {editMode ? t('common.cancel', 'Cancel') : t('common.skip', 'Skip')}
-            </button>
-          </div>
-          {!editMode && <Progress value={progress} className="h-1" />}
+        <div className="px-4 py-3 flex items-center justify-end">
+          <button
+            onClick={() => editMode ? navigate('/settings') : navigate('/discover')}
+            className="text-sm text-muted-foreground"
+          >
+            {editMode ? t('common.cancel', 'Cancel') : t('common.skip', 'Skip')}
+          </button>
         </div>
       </div>
 
