@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 interface NutritionGoalsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSave?: () => void;
 }
 
 type MealOption = {
@@ -33,7 +34,7 @@ const PLAN_DURATION_OPTIONS = [
   { value: 7, label: '7 Days' },
 ];
 
-export function NutritionGoalsModal({ open, onOpenChange }: NutritionGoalsModalProps) {
+export function NutritionGoalsModal({ open, onOpenChange, onSave }: NutritionGoalsModalProps) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { preferences, savePreferences, profile } = useUserData();
@@ -120,6 +121,7 @@ export function NutritionGoalsModal({ open, onOpenChange }: NutritionGoalsModalP
       }, profile.id);
       
       toast.success(t('common.saved', 'Settings saved!'));
+      onSave?.();
       onOpenChange(false);
     } catch (error) {
       console.error('Error saving nutrition goals:', error);
