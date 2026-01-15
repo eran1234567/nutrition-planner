@@ -80,11 +80,15 @@ export const useAuth = () => {
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (!error) {
+    try {
+      // Reset state first to ensure immediate UI feedback
       useAuthStore.getState().reset();
+      const { error } = await supabase.auth.signOut();
+      return { error };
+    } catch (error) {
+      console.error('Sign out error:', error);
+      return { error: error as Error };
     }
-    return { error };
   };
 
   return {
