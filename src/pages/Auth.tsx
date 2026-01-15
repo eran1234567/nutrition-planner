@@ -80,8 +80,8 @@ const Auth = () => {
             setError(error.message);
           }
         } else {
-          // Navigate to recipe upload page after successful signup
-          navigate('/my-recipes', { replace: true });
+          // Navigate to discover page after successful signup
+          navigate('/discover', { replace: true });
         }
       } else {
         const { error } = await signIn(email, password);
