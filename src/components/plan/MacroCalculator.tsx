@@ -243,17 +243,27 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
   };
 
   // Check if macros are valid (don't exceed calories)
-  const getMacroWarning = () => {
+  const getMacroWarning = (): { title: string; detail: string } | null => {
     const macros = calculateFinalMacros();
-    const actualCalories = macros.protein * 4 + macros.carbs * 4 + macros.fat * 9;
     const targetCalories = getTargetCalories();
     
-    if (macros.carbs < 0) {
-      return 'Protein and fat exceed target calories. Reduce protein or fat percentage.';
+    // Calculate what percentage of calories protein takes
+    const proteinCalories = macros.protein * 4;
+    const proteinPercent = Math.round((proteinCalories / targetCalories) * 100);
+    const totalPercent = proteinPercent + fatPercent;
+    
+    if (macros.carbs < 0 || totalPercent > 100) {
+      return {
+        title: 'Macro settings exceed calorie target',
+        detail: `Protein (${proteinPercent}%) + Fat (${fatPercent}%) = ${totalPercent}% of calories. Reduce protein factor or fat percentage so total ≤ 100%.`
+      };
     }
     
     if (dietType === 'keto' && macros.carbs > 50) {
-      return `Net carbs (${macros.carbs}g) exceed keto limit. Consider reducing protein or increasing fat.`;
+      return {
+        title: 'Carbs exceed keto limit',
+        detail: `Net carbs (${macros.carbs}g) exceed the 20-50g keto limit. Consider reducing protein or increasing fat.`
+      };
     }
     
     return null;
@@ -715,8 +725,14 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
 
               {/* Warning */}
               {warning && (
-                <div className="mt-3 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                  <p className="text-sm text-destructive">{warning}</p>
+                <div className="mt-3 p-4 rounded-lg bg-destructive/10 border border-destructive/30">
+                  <div className="flex items-start gap-2">
+                    <span className="text-destructive text-lg">⚠️</span>
+                    <div>
+                      <p className="font-semibold text-destructive">{warning.title}</p>
+                      <p className="text-sm text-destructive/80 mt-1">{warning.detail}</p>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
