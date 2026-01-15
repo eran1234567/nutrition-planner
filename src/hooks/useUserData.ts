@@ -24,6 +24,7 @@ export interface UserPreferences {
   carbs_target: number | null;
   fat_target: number | null;
   meals_per_day: number | null;
+  plan_duration: number | null;
   medical_diabetes_friendly: boolean | null;
   medical_kidney_friendly: boolean | null;
   medical_heart_healthy: boolean | null;
