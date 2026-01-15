@@ -173,6 +173,9 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     if (dietType === 'keto') {
       setProteinPerLb(0.8);
       setFatPercent(70);
+    } else if (dietType === 'paleo' || dietType === 'vegan' || dietType === 'none') {
+      setProteinPerLb(1.2);
+      setFatPercent(25);
     } else {
       setProteinPerLb(1.0);
       setFatPercent(25);
