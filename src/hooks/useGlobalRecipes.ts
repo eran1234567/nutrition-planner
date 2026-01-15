@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { seedRecipes } from '@/data/seedRecipes';
 
 export interface GlobalRecipe {
   id: string;
@@ -43,70 +44,142 @@ export interface GlobalRecipe {
   isUserRecipe: boolean;
 }
 
+function getSeedFallback(): GlobalRecipe[] {
+  return seedRecipes
+    .filter((r) => r.scope === 'global' && !r.is_deleted)
+    .map((r) => ({
+      id: r.id,
+      title: r.title,
+      description: r.description ?? null,
+      image_url: r.image_url ?? null,
+      prep_time: r.prep_time ?? null,
+      cook_time: r.cook_time ?? null,
+      total_time: r.total_time ?? null,
+      servings: r.servings ?? null,
+      difficulty: r.difficulty ?? null,
+      cuisine: r.cuisine ?? null,
+      is_kid_friendly: r.is_kid_friendly ?? null,
+      is_meal_prep_friendly: r.is_meal_prep_friendly ?? null,
+      is_budget_friendly: r.is_budget_friendly ?? null,
+      scope: r.scope,
+      nutrition: r.nutrition
+        ? {
+            calories: r.nutrition.calories ?? null,
+            protein_g: r.nutrition.protein_g ?? null,
+            carbs_g: r.nutrition.carbs_g ?? null,
+            fat_g: r.nutrition.fat_g ?? null,
+            fiber_g: r.nutrition.fiber_g ?? null,
+            sodium_mg: r.nutrition.sodium_mg ?? null,
+          }
+        : undefined,
+      ingredients: (r.ingredients ?? []).map((i) => ({
+        name: i.name,
+        quantity: i.quantity ?? null,
+        unit: i.unit ?? null,
+        normalized_name: i.normalized_name ?? null,
+        aisle: i.aisle ?? null,
+        order_index: i.order_index ?? null,
+      })),
+      steps: (r.steps ?? []).map((s) => ({
+        step_number: s.step_number,
+        instruction: s.instruction,
+      })),
+      tags: (r.tags ?? []).map((t) => ({
+        tag_type: t.tag_type,
+        tag_value: t.tag_value,
+      })),
+      isUserRecipe: false,
+    }));
+}
+
+async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: number | undefined;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timer = window.setTimeout(() => reject(new Error('Request timeout')), ms);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timer) window.clearTimeout(timer);
+  }
+}
+
 export function useGlobalRecipes() {
   return useQuery({
     queryKey: ['global-recipes'],
     queryFn: async (): Promise<GlobalRecipe[]> => {
-      const { data, error } = await supabase
-        .from('recipes')
-        .select(`
-          id,
-          title,
-          description,
-          image_url,
-          prep_time,
-          cook_time,
-          total_time,
-          servings,
-          difficulty,
-          cuisine,
-          is_kid_friendly,
-          is_meal_prep_friendly,
-          is_budget_friendly,
-          scope,
-          recipe_nutrition(calories, protein_g, carbs_g, fat_g, fiber_g, sodium_mg),
-          recipe_ingredients(name, quantity, unit, normalized_name, aisle, order_index),
-          recipe_steps(step_number, instruction),
-          recipe_tags(tag_type, tag_value)
-        `)
-        .eq('scope', 'global')
-        .is('owner_user_id', null)
-        .eq('is_deleted', false)
-        .order('title');
+      try {
+        const { data, error } = await withTimeout(
+          supabase
+            .from('recipes')
+            .select(
+              `
+              id,
+              title,
+              description,
+              image_url,
+              prep_time,
+              cook_time,
+              total_time,
+              servings,
+              difficulty,
+              cuisine,
+              is_kid_friendly,
+              is_meal_prep_friendly,
+              is_budget_friendly,
+              scope,
+              recipe_nutrition(calories, protein_g, carbs_g, fat_g, fiber_g, sodium_mg),
+              recipe_ingredients(name, quantity, unit, normalized_name, aisle, order_index),
+              recipe_steps(step_number, instruction),
+              recipe_tags(tag_type, tag_value)
+            `
+            )
+            .eq('scope', 'global')
+            .or('is_deleted.is.null,is_deleted.eq.false')
+            .order('title'),
+          12_000
+        );
 
-      if (error) {
-        console.error('Error fetching global recipes:', error);
-        throw error;
+        if (error) {
+          console.warn('[useGlobalRecipes] backend error, using seed fallback:', error);
+          return getSeedFallback();
+        }
+
+        return (data || []).map((r: any) => {
+          // recipe_nutrition is a one-to-one relation, so it's an object (or null), not an array
+          const nutritionData = r.recipe_nutrition;
+
+          return {
+            id: r.id,
+            title: r.title,
+            description: r.description,
+            image_url: r.image_url,
+            prep_time: r.prep_time,
+            cook_time: r.cook_time,
+            total_time: r.total_time,
+            servings: r.servings,
+            difficulty: r.difficulty,
+            cuisine: r.cuisine,
+            is_kid_friendly: r.is_kid_friendly,
+            is_meal_prep_friendly: r.is_meal_prep_friendly,
+            is_budget_friendly: r.is_budget_friendly,
+            scope: r.scope,
+            nutrition: nutritionData || undefined,
+            ingredients: r.recipe_ingredients || [],
+            steps: r.recipe_steps || [],
+            tags: r.recipe_tags || [],
+            isUserRecipe: false,
+          } as GlobalRecipe;
+        });
+      } catch (err) {
+        console.warn('[useGlobalRecipes] request failed, using seed fallback:', err);
+        return getSeedFallback();
       }
-
-      return (data || []).map(r => {
-        // recipe_nutrition is a one-to-one relation, so it's an object (or null), not an array
-        const nutritionData = r.recipe_nutrition;
-        
-        return {
-          id: r.id,
-          title: r.title,
-          description: r.description,
-          image_url: r.image_url,
-          prep_time: r.prep_time,
-          cook_time: r.cook_time,
-          total_time: r.total_time,
-          servings: r.servings,
-          difficulty: r.difficulty,
-          cuisine: r.cuisine,
-          is_kid_friendly: r.is_kid_friendly,
-          is_meal_prep_friendly: r.is_meal_prep_friendly,
-          is_budget_friendly: r.is_budget_friendly,
-          scope: r.scope,
-          nutrition: nutritionData || undefined,
-          ingredients: r.recipe_ingredients || [],
-          steps: r.recipe_steps || [],
-          tags: r.recipe_tags || [],
-          isUserRecipe: false,
-        };
-      });
     },
     staleTime: 1000 * 60 * 10, // Cache for 10 minutes
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
   });
 }
 
@@ -144,3 +217,4 @@ export function useRecipeById(id: string | undefined) {
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes
   });
 }
+
