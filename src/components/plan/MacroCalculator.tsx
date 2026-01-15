@@ -36,6 +36,8 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     age: '',
     weight: '',
     height: '',
+    heightFt: '',
+    heightIn: '',
     sex: 'male' as 'male' | 'female',
     activityLevel: 'moderate' as ActivityLevel,
     goal: 'maintain' as Goal,
@@ -58,8 +60,17 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
   const calculateNavyBodyFat = (): number | null => {
     let waist = parseFloat(formData.waist);
     let neck = parseFloat(formData.neck);
-    let height = parseFloat(formData.height);
+    let height: number;
     let hip = parseFloat(formData.hip);
+
+    // Get height based on unit
+    if (formData.unit === 'imperial') {
+      const ft = parseFloat(formData.heightFt) || 0;
+      const inches = parseFloat(formData.heightIn) || 0;
+      height = (ft * 12 + inches) * 2.54;
+    } else {
+      height = parseFloat(formData.height);
+    }
 
     if (!waist || !neck || !height) return null;
     if (formData.sex === 'female' && !hip) return null;
@@ -68,7 +79,6 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     if (formData.unit === 'imperial') {
       waist = waist * 2.54;
       neck = neck * 2.54;
-      height = height * 2.54;
       hip = hip * 2.54;
     }
 
@@ -85,12 +95,16 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
   const calculateMacros = () => {
     const age = parseInt(formData.age);
     let weight = parseFloat(formData.weight);
-    let height = parseFloat(formData.height);
+    let height: number;
 
-    // Convert imperial to metric if needed
+    // Get height based on unit
     if (formData.unit === 'imperial') {
+      const ft = parseFloat(formData.heightFt) || 0;
+      const inches = parseFloat(formData.heightIn) || 0;
+      height = (ft * 12 + inches) * 2.54; // Convert total inches to cm
       weight = weight * 0.453592; // lbs to kg
-      height = height * 2.54; // inches to cm
+    } else {
+      height = parseFloat(formData.height);
     }
 
     // Get body fat percentage
@@ -149,11 +163,12 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     setStep('input');
   };
 
-  const isFormValid = formData.age && formData.weight && formData.height;
+  const isFormValid = formData.age && formData.weight && 
+    (formData.unit === 'imperial' ? (formData.heightFt || formData.heightIn) : formData.height);
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calculator className="w-5 h-5" />
@@ -207,7 +222,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
             </div>
 
             {/* Age, Weight, Height */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className={`grid gap-3 ${formData.unit === 'imperial' ? 'grid-cols-4' : 'grid-cols-3'}`}>
               <div>
                 <label className="text-sm font-medium mb-2 block">Age</label>
                 <input
@@ -230,18 +245,41 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                   className="w-full h-10 px-3 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                 />
               </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">
-                  Height ({formData.unit === 'metric' ? 'cm' : 'in'})
-                </label>
-                <input
-                  type="number"
-                  value={formData.height}
-                  onChange={(e) => setFormData(prev => ({ ...prev, height: e.target.value }))}
-                  placeholder={formData.unit === 'metric' ? '175' : '69'}
-                  className="w-full h-10 px-3 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                />
-              </div>
+              {formData.unit === 'imperial' ? (
+                <>
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Height (ft)</label>
+                    <input
+                      type="number"
+                      value={formData.heightFt}
+                      onChange={(e) => setFormData(prev => ({ ...prev, heightFt: e.target.value }))}
+                      placeholder="5"
+                      className="w-full h-10 px-3 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Height (in)</label>
+                    <input
+                      type="number"
+                      value={formData.heightIn}
+                      onChange={(e) => setFormData(prev => ({ ...prev, heightIn: e.target.value }))}
+                      placeholder="9"
+                      className="w-full h-10 px-3 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    />
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Height (cm)</label>
+                  <input
+                    type="number"
+                    value={formData.height}
+                    onChange={(e) => setFormData(prev => ({ ...prev, height: e.target.value }))}
+                    placeholder="175"
+                    className="w-full h-10 px-3 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Activity Level */}
@@ -262,109 +300,84 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
 
             {/* Body Fat % */}
             <div>
-              <label className="text-sm font-medium mb-3 block">Body Fat %</label>
+              <label className="text-sm font-medium mb-2 block">Body Fat %</label>
               
-              {/* Method selection */}
-              <div className="space-y-2 mb-3">
-                <label 
-                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                    formData.bodyFatMethod === 'direct' 
-                      ? 'border-primary bg-primary/5' 
-                      : 'border-border hover:bg-muted/50'
-                  }`}
-                  onClick={() => setFormData(prev => ({ ...prev, bodyFatMethod: 'direct' }))}
-                >
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                    formData.bodyFatMethod === 'direct' ? 'border-primary' : 'border-muted-foreground'
-                  }`}>
-                    {formData.bodyFatMethod === 'direct' && (
-                      <div className="w-2.5 h-2.5 rounded-full bg-primary" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">Enter directly</p>
-                    <p className="text-xs text-muted-foreground">If you know your body fat percentage</p>
-                  </div>
-                </label>
-                
-                <label 
-                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                    formData.bodyFatMethod === 'navy' 
-                      ? 'border-primary bg-primary/5' 
-                      : 'border-border hover:bg-muted/50'
-                  }`}
-                  onClick={() => setFormData(prev => ({ ...prev, bodyFatMethod: 'navy' }))}
-                >
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                    formData.bodyFatMethod === 'navy' ? 'border-primary' : 'border-muted-foreground'
-                  }`}>
-                    {formData.bodyFatMethod === 'navy' && (
-                      <div className="w-2.5 h-2.5 rounded-full bg-primary" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">US Navy method</p>
-                    <p className="text-xs text-muted-foreground">Estimate using body measurements</p>
-                  </div>
-                </label>
-              </div>
-
-              {/* Body fat input based on method */}
-              {formData.bodyFatMethod === 'direct' ? (
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Body Fat %</label>
+              {/* Direct entry option */}
+              <div 
+                className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all mb-2 ${
+                  formData.bodyFatMethod === 'direct' 
+                    ? 'border-primary bg-primary/5' 
+                    : 'border-border hover:bg-muted/50'
+                }`}
+                onClick={() => setFormData(prev => ({ ...prev, bodyFatMethod: 'direct' }))}
+              >
+                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                  formData.bodyFatMethod === 'direct' ? 'border-primary' : 'border-muted-foreground'
+                }`}>
+                  {formData.bodyFatMethod === 'direct' && (
+                    <div className="w-2 h-2 rounded-full bg-primary" />
+                  )}
+                </div>
+                <span className="font-medium text-sm flex-shrink-0">Enter directly</span>
+                {formData.bodyFatMethod === 'direct' && (
                   <input
                     type="number"
                     value={formData.bodyFatPercent}
                     onChange={(e) => setFormData(prev => ({ ...prev, bodyFatPercent: e.target.value }))}
                     placeholder="25"
-                    className="w-full h-10 px-3 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex-1 h-8 px-2 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                   />
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">
-                        Waist ({formData.unit === 'metric' ? 'cm' : 'in'})
-                      </label>
+                )}
+              </div>
+              
+              {/* US Navy method option */}
+              <div 
+                className={`p-2.5 rounded-lg border cursor-pointer transition-all ${
+                  formData.bodyFatMethod === 'navy' 
+                    ? 'border-primary bg-primary/5' 
+                    : 'border-border hover:bg-muted/50'
+                }`}
+                onClick={() => setFormData(prev => ({ ...prev, bodyFatMethod: 'navy' }))}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                    formData.bodyFatMethod === 'navy' ? 'border-primary' : 'border-muted-foreground'
+                  }`}>
+                    {formData.bodyFatMethod === 'navy' && (
+                      <div className="w-2 h-2 rounded-full bg-primary" />
+                    )}
+                  </div>
+                  <span className="font-medium text-sm">US Navy method</span>
+                  {formData.bodyFatMethod === 'navy' && (
+                    <div className="flex-1 flex gap-2" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="number"
                         value={formData.waist}
                         onChange={(e) => setFormData(prev => ({ ...prev, waist: e.target.value }))}
-                        placeholder={formData.unit === 'metric' ? '85' : '34'}
-                        className="w-full h-10 px-3 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                        placeholder={`Waist (${formData.unit === 'metric' ? 'cm' : 'in'})`}
+                        className="flex-1 h-8 px-2 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                       />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">
-                        Neck ({formData.unit === 'metric' ? 'cm' : 'in'})
-                      </label>
                       <input
                         type="number"
                         value={formData.neck}
                         onChange={(e) => setFormData(prev => ({ ...prev, neck: e.target.value }))}
-                        placeholder={formData.unit === 'metric' ? '38' : '15'}
-                        className="w-full h-10 px-3 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                        placeholder={`Neck (${formData.unit === 'metric' ? 'cm' : 'in'})`}
+                        className="flex-1 h-8 px-2 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                       />
-                    </div>
-                  </div>
-                  {formData.sex === 'female' && (
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">
-                        Hip ({formData.unit === 'metric' ? 'cm' : 'in'})
-                      </label>
-                      <input
-                        type="number"
-                        value={formData.hip}
-                        onChange={(e) => setFormData(prev => ({ ...prev, hip: e.target.value }))}
-                        placeholder={formData.unit === 'metric' ? '100' : '40'}
-                        className="w-full h-10 px-3 rounded-lg border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                      />
+                      {formData.sex === 'female' && (
+                        <input
+                          type="number"
+                          value={formData.hip}
+                          onChange={(e) => setFormData(prev => ({ ...prev, hip: e.target.value }))}
+                          placeholder={`Hip (${formData.unit === 'metric' ? 'cm' : 'in'})`}
+                          className="flex-1 h-8 px-2 rounded border border-border bg-card text-foreground focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                        />
+                      )}
                     </div>
                   )}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Goal */}
