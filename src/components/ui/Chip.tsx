@@ -11,6 +11,7 @@ interface ChipProps {
   size?: 'sm' | 'md' | 'lg';
   icon?: ReactNode;
   disabled?: boolean;
+  className?: string;
 }
 
 export function Chip({
@@ -22,6 +23,7 @@ export function Chip({
   size = 'md',
   icon,
   disabled = false,
+  className,
 }: ChipProps) {
   return (
     <button
@@ -36,7 +38,8 @@ export function Chip({
         size === 'sm' && 'text-xs px-2 py-1',
         size === 'lg' && 'text-base px-4 py-2',
         disabled && 'opacity-50 cursor-not-allowed',
-        onClick && !disabled && 'cursor-pointer hover:bg-muted active:scale-95'
+        onClick && !disabled && 'cursor-pointer hover:bg-muted active:scale-95',
+        className
       )}
     >
       {icon && <span className="flex-shrink-0">{icon}</span>}
