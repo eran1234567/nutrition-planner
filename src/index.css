@@ -73,12 +73,12 @@
     --sidebar-border: 40 20% 88%;
     --sidebar-ring: 142 35% 42%;
 
-    /* Nutrition color coding */
-    --calories: 18 70% 55%;
-    --protein: 142 60% 45%;
-    --carbs: 38 92% 50%;
-    --fat: 280 60% 55%;
-    --fiber: 142 45% 35%;
+    /* Nutrition color coding - distinct colors for each */
+    --calories: 142 35% 42%; /* Sage green - matches primary */
+    --protein: 210 75% 50%;  /* Blue */
+    --carbs: 38 92% 50%;     /* Amber/Gold */
+    --fat: 280 60% 55%;      /* Purple */
+    --fiber: 160 50% 40%;    /* Teal */
 
     /* Meal type colors */
     --breakfast: 38 92% 50%;
@@ -136,11 +136,11 @@
     --sidebar-border: 20 15% 22%;
     --sidebar-ring: 142 40% 50%;
 
-    --calories: 18 65% 50%;
-    --protein: 142 55% 45%;
-    --carbs: 38 85% 50%;
-    --fat: 280 55% 55%;
-    --fiber: 142 40% 40%;
+    --calories: 142 40% 50%; /* Sage green - matches primary */
+    --protein: 210 70% 55%;  /* Blue */
+    --carbs: 38 85% 50%;     /* Amber/Gold */
+    --fat: 280 55% 55%;      /* Purple */
+    --fiber: 160 45% 45%;    /* Teal */
 
     --breakfast: 38 85% 50%;
     --lunch: 142 55% 45%;
