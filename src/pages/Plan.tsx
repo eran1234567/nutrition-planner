@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, ShoppingCart, RefreshCw, Settings, Sparkles, AlertTriangle, Cloud, CloudOff } from 'lucide-react';
+import { Plus, ShoppingCart, RefreshCw, Settings, Sparkles, AlertTriangle, Cloud, CloudOff, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
@@ -18,7 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { format, addDays, startOfWeek } from 'date-fns';
-import { generateMealPlan, validatePlanInputs } from '@/lib/mealPlanGenerator';
+import { generateMealPlan, validatePlanInputs, optimizeDayServings } from '@/lib/mealPlanGenerator';
 import type { GeneratedSlot } from '@/types/mealPlan';
 import { toast } from 'sonner';
 import type { GlobalRecipe } from '@/hooks/useGlobalRecipes';
@@ -161,6 +161,35 @@ export default function Plan() {
   const handleRegenerateDay = () => {
     if (!dailyTargets || !validation.isValid) return;
     handleGeneratePlan();
+  };
+
+  // Auto-optimize current day's servings to hit targets exactly
+  const handleOptimizeDay = () => {
+    if (!generatedPlan || !dailyTargets) return;
+    
+    const dayPlan = generatedPlan.days[selectedDay];
+    if (!dayPlan) return;
+    
+    const dayLocks = lockedSlots[selectedDay] || [];
+    
+    const optimizedDay = optimizeDayServings(
+      dayPlan,
+      allRecipes,
+      dailyTargets,
+      dayLocks
+    );
+    
+    // Update the plan with optimized day
+    const updatedDays = generatedPlan.days.map((day, idx) => 
+      idx === selectedDay ? optimizedDay : day
+    );
+    
+    setGeneratedPlan({
+      ...generatedPlan,
+      days: updatedDays,
+    });
+    
+    toast.success('Servings optimized to match targets');
   };
 
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
@@ -321,15 +350,26 @@ export default function Plan() {
             {/* Day header */}
             <div className="flex items-center justify-between">
               <h2 className="font-semibold">{format(days[selectedDay], 'EEEE, MMM d')}</h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleRegenerateDay}
-                disabled={isGenerating}
-              >
-                <RefreshCw className={cn('w-4 h-4 mr-1', isGenerating && 'animate-spin')} />
-                Regenerate
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleOptimizeDay}
+                  title="Auto-adjust servings to hit targets exactly"
+                >
+                  <Wand2 className="w-4 h-4 mr-1" />
+                  Optimize
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRegenerateDay}
+                  disabled={isGenerating}
+                >
+                  <RefreshCw className={cn('w-4 h-4 mr-1', isGenerating && 'animate-spin')} />
+                  Regenerate
+                </Button>
+              </div>
             </div>
 
 
