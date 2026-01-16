@@ -17,21 +17,39 @@ export function PlanModeHeader({ onExit }: PlanModeHeaderProps) {
     currentSlotFilter, 
     setCurrentSlotFilter,
     recipePoolsBySlot,
+    exactAssignments,
     dailyTargets,
     numberOfDays,
   } = useMealPlanStore();
 
-  const totalRecipesSelected = useMemo(() => {
-    return Object.values(recipePoolsBySlot).reduce((sum, pool) => sum + pool.length, 0);
-  }, [recipePoolsBySlot]);
-
+  // Count unique recipes in pool + exact assignments per slot
   const slotStatus = useMemo(() => {
-    return selectedMealSlots.map(slot => ({
-      slot,
-      count: (recipePoolsBySlot[slot.id] || []).length,
-      hasRecipes: (recipePoolsBySlot[slot.id] || []).length > 0,
-    }));
-  }, [selectedMealSlots, recipePoolsBySlot]);
+    return selectedMealSlots.map(slot => {
+      const poolRecipes = recipePoolsBySlot[slot.id] || [];
+      
+      // Get unique recipe IDs from exact assignments for this slot
+      const exactRecipeIds = new Set<string>();
+      Object.values(exactAssignments).forEach(dayAssignments => {
+        const assignment = dayAssignments[slot.id];
+        if (assignment) {
+          exactRecipeIds.add(assignment.recipeId);
+        }
+      });
+      
+      // Combine pool + exact (unique recipes only)
+      const allRecipeIds = new Set([...poolRecipes, ...exactRecipeIds]);
+      
+      return {
+        slot,
+        count: allRecipeIds.size,
+        hasRecipes: allRecipeIds.size > 0,
+      };
+    });
+  }, [selectedMealSlots, recipePoolsBySlot, exactAssignments]);
+
+  const totalRecipesSelected = useMemo(() => {
+    return slotStatus.reduce((sum, s) => sum + s.count, 0);
+  }, [slotStatus]);
 
   return (
     <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 mb-4 space-y-3">
