@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, Users, Check, Plus, Trash2 } from 'lucide-react';
+import { Clock, Users, Check, Plus, Trash2, Minus } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
@@ -26,6 +26,7 @@ interface RecipeCardRecipe {
 interface RecipeCardProps {
   recipe: RecipeCardRecipe;
   isSelected?: boolean;
+  isRemovable?: boolean;
   onSelect?: () => void;
   onClick?: () => void;
   onDelete?: () => void;
@@ -34,7 +35,8 @@ interface RecipeCardProps {
 
 export function RecipeCard({ 
   recipe, 
-  isSelected = false, 
+  isSelected = false,
+  isRemovable = false,
   onSelect, 
   onClick,
   onDelete,
@@ -86,12 +88,14 @@ export function RecipeCard({
             }}
             className={cn(
               'absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center transition-all',
-              isSelected 
-                ? 'bg-primary text-primary-foreground shadow-lg' 
-                : 'bg-card/90 text-muted-foreground hover:bg-card'
+              isRemovable
+                ? 'bg-destructive text-destructive-foreground shadow-lg hover:bg-destructive/90'
+                : isSelected 
+                  ? 'bg-primary text-primary-foreground shadow-lg' 
+                  : 'bg-card/90 text-muted-foreground hover:bg-card'
             )}
           >
-            {isSelected ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+            {isRemovable ? <Minus className="w-5 h-5" /> : isSelected ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
           </button>
         )}
 
