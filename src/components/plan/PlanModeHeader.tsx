@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Target, X, Plus, Minus } from 'lucide-react';
+import { Target, X, Minus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useMealPlanStore } from '@/stores/mealPlanStore';
@@ -16,14 +16,14 @@ export function PlanModeHeader({ onExit }: PlanModeHeaderProps) {
   const { t } = useTranslation();
   const { 
     selectedMealSlots, 
-    currentSlotFilter, 
-    setCurrentSlotFilter,
     recipePoolsBySlot,
     exactAssignments,
     dailyTargets,
     numberOfDays,
     removeFromPool,
     removeExactAssignment,
+    clearAllPools,
+    clearExactAssignments,
   } = useMealPlanStore();
 
   const { data: globalRecipes = [] } = useGlobalRecipes();
@@ -66,6 +66,11 @@ export function PlanModeHeader({ onExit }: PlanModeHeaderProps) {
     });
   }, [selectedMealSlots, recipePoolsBySlot, exactAssignments, numberOfDays]);
 
+  // Check if there are any recipes to clear
+  const hasAnyRecipes = useMemo(() => {
+    return slotData.some(s => s.poolRecipes.length > 0 || Object.values(s.dayAssignments).some(Boolean));
+  }, [slotData]);
+
   const handleRemoveFromPool = (slotId: MealSlotId, recipeId: string) => {
     removeFromPool(slotId, recipeId);
   };
@@ -74,8 +79,9 @@ export function PlanModeHeader({ onExit }: PlanModeHeaderProps) {
     removeExactAssignment(dayIndex, slotId);
   };
 
-  const handleSlotClick = (slotId: MealSlotId) => {
-    setCurrentSlotFilter(currentSlotFilter === slotId ? null : slotId);
+  const handleClearAll = () => {
+    clearAllPools();
+    clearExactAssignments();
   };
 
   return (
@@ -95,9 +101,22 @@ export function PlanModeHeader({ onExit }: PlanModeHeaderProps) {
             </p>
           </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={onExit} className="h-8 w-8 p-0">
-          <X className="w-4 h-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {hasAnyRecipes && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleClearAll} 
+              className="h-8 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="w-4 h-4 mr-1" />
+              <span className="text-xs">Clear</span>
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={onExit} className="h-8 w-8 p-0">
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Table */}
@@ -120,25 +139,15 @@ export function PlanModeHeader({ onExit }: PlanModeHeaderProps) {
 
           {/* Table Rows - Meal Slots */}
           {slotData.map(({ slot, poolRecipes, dayAssignments }) => {
-            const isActiveFilter = currentSlotFilter === slot.id;
             const hasRecipes = poolRecipes.length > 0 || Object.values(dayAssignments).some(Boolean);
             
             return (
               <div 
                 key={slot.id} 
-                className={cn(
-                  "flex border-b border-primary/10 last:border-b-0 transition-colors",
-                  isActiveFilter && "bg-primary/5"
-                )}
+                className="flex border-b border-primary/10 last:border-b-0"
               >
                 {/* Slot Name */}
-                <button
-                  onClick={() => handleSlotClick(slot.id)}
-                  className={cn(
-                    "w-28 shrink-0 p-2 text-left border-r border-primary/10 hover:bg-muted/50 transition-colors",
-                    isActiveFilter && "bg-primary/10"
-                  )}
-                >
+                <div className="w-28 shrink-0 p-2 text-left border-r border-primary/10">
                   <span className={cn(
                     "text-xs font-medium",
                     !hasRecipes && "text-amber-600"
@@ -146,7 +155,7 @@ export function PlanModeHeader({ onExit }: PlanModeHeaderProps) {
                     {slot.label}
                     {!hasRecipes && <span className="ml-1">!</span>}
                   </span>
-                </button>
+                </div>
 
                 {/* Pool Cell */}
                 <div className="w-24 shrink-0 p-1.5 border-r border-primary/10">
@@ -190,12 +199,9 @@ export function PlanModeHeader({ onExit }: PlanModeHeaderProps) {
                       )}
                     </div>
                   ) : (
-                    <button
-                      onClick={() => handleSlotClick(slot.id)}
-                      className="w-full h-6 rounded border border-dashed border-muted-foreground/30 flex items-center justify-center text-muted-foreground/50 hover:border-primary/50 hover:text-primary/50 transition-colors"
-                    >
-                      <Plus className="w-3 h-3" />
-                    </button>
+                    <div className="w-full h-6 rounded border border-dashed border-muted-foreground/20 flex items-center justify-center">
+                      <span className="text-2xs text-muted-foreground/40">—</span>
+                    </div>
                   )}
                 </div>
 
@@ -249,7 +255,7 @@ export function PlanModeHeader({ onExit }: PlanModeHeaderProps) {
       {slotData.some(s => s.poolRecipes.length === 0 && !Object.values(s.dayAssignments).some(Boolean)) && (
         <div className="px-3 py-2 bg-amber-500/10 border-t border-amber-500/20">
           <p className="text-xs text-amber-600 dark:text-amber-400">
-            Click a meal row to add recipes to it
+            Add at least one recipe to each meal slot
           </p>
         </div>
       )}
