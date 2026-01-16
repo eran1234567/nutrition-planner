@@ -260,8 +260,15 @@ export default function Discover() {
       if (!recipe.isUserRecipe && (!recipe.image_url || recipe.image_url.includes('undefined') || (!recipe.image_url.startsWith('http') && !recipe.image_url.startsWith('/')))) {
         return false;
       }
-      if (searchQuery && !recipe.title.toLowerCase().includes(searchQuery.toLowerCase())) {
-        return false;
+      if (searchQuery) {
+        const searchTerms = searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
+        const titleLower = recipe.title.toLowerCase();
+        const descLower = (recipe.description || '').toLowerCase();
+        // Match if ALL search terms appear in title OR description
+        const matchesSearch = searchTerms.every(term => 
+          titleLower.includes(term) || descLower.includes(term)
+        );
+        if (!matchesSearch) return false;
       }
       if (selectedTime && recipe.total_time && recipe.total_time > selectedTime) {
         return false;
