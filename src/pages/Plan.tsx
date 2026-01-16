@@ -19,7 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { format, addDays, startOfWeek } from 'date-fns';
 import { generateMealPlan, validatePlanInputs } from '@/lib/mealPlanGenerator';
-import { SERVING_MULTIPLIERS, type GeneratedSlot } from '@/types/mealPlan';
+import type { GeneratedSlot } from '@/types/mealPlan';
 import { toast } from 'sonner';
 import type { GlobalRecipe } from '@/hooks/useGlobalRecipes';
 
@@ -134,15 +134,8 @@ export default function Plan() {
     }
   }, [isPlanMode, validation.isValid, generatedPlan, handleGeneratePlan]);
 
-  // Handle multiplier adjustment with debounced sync
-  const handleAdjustMultiplier = async (dayIndex: number, slotId: string, delta: number) => {
-    const currentSlot = generatedPlan?.days[dayIndex]?.slots.find(s => s.slotId === slotId);
-    if (!currentSlot) return;
-
-    const currentIndex = SERVING_MULTIPLIERS.indexOf(currentSlot.servingMultiplier as typeof SERVING_MULTIPLIERS[number]);
-    const newIndex = Math.max(0, Math.min(SERVING_MULTIPLIERS.length - 1, currentIndex + delta));
-    const newMultiplier = SERVING_MULTIPLIERS[newIndex];
-
+  // Handle multiplier change (now supports custom values)
+  const handleSetMultiplier = (dayIndex: number, slotId: string, newMultiplier: number) => {
     updateSlotMultiplier(dayIndex, slotId, newMultiplier);
   };
 
@@ -356,7 +349,7 @@ export default function Plan() {
                     recipe={recipe}
                     isLocked={isLocked}
                     onToggleLock={() => toggleSlotLock(selectedDay, slot.slotId)}
-                    onAdjustMultiplier={(delta) => handleAdjustMultiplier(selectedDay, slot.slotId, delta)}
+                    onSetMultiplier={(mult) => handleSetMultiplier(selectedDay, slot.slotId, mult)}
                     onSwap={() => handleSwapRecipe(slot.slotId)}
                   />
                 );

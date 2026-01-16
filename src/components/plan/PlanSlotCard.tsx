@@ -1,11 +1,11 @@
-import { useMemo } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Lock, Unlock, RefreshCw, Minus, Plus, ArrowLeftRight } from 'lucide-react';
+import { Lock, Unlock, Minus, Plus, ArrowLeftRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import type { GeneratedSlot, MealSlotId } from '@/types/mealPlan';
+import type { GeneratedSlot } from '@/types/mealPlan';
 import type { GlobalRecipe } from '@/hooks/useGlobalRecipes';
-import { SERVING_MULTIPLIERS } from '@/types/mealPlan';
 
 interface PlanSlotCardProps {
   slot: GeneratedSlot;
@@ -13,9 +13,13 @@ interface PlanSlotCardProps {
   recipe: GlobalRecipe | null;
   isLocked: boolean;
   onToggleLock: () => void;
-  onAdjustMultiplier: (delta: number) => void;
+  onSetMultiplier: (multiplier: number) => void;
   onSwap: () => void;
 }
+
+const MIN_MULTIPLIER = 0.25;
+const MAX_MULTIPLIER = 5.0;
+const STEP = 0.25;
 
 export function PlanSlotCard({
   slot,
@@ -23,14 +27,70 @@ export function PlanSlotCard({
   recipe,
   isLocked,
   onToggleLock,
-  onAdjustMultiplier,
+  onSetMultiplier,
   onSwap,
 }: PlanSlotCardProps) {
   const { t } = useTranslation();
+  const [isEditing, setIsEditing] = useState(false);
+  const [inputValue, setInputValue] = useState(slot.servingMultiplier.toString());
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const multiplierIndex = SERVING_MULTIPLIERS.indexOf(slot.servingMultiplier as typeof SERVING_MULTIPLIERS[number]);
-  const canDecrease = multiplierIndex > 0;
-  const canIncrease = multiplierIndex < SERVING_MULTIPLIERS.length - 1;
+  // Update input when slot changes externally
+  useEffect(() => {
+    if (!isEditing) {
+      setInputValue(slot.servingMultiplier.toString());
+    }
+  }, [slot.servingMultiplier, isEditing]);
+
+  // Focus input when editing starts
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  const validateAndApply = (value: string) => {
+    const num = parseFloat(value);
+    if (!isNaN(num) && num >= MIN_MULTIPLIER && num <= MAX_MULTIPLIER) {
+      // Round to 2 decimal places
+      const rounded = Math.round(num * 100) / 100;
+      onSetMultiplier(rounded);
+      setInputValue(rounded.toString());
+    } else {
+      // Reset to current value
+      setInputValue(slot.servingMultiplier.toString());
+    }
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      validateAndApply(inputValue);
+    } else if (e.key === 'Escape') {
+      setInputValue(slot.servingMultiplier.toString());
+      setIsEditing(false);
+    }
+  };
+
+  const handleBlur = () => {
+    validateAndApply(inputValue);
+  };
+
+  const handleDecrease = () => {
+    const newValue = Math.max(MIN_MULTIPLIER, slot.servingMultiplier - STEP);
+    const rounded = Math.round(newValue * 100) / 100;
+    onSetMultiplier(rounded);
+  };
+
+  const handleIncrease = () => {
+    const newValue = Math.min(MAX_MULTIPLIER, slot.servingMultiplier + STEP);
+    const rounded = Math.round(newValue * 100) / 100;
+    onSetMultiplier(rounded);
+  };
+
+  const canDecrease = slot.servingMultiplier > MIN_MULTIPLIER;
+  const canIncrease = slot.servingMultiplier < MAX_MULTIPLIER;
 
   if (!recipe) {
     return (
@@ -123,19 +183,40 @@ export function PlanSlotCard({
               variant="outline"
               size="sm"
               className="h-7 w-7 p-0"
-              onClick={() => onAdjustMultiplier(-1)}
+              onClick={handleDecrease}
               disabled={!canDecrease}
             >
               <Minus className="w-3 h-3" />
             </Button>
-            <span className="text-sm font-medium w-12 text-center">
-              {slot.servingMultiplier}x
-            </span>
+            
+            {isEditing ? (
+              <Input
+                ref={inputRef}
+                type="number"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onBlur={handleBlur}
+                min={MIN_MULTIPLIER}
+                max={MAX_MULTIPLIER}
+                step={0.05}
+                className="h-7 w-14 text-center text-sm font-medium p-1"
+              />
+            ) : (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="text-sm font-medium w-14 text-center py-1 rounded hover:bg-muted transition-colors"
+                title="Click to edit"
+              >
+                {slot.servingMultiplier}x
+              </button>
+            )}
+            
             <Button
               variant="outline"
               size="sm"
               className="h-7 w-7 p-0"
-              onClick={() => onAdjustMultiplier(1)}
+              onClick={handleIncrease}
               disabled={!canIncrease}
             >
               <Plus className="w-3 h-3" />
