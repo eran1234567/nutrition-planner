@@ -183,6 +183,54 @@ function optimizeDayMultipliers(
   return currentSlots;
 }
 
+/**
+ * Public function to optimize a single day's servings to hit targets.
+ * Returns the optimized day with updated slots and totals.
+ */
+export function optimizeDayServings(
+  day: GeneratedDay,
+  recipes: GlobalRecipe[],
+  dailyTargets: DailyTargets,
+  lockedSlotIds: string[] = []
+): GeneratedDay {
+  const recipeMap = new Map<string, GlobalRecipe>();
+  for (const recipe of recipes) {
+    recipeMap.set(recipe.id, recipe);
+  }
+
+  const optimizedSlots = optimizeDayMultipliers(
+    day.slots,
+    recipeMap,
+    dailyTargets,
+    lockedSlotIds
+  );
+
+  // Recalculate day totals
+  const dayTotals = optimizedSlots.reduce(
+    (acc, slot) => ({
+      calories: acc.calories + slot.slotTotals.calories,
+      protein: acc.protein + slot.slotTotals.protein,
+      carbs: acc.carbs + slot.slotTotals.carbs,
+      fat: acc.fat + slot.slotTotals.fat,
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  );
+
+  const deltaVsTarget = {
+    calories: dayTotals.calories - dailyTargets.calories,
+    protein: dayTotals.protein - dailyTargets.protein,
+    carbs: dayTotals.carbs - dailyTargets.carbs,
+    fat: dayTotals.fat - dailyTargets.fat,
+  };
+
+  return {
+    ...day,
+    slots: optimizedSlots,
+    dayTotals,
+    deltaVsTarget,
+  };
+}
+
 function selectRecipeFromPool(
   pool: string[],
   recipes: Map<string, GlobalRecipe>,
