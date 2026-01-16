@@ -34,21 +34,33 @@ export function AddToPlanModal({
     setExactAssignment,
     recipePoolsBySlot,
     exactAssignments,
+    lastSelectedSlot,
+    setLastSelectedSlot,
   } = useMealPlanStore();
   const { data: globalRecipes = [] } = useGlobalRecipes();
   
-  const [selectedSlot, setSelectedSlot] = useState<MealSlotId | null>(defaultSlot || null);
+  // Use defaultSlot if provided, otherwise use last selected slot, otherwise first available
+  const initialSlot = defaultSlot || lastSelectedSlot || (selectedMealSlots.length > 0 ? selectedMealSlots[0].id : null);
+  const [selectedSlot, setSelectedSlot] = useState<MealSlotId | null>(initialSlot);
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('pool');
   const [selectedDays, setSelectedDays] = useState<number[]>([0]);
   const [showReplaceConfirm, setShowReplaceConfirm] = useState(false);
   const [conflictingDays, setConflictingDays] = useState<{ dayIndex: number; existingRecipeName: string }[]>([]);
 
-  // Initialize slot on open
+  // Sync selected slot when modal opens
   useMemo(() => {
-    if (open && !selectedSlot && selectedMealSlots.length > 0) {
-      setSelectedSlot(defaultSlot || selectedMealSlots[0].id);
+    if (open && selectedMealSlots.length > 0) {
+      // Use defaultSlot if provided, otherwise keep lastSelectedSlot, otherwise use first slot
+      const slotToUse = defaultSlot || lastSelectedSlot || selectedMealSlots[0].id;
+      // Only update if the slot exists in selectedMealSlots
+      const isValidSlot = selectedMealSlots.some(s => s.id === slotToUse);
+      if (isValidSlot && selectedSlot !== slotToUse) {
+        setSelectedSlot(slotToUse);
+      } else if (!isValidSlot) {
+        setSelectedSlot(selectedMealSlots[0].id);
+      }
     }
-  }, [open, defaultSlot, selectedMealSlots]);
+  }, [open, defaultSlot, lastSelectedSlot, selectedMealSlots]);
 
   const isAlreadyInPool = selectedSlot 
     ? (recipePoolsBySlot[selectedSlot] || []).includes(recipeId) 
@@ -92,6 +104,9 @@ export function AddToPlanModal({
 
   const performAdd = () => {
     if (!selectedSlot) return;
+
+    // Remember this slot for next time
+    setLastSelectedSlot(selectedSlot);
 
     if (assignmentMode === 'pool') {
       addToPool(selectedSlot, recipeId);

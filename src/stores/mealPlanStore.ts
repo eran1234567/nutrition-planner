@@ -26,6 +26,7 @@ interface MealPlanState {
   // Plan mode state
   isPlanMode: boolean;
   currentSlotFilter: MealSlotId | null;
+  lastSelectedSlot: MealSlotId | null;
   
   // Actions
   setDailyTargets: (targets: DailyTargets) => void;
@@ -53,6 +54,7 @@ interface MealPlanState {
   // Mode actions
   setIsPlanMode: (isPlanMode: boolean) => void;
   setCurrentSlotFilter: (slotId: MealSlotId | null) => void;
+  setLastSelectedSlot: (slotId: MealSlotId | null) => void;
   
   // Reset
   resetPlanState: () => void;
@@ -68,6 +70,7 @@ const initialState = {
   lockedSlots: {},
   isPlanMode: false,
   currentSlotFilter: null,
+  lastSelectedSlot: null,
 };
 
 export const useMealPlanStore = create<MealPlanState>()(
@@ -203,6 +206,8 @@ export const useMealPlanStore = create<MealPlanState>()(
       setIsPlanMode: (isPlanMode) => set({ isPlanMode }),
       
       setCurrentSlotFilter: (slotId) => set({ currentSlotFilter: slotId }),
+      
+      setLastSelectedSlot: (slotId) => set({ lastSelectedSlot: slotId }),
       
       resetPlanState: () => set(initialState),
     }),
