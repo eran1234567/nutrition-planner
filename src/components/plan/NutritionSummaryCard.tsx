@@ -69,11 +69,11 @@ export function NutritionSummaryCard({
             percent={caloriePercent}
             size={100}
             strokeWidth={8}
-            colorClass="stroke-primary"
+            colorClass="stroke-[hsl(var(--calories))]"
             trackClass="stroke-muted"
           >
             <div className="text-center">
-              <Flame className="w-4 h-4 text-primary mx-auto mb-0.5" />
+              <Flame className="w-4 h-4 text-[hsl(var(--calories))] mx-auto mb-0.5" />
               <span className="text-xl font-bold text-foreground">{dayTotals.calories}</span>
               <p className="text-[10px] text-muted-foreground">/ {dailyTargets.calories}</p>
             </div>
