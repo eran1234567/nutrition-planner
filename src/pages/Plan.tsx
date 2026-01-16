@@ -6,9 +6,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { StickyActions } from '@/components/ui/StickyActions';
 import { NutritionGoalsModal } from '@/components/plan/NutritionGoalsModal';
-import { DailyTargets } from '@/components/plan/DailyTargets';
+import { NutritionSummaryCard } from '@/components/plan/NutritionSummaryCard';
 import { PlanSlotCard } from '@/components/plan/PlanSlotCard';
-import { DayTotalsSummary } from '@/components/plan/DayTotalsSummary';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAppStore } from '@/stores/appStore';
 import { useMealPlanStore } from '@/stores/mealPlanStore';
@@ -282,12 +281,15 @@ export default function Plan() {
           ))}
         </div>
 
-        {/* Daily Targets */}
-        <DailyTargets
-          calorieTarget={dailyTargets?.calories ?? preferences?.calorie_target ?? null}
-          proteinTarget={dailyTargets?.protein ?? preferences?.protein_target ?? null}
-          carbsTarget={dailyTargets?.carbs ?? preferences?.carbs_target ?? null}
-          fatTarget={dailyTargets?.fat ?? preferences?.fat_target ?? null}
+        {/* Nutrition Summary - combined targets and actuals */}
+        <NutritionSummaryCard
+          dailyTargets={dailyTargets ?? (preferences?.calorie_target ? {
+            calories: preferences.calorie_target,
+            protein: preferences.protein_target ?? 0,
+            carbs: preferences.carbs_target ?? 0,
+            fat: preferences.fat_target ?? 0,
+          } : null)}
+          dayTotals={calculatedDayTotals}
           onSetGoals={() => setShowGoalsModal(true)}
         />
 
@@ -337,11 +339,6 @@ export default function Plan() {
               </Button>
             </div>
 
-            {/* Day totals summary - use calculated totals from recipe data */}
-            <DayTotalsSummary
-              dayTotals={calculatedDayTotals}
-              dailyTargets={dailyTargets}
-            />
 
             {/* Meal slots */}
             <div className="space-y-3">
