@@ -1,8 +1,6 @@
-import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Flame, Settings, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Flame, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import type { DailyTargets } from '@/types/mealPlan';
 
@@ -49,133 +47,150 @@ export function NutritionSummaryCard({
     );
   }
 
-  const caloriePercent = Math.round((dayTotals.calories / dailyTargets.calories) * 100);
-  const calorieDelta = dayTotals.calories - dailyTargets.calories;
+  const caloriePercent = Math.min(Math.round((dayTotals.calories / dailyTargets.calories) * 100), 100);
 
   return (
-    <div className="bg-card rounded-2xl border border-border p-4 mb-4 space-y-4">
-      {/* Header with calorie summary */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Flame className="w-5 h-5 text-primary" />
-          <div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-foreground">{dayTotals.calories.toLocaleString()}</span>
-              <span className="text-sm text-muted-foreground">/ {dailyTargets.calories.toLocaleString()} cal</span>
+    <div className="bg-card rounded-2xl border border-border p-4 mb-4">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-sm font-medium text-muted-foreground">Daily Nutrition</span>
+        {onSetGoals && (
+          <Button variant="ghost" size="sm" onClick={onSetGoals} className="h-7 w-7 p-0">
+            <Settings className="w-4 h-4 text-muted-foreground" />
+          </Button>
+        )}
+      </div>
+
+      {/* Main content - Calories ring + Macros */}
+      <div className="flex items-center gap-6">
+        {/* Large Calories Ring */}
+        <div className="flex-shrink-0">
+          <CircularProgress
+            percent={caloriePercent}
+            size={100}
+            strokeWidth={8}
+            colorClass="stroke-primary"
+            trackClass="stroke-muted"
+          >
+            <div className="text-center">
+              <Flame className="w-4 h-4 text-primary mx-auto mb-0.5" />
+              <span className="text-xl font-bold text-foreground">{dayTotals.calories}</span>
+              <p className="text-[10px] text-muted-foreground">/ {dailyTargets.calories}</p>
             </div>
-          </div>
+          </CircularProgress>
         </div>
-        <div className="flex items-center gap-2">
-          <CalorieBadge delta={calorieDelta} />
-          {onSetGoals && (
-            <Button variant="ghost" size="sm" onClick={onSetGoals} className="h-8 w-8 p-0">
-              <Settings className="w-4 h-4 text-muted-foreground" />
-            </Button>
-          )}
+
+        {/* Macro rings */}
+        <div className="flex-1 grid grid-cols-3 gap-3">
+          <MacroRing
+            label="Protein"
+            actual={dayTotals.protein}
+            target={dailyTargets.protein}
+            colorClass="stroke-[hsl(var(--protein))]"
+            textColorClass="text-[hsl(var(--protein))]"
+          />
+          <MacroRing
+            label="Carbs"
+            actual={dayTotals.carbs}
+            target={dailyTargets.carbs}
+            colorClass="stroke-[hsl(var(--carbs))]"
+            textColorClass="text-[hsl(var(--carbs))]"
+          />
+          <MacroRing
+            label="Fat"
+            actual={dayTotals.fat}
+            target={dailyTargets.fat}
+            colorClass="stroke-[hsl(var(--fat))]"
+            textColorClass="text-[hsl(var(--fat))]"
+          />
         </div>
-      </div>
-
-      {/* Calorie progress bar */}
-      <Progress 
-        value={Math.min(caloriePercent, 100)} 
-        className="h-2"
-      />
-
-      {/* Macros grid */}
-      <div className="grid grid-cols-3 gap-3">
-        <MacroItem
-          label="Protein"
-          actual={dayTotals.protein}
-          target={dailyTargets.protein}
-          colorClass="text-[hsl(var(--protein))]"
-          bgClass="bg-[hsl(var(--protein))]"
-        />
-        <MacroItem
-          label="Carbs"
-          actual={dayTotals.carbs}
-          target={dailyTargets.carbs}
-          colorClass="text-[hsl(var(--carbs))]"
-          bgClass="bg-[hsl(var(--carbs))]"
-        />
-        <MacroItem
-          label="Fat"
-          actual={dayTotals.fat}
-          target={dailyTargets.fat}
-          colorClass="text-[hsl(var(--fat))]"
-          bgClass="bg-[hsl(var(--fat))]"
-        />
       </div>
     </div>
   );
 }
 
-function CalorieBadge({ delta }: { delta: number }) {
-  const isOver = delta > 50;
-  const isUnder = delta < -50;
-  const isOnTarget = !isOver && !isUnder;
+interface CircularProgressProps {
+  percent: number;
+  size: number;
+  strokeWidth: number;
+  colorClass: string;
+  trackClass: string;
+  children?: React.ReactNode;
+}
 
-  const Icon = isOver ? TrendingUp : isUnder ? TrendingDown : Minus;
+function CircularProgress({
+  percent,
+  size,
+  strokeWidth,
+  colorClass,
+  trackClass,
+  children,
+}: CircularProgressProps) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const offset = circumference - (percent / 100) * circumference;
 
   return (
-    <div
-      className={cn(
-        'flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium',
-        isOver && 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400',
-        isUnder && 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400',
-        isOnTarget && 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-400'
-      )}
-    >
-      <Icon className="w-3 h-3" />
-      <span>
-        {delta > 0 ? '+' : ''}{delta} cal
-      </span>
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg className="transform -rotate-90" width={size} height={size}>
+        {/* Background track */}
+        <circle
+          className={cn('fill-none', trackClass)}
+          strokeWidth={strokeWidth}
+          r={radius}
+          cx={size / 2}
+          cy={size / 2}
+        />
+        {/* Progress arc */}
+        <circle
+          className={cn('fill-none transition-all duration-500 ease-out', colorClass)}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          r={radius}
+          cx={size / 2}
+          cy={size / 2}
+          style={{
+            strokeDasharray: circumference,
+            strokeDashoffset: offset,
+          }}
+        />
+      </svg>
+      {/* Center content */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        {children}
+      </div>
     </div>
   );
 }
 
-function MacroItem({
+function MacroRing({
   label,
   actual,
   target,
   colorClass,
-  bgClass,
+  textColorClass,
 }: {
   label: string;
   actual: number;
   target: number;
   colorClass: string;
-  bgClass: string;
+  textColorClass: string;
 }) {
-  const percent = target > 0 ? Math.round((actual / target) * 100) : 0;
-  const isOver = percent > 105;
-  const isUnder = percent < 95;
-  const isOnTarget = !isOver && !isUnder;
+  const percent = target > 0 ? Math.min(Math.round((actual / target) * 100), 100) : 0;
 
   return (
-    <div className="bg-muted/50 rounded-xl p-3 text-center">
-      {/* Colored dot and label */}
-      <div className="flex items-center justify-center gap-1.5 mb-1">
-        <div className={cn('w-2 h-2 rounded-full', bgClass)} />
-        <span className="text-xs text-muted-foreground font-medium">{label}</span>
-      </div>
-      
-      {/* Actual / Target */}
-      <div className="flex items-baseline justify-center gap-1">
-        <span className={cn('text-lg font-bold', colorClass)}>{actual}g</span>
-        <span className="text-xs text-muted-foreground">/ {target}g</span>
-      </div>
-      
-      {/* Percentage */}
-      <div
-        className={cn(
-          'text-xs font-medium mt-0.5',
-          isOver && 'text-amber-600 dark:text-amber-400',
-          isUnder && 'text-blue-600 dark:text-blue-400',
-          isOnTarget && 'text-green-600 dark:text-green-400'
-        )}
+    <div className="flex flex-col items-center">
+      <CircularProgress
+        percent={percent}
+        size={56}
+        strokeWidth={5}
+        colorClass={colorClass}
+        trackClass="stroke-muted"
       >
-        {percent}%
-      </div>
+        <span className={cn('text-sm font-bold', textColorClass)}>{actual}g</span>
+      </CircularProgress>
+      <span className="text-[10px] text-muted-foreground mt-1.5">{label}</span>
+      <span className="text-[10px] text-muted-foreground">/ {target}g</span>
     </div>
   );
 }
