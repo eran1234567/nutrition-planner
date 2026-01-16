@@ -8,7 +8,8 @@ import type {
 } from '@/types/mealPlan';
 import type { GlobalRecipe } from '@/hooks/useGlobalRecipes';
 
-const MULTIPLIERS = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+// Finer-grained multipliers for more precise macro matching
+const MULTIPLIERS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0];
 
 interface RecipeMacros {
   calories: number;
@@ -78,6 +79,108 @@ function findBestMultiplier(
   }
   
   return bestResult;
+}
+
+/**
+ * Optimize day's multipliers to hit daily targets exactly.
+ * Uses an iterative approach: find the slot with highest calorie impact 
+ * and adjust its multiplier to get closer to target.
+ */
+function optimizeDayMultipliers(
+  slots: GeneratedSlot[],
+  recipeMap: Map<string, GlobalRecipe>,
+  dailyTargets: DailyTargets,
+  lockedSlotIds: string[]
+): GeneratedSlot[] {
+  // Calculate initial totals
+  const calculateTotals = (slotList: GeneratedSlot[]): RecipeMacros => {
+    return slotList.reduce(
+      (acc, slot) => ({
+        calories: acc.calories + slot.slotTotals.calories,
+        protein: acc.protein + slot.slotTotals.protein,
+        carbs: acc.carbs + slot.slotTotals.carbs,
+        fat: acc.fat + slot.slotTotals.fat,
+      }),
+      { calories: 0, protein: 0, carbs: 0, fat: 0 }
+    );
+  };
+
+  let currentSlots = [...slots];
+  let currentTotals = calculateTotals(currentSlots);
+  
+  // Iteratively optimize - run multiple passes to refine
+  const maxIterations = 10;
+  for (let iter = 0; iter < maxIterations; iter++) {
+    const calorieDiff = dailyTargets.calories - currentTotals.calories;
+    
+    // If we're within 10 calories, stop
+    if (Math.abs(calorieDiff) < 10) break;
+    
+    // Find the best slot to adjust
+    let bestAdjustment: { slotIndex: number; newMultiplier: number; newScore: number } | null = null;
+    let bestOverallScore = calculateFitScore(currentTotals, dailyTargets);
+    
+    for (let i = 0; i < currentSlots.length; i++) {
+      const slot = currentSlots[i];
+      
+      // Skip locked slots
+      if (lockedSlotIds.includes(slot.slotId)) continue;
+      
+      // Skip slots without recipes
+      if (!slot.recipeId) continue;
+      
+      const recipe = recipeMap.get(slot.recipeId);
+      const recipeMacros = recipe ? getRecipeMacros(recipe) : null;
+      if (!recipeMacros) continue;
+      
+      // Try each multiplier
+      for (const mult of MULTIPLIERS) {
+        if (mult === slot.servingMultiplier) continue;
+        
+        const newSlotTotals = calculateMacrosWithMultiplier(recipeMacros, mult);
+        
+        // Calculate what the day totals would be with this change
+        const testTotals: RecipeMacros = {
+          calories: currentTotals.calories - slot.slotTotals.calories + newSlotTotals.calories,
+          protein: currentTotals.protein - slot.slotTotals.protein + newSlotTotals.protein,
+          carbs: currentTotals.carbs - slot.slotTotals.carbs + newSlotTotals.carbs,
+          fat: currentTotals.fat - slot.slotTotals.fat + newSlotTotals.fat,
+        };
+        
+        const score = calculateFitScore(testTotals, dailyTargets);
+        
+        if (score < bestOverallScore) {
+          bestOverallScore = score;
+          bestAdjustment = { slotIndex: i, newMultiplier: mult, newScore: score };
+        }
+      }
+    }
+    
+    // Apply the best adjustment found
+    if (bestAdjustment) {
+      const slot = currentSlots[bestAdjustment.slotIndex];
+      const recipe = recipeMap.get(slot.recipeId);
+      const recipeMacros = recipe ? getRecipeMacros(recipe) : null;
+      
+      if (recipeMacros) {
+        currentSlots = currentSlots.map((s, idx) => 
+          idx === bestAdjustment!.slotIndex
+            ? {
+                ...s,
+                servingMultiplier: bestAdjustment!.newMultiplier,
+                slotTotals: calculateMacrosWithMultiplier(recipeMacros, bestAdjustment!.newMultiplier),
+              }
+            : s
+        );
+        currentTotals = calculateTotals(currentSlots);
+      }
+    } else {
+      // No improvement possible, stop
+      break;
+    }
+  }
+  
+  return currentSlots;
 }
 
 function selectRecipeFromPool(
@@ -273,8 +376,16 @@ export function generateMealPlan(input: GeneratePlanInput): GeneratedPlan {
       usedMap.set(recipeId, [...usedDays, dayIndex]);
     }
     
-    // Calculate day totals
-    const dayTotals = slots.reduce(
+    // Optimize multipliers to hit daily targets exactly
+    const optimizedSlots = optimizeDayMultipliers(
+      slots, 
+      recipeMap, 
+      dailyTargets, 
+      dayLocks
+    );
+    
+    // Calculate day totals after optimization
+    const dayTotals = optimizedSlots.reduce(
       (acc, slot) => ({
         calories: acc.calories + slot.slotTotals.calories,
         protein: acc.protein + slot.slotTotals.protein,
@@ -293,7 +404,7 @@ export function generateMealPlan(input: GeneratePlanInput): GeneratedPlan {
     
     days.push({
       dayIndex,
-      slots,
+      slots: optimizedSlots,
       dayTotals,
       deltaVsTarget,
     });
