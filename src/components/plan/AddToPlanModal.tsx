@@ -35,7 +35,7 @@ export function AddToPlanModal({
   
   const [selectedSlot, setSelectedSlot] = useState<MealSlotId | null>(defaultSlot || null);
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('pool');
-  const [selectedDay, setSelectedDay] = useState<number>(0);
+  const [selectedDays, setSelectedDays] = useState<number[]>([0]);
 
   // Initialize slot on open
   useMemo(() => {
@@ -48,13 +48,24 @@ export function AddToPlanModal({
     ? (recipePoolsBySlot[selectedSlot] || []).includes(recipeId) 
     : false;
 
+  const toggleDay = (dayIndex: number) => {
+    setSelectedDays(prev => 
+      prev.includes(dayIndex) 
+        ? prev.filter(d => d !== dayIndex)
+        : [...prev, dayIndex].sort((a, b) => a - b)
+    );
+  };
+
   const handleAdd = () => {
     if (!selectedSlot) return;
 
     if (assignmentMode === 'pool') {
       addToPool(selectedSlot, recipeId);
     } else {
-      setExactAssignment(selectedDay, selectedSlot, recipeId);
+      // Add to all selected days
+      selectedDays.forEach(dayIndex => {
+        setExactAssignment(dayIndex, selectedSlot, recipeId);
+      });
     }
 
     onOpenChange(false);
@@ -152,12 +163,15 @@ export function AddToPlanModal({
                 <Calendar className="w-4 h-4" />
                 Which day?
               </p>
+              <p className="text-xs text-muted-foreground mb-2">
+                Select one or more days
+              </p>
               <div className="flex flex-wrap gap-2">
                 {Array.from({ length: numberOfDays }, (_, i) => (
                   <Chip
                     key={i}
-                    selected={selectedDay === i}
-                    onClick={() => setSelectedDay(i)}
+                    selected={selectedDays.includes(i)}
+                    onClick={() => toggleDay(i)}
                     variant="outline"
                   >
                     Day {i + 1}
@@ -180,10 +194,15 @@ export function AddToPlanModal({
           <Button 
             className="w-full" 
             onClick={handleAdd}
-            disabled={!selectedSlot || (assignmentMode === 'pool' && isAlreadyInPool)}
+            disabled={!selectedSlot || (assignmentMode === 'pool' && isAlreadyInPool) || (assignmentMode === 'exact' && selectedDays.length === 0)}
           >
             <Check className="w-4 h-4 mr-2" />
-            {assignmentMode === 'pool' ? 'Add to Pool' : `Add to Day ${selectedDay + 1}`}
+            {assignmentMode === 'pool' 
+              ? 'Add to Pool' 
+              : selectedDays.length === 1 
+                ? `Add to Day ${selectedDays[0] + 1}`
+                : `Add to ${selectedDays.length} Days`
+            }
           </Button>
         </div>
       </DialogContent>
