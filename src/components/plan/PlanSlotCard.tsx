@@ -97,9 +97,21 @@ export function PlanSlotCard({
           {/* Info */}
           <div className="flex-1 min-w-0">
             <p className="font-medium text-sm line-clamp-2">{recipe.title}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {slot.slotTotals.calories} cal • {slot.slotTotals.protein}g P
-            </p>
+            {/* Macro badges with colors */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+              <span className="text-xs text-[hsl(var(--calories))] font-medium">
+                {slot.slotTotals.calories} cal
+              </span>
+              <span className="text-xs text-[hsl(var(--protein))] font-medium">
+                {slot.slotTotals.protein}g P
+              </span>
+              <span className="text-xs text-[hsl(var(--carbs))] font-medium">
+                {slot.slotTotals.carbs}g C
+              </span>
+              <span className="text-xs text-[hsl(var(--fat))] font-medium">
+                {slot.slotTotals.fat}g F
+              </span>
+            </div>
           </div>
         </div>
 
