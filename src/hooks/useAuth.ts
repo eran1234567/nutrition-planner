@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
+import { useMealPlanStore } from '@/stores/mealPlanStore';
 
 export const useAuth = () => {
   const { 
@@ -14,10 +15,22 @@ export const useAuth = () => {
     setIsLoading 
   } = useAuthStore();
 
+  // Track previous user ID to detect user changes
+  const prevUserIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        const newUserId = session?.user?.id ?? null;
+        const prevUserId = prevUserIdRef.current;
+
+        // Clear meal plan store if user changed (including logout)
+        if (prevUserId !== null && prevUserId !== newUserId) {
+          useMealPlanStore.getState().resetPlanState();
+        }
+        prevUserIdRef.current = newUserId;
+
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -35,6 +48,7 @@ export const useAuth = () => {
 
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      prevUserIdRef.current = session?.user?.id ?? null;
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
