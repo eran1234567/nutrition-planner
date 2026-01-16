@@ -310,8 +310,8 @@ export default function Discover() {
         return false;
       }
       
-      // In plan mode without a slot filter, don't filter by meal type
-      if (!isPlanMode && selectedMealType && !recipe.tags.some(t => t.tag_type === 'meal' && t.tag_value === selectedMealType)) {
+      // Apply meal type filter (both in normal mode and plan mode without slot filter)
+      if (selectedMealType && !recipe.tags.some(t => t.tag_type === 'meal' && t.tag_value === selectedMealType)) {
         return false;
       }
       if (selectedCuisine && recipe.cuisine?.toLowerCase() !== selectedCuisine.toLowerCase()) {
