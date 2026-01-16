@@ -20,7 +20,7 @@ import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { format, addDays, startOfWeek } from 'date-fns';
 import { generateMealPlan, validatePlanInputs } from '@/lib/mealPlanGenerator';
-import { SERVING_MULTIPLIERS } from '@/types/mealPlan';
+import { SERVING_MULTIPLIERS, type GeneratedSlot } from '@/types/mealPlan';
 import { toast } from 'sonner';
 import type { GlobalRecipe } from '@/hooks/useGlobalRecipes';
 
@@ -177,6 +177,41 @@ export default function Plan() {
   const currentDayPlan = generatedPlan?.days[selectedDay];
   const currentDayLocks = lockedSlots[selectedDay] || [];
 
+  // Recalculate day totals using actual recipe data (since stored totals may be stale)
+  const calculatedDayTotals = useMemo(() => {
+    if (!currentDayPlan || allRecipes.length === 0) {
+      return { calories: 0, protein: 0, carbs: 0, fat: 0 };
+    }
+
+    return currentDayPlan.slots.reduce((acc, slot) => {
+      const recipe = recipeMap.get(slot.recipeId);
+      if (!recipe?.nutrition) return acc;
+
+      const multiplier = slot.servingMultiplier || 1;
+      return {
+        calories: acc.calories + Math.round((recipe.nutrition.calories ?? 0) * multiplier),
+        protein: acc.protein + Math.round((recipe.nutrition.protein_g ?? 0) * multiplier),
+        carbs: acc.carbs + Math.round((recipe.nutrition.carbs_g ?? 0) * multiplier),
+        fat: acc.fat + Math.round((recipe.nutrition.fat_g ?? 0) * multiplier),
+      };
+    }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+  }, [currentDayPlan, recipeMap, allRecipes.length]);
+
+  // Calculate slot totals for display (recalculated from recipe data)
+  const getSlotTotals = useCallback((slot: GeneratedSlot) => {
+    const recipe = recipeMap.get(slot.recipeId);
+    if (!recipe?.nutrition) {
+      return { calories: 0, protein: 0, carbs: 0, fat: 0 };
+    }
+    const multiplier = slot.servingMultiplier || 1;
+    return {
+      calories: Math.round((recipe.nutrition.calories ?? 0) * multiplier),
+      protein: Math.round((recipe.nutrition.protein_g ?? 0) * multiplier),
+      carbs: Math.round((recipe.nutrition.carbs_g ?? 0) * multiplier),
+      fat: Math.round((recipe.nutrition.fat_g ?? 0) * multiplier),
+    };
+  }, [recipeMap]);
+
   // Check if we have a plan to show
   const hasPlan = generatedPlan && generatedPlan.days.length > 0;
   const hasRecipesInPools = Object.values(recipePoolsBySlot).some(pool => pool.length > 0);
@@ -302,9 +337,9 @@ export default function Plan() {
               </Button>
             </div>
 
-            {/* Day totals summary */}
+            {/* Day totals summary - use calculated totals from recipe data */}
             <DayTotalsSummary
-              dayTotals={currentDayPlan.dayTotals}
+              dayTotals={calculatedDayTotals}
               dailyTargets={dailyTargets}
             />
 
@@ -314,11 +349,12 @@ export default function Plan() {
                 const slotDef = selectedMealSlots.find(s => s.id === slot.slotId);
                 const recipe = recipeMap.get(slot.recipeId) || null;
                 const isLocked = currentDayLocks.includes(slot.slotId);
+                const slotTotals = getSlotTotals(slot);
 
                 return (
                   <PlanSlotCard
                     key={slot.slotId}
-                    slot={slot}
+                    slot={{ ...slot, slotTotals }}
                     slotLabel={slotDef?.label || slot.slotId}
                     recipe={recipe}
                     isLocked={isLocked}
