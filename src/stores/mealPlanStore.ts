@@ -143,6 +143,8 @@ export const useMealPlanStore = create<MealPlanState>()(
       updateSlotMultiplier: (dayIndex, slotId, multiplier) => set((state) => {
         if (!state.generatedPlan) return state;
         
+        // Note: slotTotals will be recalculated in Plan.tsx when recipes are available
+        // Store only updates the multiplier - actual macro calculation happens in the component
         const newDays = state.generatedPlan.days.map(day => {
           if (day.dayIndex !== dayIndex) return day;
           
