@@ -123,19 +123,17 @@ export function NutritionGoalsModal({ open, onOpenChange, onSave }: NutritionGoa
     }
   }, [open]);
 
-  // Update default percents when selected meals change
+  // Update default percents when selected meals change - always redistribute to 100%
   useEffect(() => {
-    const currentSlotIds = Object.keys(slotPercents) as MealSlotId[];
-    const needsDefaults = selectedMeals.some(id => !(id in slotPercents) || slotPercents[id] === undefined);
+    // Check if current percents match selected meals and sum to 100
+    const currentTotal = selectedMeals.reduce((sum, id) => sum + (slotPercents[id] || 0), 0);
+    const allMealsHavePercents = selectedMeals.every(id => id in slotPercents && slotPercents[id] !== undefined);
+    const correctMealCount = Object.keys(slotPercents).filter(id => selectedMeals.includes(id as MealSlotId)).length === selectedMeals.length;
     
-    if (needsDefaults || currentSlotIds.length !== selectedMeals.length) {
+    // If percents don't sum to 100 or meals changed, redistribute evenly
+    if (!allMealsHavePercents || !correctMealCount || currentTotal !== 100) {
       const defaults = getDefaultPercentsForSlots(selectedMeals);
-      // Merge with existing, only set defaults for new slots
-      const newPercents: Record<MealSlotId, number> = {} as Record<MealSlotId, number>;
-      selectedMeals.forEach(id => {
-        newPercents[id] = slotPercents[id] ?? defaults[id] ?? 0;
-      });
-      setSlotPercents(newPercents);
+      setSlotPercents(defaults);
     }
   }, [selectedMeals]);
 
