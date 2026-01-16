@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, ShoppingCart, RefreshCw, Settings, Sparkles, AlertTriangle } from 'lucide-react';
+import { Plus, ShoppingCart, RefreshCw, Settings, Sparkles, AlertTriangle, Cloud, CloudOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
@@ -9,10 +9,13 @@ import { NutritionGoalsModal } from '@/components/plan/NutritionGoalsModal';
 import { DailyTargets } from '@/components/plan/DailyTargets';
 import { PlanSlotCard } from '@/components/plan/PlanSlotCard';
 import { DayTotalsSummary } from '@/components/plan/DayTotalsSummary';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAppStore } from '@/stores/appStore';
 import { useMealPlanStore } from '@/stores/mealPlanStore';
 import { useUserData } from '@/hooks/useUserData';
 import { useGlobalRecipes } from '@/hooks/useGlobalRecipes';
+import { useMealPlanSync } from '@/hooks/useMealPlanSync';
+import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { format, addDays, startOfWeek } from 'date-fns';
@@ -24,8 +27,10 @@ import type { GlobalRecipe } from '@/hooks/useGlobalRecipes';
 export default function Plan() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const { preferences, loading: preferencesLoading, refetch: refetchPreferences } = useUserData();
   const { data: allRecipes = [] } = useGlobalRecipes();
+  const { isSaving, isLoading: isSyncLoading, activePlanId, savePlan, updatePlan } = useMealPlanSync();
   
   const {
     dailyTargets,
@@ -48,6 +53,7 @@ export default function Plan() {
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [hasShownInitialModal, setHasShownInitialModal] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const hasSavedPlanRef = useRef(false);
 
   // Show nutrition goals modal on first visit if no goals are set
   useEffect(() => {
@@ -83,13 +89,14 @@ export default function Plan() {
   }, [dailyTargets, selectedMealSlots, recipePoolsBySlot, exactAssignments, allRecipes, numberOfDays]);
 
   // Generate plan
-  const handleGeneratePlan = useCallback(() => {
+  const handleGeneratePlan = useCallback(async () => {
     if (!dailyTargets || !validation.isValid) return;
 
     setIsGenerating(true);
+    hasSavedPlanRef.current = false;
     
     // Small delay for UX
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
         const plan = generateMealPlan({
           dailyTargets,
@@ -104,7 +111,14 @@ export default function Plan() {
         
         setGeneratedPlan(plan);
         setIsPlanMode(false);
-        toast.success('Meal plan generated!');
+        
+        // Auto-save to database if authenticated
+        if (isAuthenticated && !hasSavedPlanRef.current) {
+          hasSavedPlanRef.current = true;
+          await savePlan(plan);
+        } else {
+          toast.success('Meal plan generated!');
+        }
       } catch (error) {
         console.error('Error generating plan:', error);
         toast.error('Failed to generate plan');
@@ -112,7 +126,7 @@ export default function Plan() {
         setIsGenerating(false);
       }
     }, 300);
-  }, [dailyTargets, validation.isValid, selectedMealSlots, recipePoolsBySlot, exactAssignments, allRecipes, numberOfDays, lockedSlots, generatedPlan, setGeneratedPlan, setIsPlanMode]);
+  }, [dailyTargets, validation.isValid, selectedMealSlots, recipePoolsBySlot, exactAssignments, allRecipes, numberOfDays, lockedSlots, generatedPlan, setGeneratedPlan, setIsPlanMode, isAuthenticated, savePlan]);
 
   // Auto-generate when coming from Discover with valid recipes
   useEffect(() => {
@@ -121,8 +135,8 @@ export default function Plan() {
     }
   }, [isPlanMode, validation.isValid, generatedPlan, handleGeneratePlan]);
 
-  // Handle multiplier adjustment
-  const handleAdjustMultiplier = (dayIndex: number, slotId: string, delta: number) => {
+  // Handle multiplier adjustment with debounced sync
+  const handleAdjustMultiplier = async (dayIndex: number, slotId: string, delta: number) => {
     const currentSlot = generatedPlan?.days[dayIndex]?.slots.find(s => s.slotId === slotId);
     if (!currentSlot) return;
 
@@ -132,6 +146,17 @@ export default function Plan() {
 
     updateSlotMultiplier(dayIndex, slotId, newMultiplier);
   };
+
+  // Sync plan changes to database (debounced)
+  useEffect(() => {
+    if (!generatedPlan || !activePlanId || !isAuthenticated) return;
+    
+    const timeout = setTimeout(() => {
+      updatePlan(generatedPlan);
+    }, 1000);
+
+    return () => clearTimeout(timeout);
+  }, [generatedPlan, activePlanId, isAuthenticated, updatePlan]);
 
   // Handle swap - navigate to Discover with slot filter
   const handleSwapRecipe = (slotId: string) => {
@@ -156,15 +181,50 @@ export default function Plan() {
   const hasPlan = generatedPlan && generatedPlan.days.length > 0;
   const hasRecipesInPools = Object.values(recipePoolsBySlot).some(pool => pool.length > 0);
 
+  // Show loading skeleton while syncing from database
+  if (isSyncLoading) {
+    return (
+      <div className="min-h-screen bg-background pb-40">
+        <div className="page-container">
+          <PageHeader title={t('plan.weeklyPlan')} />
+          <div className="space-y-4">
+            <Skeleton className="h-16 w-full rounded-xl" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+            <Skeleton className="h-32 w-full rounded-xl" />
+            <Skeleton className="h-32 w-full rounded-xl" />
+          </div>
+        </div>
+        <BottomNav />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background pb-40">
       <div className="page-container">
         <PageHeader 
           title={t('plan.weeklyPlan')} 
           rightAction={
-            <Button variant="ghost" size="icon" onClick={() => setShowGoalsModal(true)}>
-              <Settings className="w-5 h-5" />
-            </Button>
+            <div className="flex items-center gap-1">
+              {isAuthenticated && activePlanId && (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground mr-1">
+                  {isSaving ? (
+                    <>
+                      <Cloud className="w-3.5 h-3.5 animate-pulse" />
+                      <span className="hidden sm:inline">Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Cloud className="w-3.5 h-3.5 text-primary" />
+                      <span className="hidden sm:inline">Saved</span>
+                    </>
+                  )}
+                </div>
+              )}
+              <Button variant="ghost" size="icon" onClick={() => setShowGoalsModal(true)}>
+                <Settings className="w-5 h-5" />
+              </Button>
+            </div>
           }
         />
 
