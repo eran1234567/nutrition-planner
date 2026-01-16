@@ -256,6 +256,42 @@ export default function Discover() {
 
   // Apply slot-based filtering when in plan mode
   const filteredRecipes = useMemo(() => {
+    // When in plan mode with a slot filter selected, show only recipes in that slot's pool
+    if (isPlanMode && currentSlotFilter) {
+      const poolRecipeIds = recipePoolsBySlot[currentSlotFilter] || [];
+      if (poolRecipeIds.length === 0) {
+        // If pool is empty, show recipes filtered by meal type for that slot
+        const slotMealType = getMealTypeForSlot(currentSlotFilter);
+        return allRecipes.filter(recipe => {
+          if (!recipe.isUserRecipe && (!recipe.image_url || recipe.image_url.includes('undefined') || (!recipe.image_url.startsWith('http') && !recipe.image_url.startsWith('/')))) {
+            return false;
+          }
+          if (searchQuery) {
+            const searchTerms = searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
+            const titleLower = recipe.title.toLowerCase();
+            const descLower = (recipe.description || '').toLowerCase();
+            const matchesSearch = searchTerms.every(term => 
+              titleLower.includes(term) || descLower.includes(term)
+            );
+            if (!matchesSearch) return false;
+          }
+          if (selectedTime && recipe.total_time && recipe.total_time > selectedTime) {
+            return false;
+          }
+          if (slotMealType && !recipe.tags.some(t => t.tag_type === 'meal' && t.tag_value === slotMealType)) {
+            return false;
+          }
+          if (selectedCuisine && recipe.cuisine?.toLowerCase() !== selectedCuisine.toLowerCase()) {
+            return false;
+          }
+          return true;
+        });
+      }
+      
+      // Show only recipes that are in the selected slot's pool
+      return allRecipes.filter(recipe => poolRecipeIds.includes(recipe.id));
+    }
+    
     let recipes = allRecipes.filter(recipe => {
       if (!recipe.isUserRecipe && (!recipe.image_url || recipe.image_url.includes('undefined') || (!recipe.image_url.startsWith('http') && !recipe.image_url.startsWith('/')))) {
         return false;
@@ -274,12 +310,8 @@ export default function Discover() {
         return false;
       }
       
-      // In plan mode, use currentSlotFilter for meal type
-      const effectiveMealType = isPlanMode && currentSlotFilter 
-        ? getMealTypeForSlot(currentSlotFilter)
-        : selectedMealType;
-      
-      if (effectiveMealType && !recipe.tags.some(t => t.tag_type === 'meal' && t.tag_value === effectiveMealType)) {
+      // In plan mode without a slot filter, don't filter by meal type
+      if (!isPlanMode && selectedMealType && !recipe.tags.some(t => t.tag_type === 'meal' && t.tag_value === selectedMealType)) {
         return false;
       }
       if (selectedCuisine && recipe.cuisine?.toLowerCase() !== selectedCuisine.toLowerCase()) {
@@ -322,7 +354,7 @@ export default function Discover() {
     });
 
     return recipes;
-  }, [allRecipes, searchQuery, selectedTime, selectedMealType, selectedCuisine, blockedTerms, ageBlockedTerms, userAgeGroup, healthPreferences, isPlanMode, currentSlotFilter]);
+  }, [allRecipes, searchQuery, selectedTime, selectedMealType, selectedCuisine, blockedTerms, ageBlockedTerms, userAgeGroup, healthPreferences, isPlanMode, currentSlotFilter, recipePoolsBySlot]);
 
   // Helper to get meal type from slot ID
   function getMealTypeForSlot(slotId: MealSlotId): string {
@@ -345,8 +377,15 @@ export default function Discover() {
     return selectedMeals.some(r => r.id === recipeId);
   };
 
+  const { removeFromPool } = useMealPlanStore();
+  
   const handleSelect = (recipe: any) => {
     if (isPlanMode) {
+      // If viewing a specific slot and recipe is in that slot's pool, remove it
+      if (currentSlotFilter && isInPool(recipe.id)) {
+        removeFromPool(currentSlotFilter, recipe.id);
+        return;
+      }
       // Open add to plan modal
       setAddToPlanModal({
         open: true,
@@ -532,16 +571,20 @@ export default function Discover() {
         {/* Recipe Grid */}
         {!isLoadingGlobal && (
           <div className="grid grid-cols-2 gap-3">
-            {filteredRecipes.map((recipe) => (
-              <RecipeCard
-                key={recipe.id}
-                recipe={recipe as any}
-                isSelected={isSelected(recipe.id)}
-                onSelect={() => handleSelect(recipe)}
-                onClick={() => navigate(`/recipe/${recipe.id}`)}
-                compact
-              />
-            ))}
+            {filteredRecipes.map((recipe) => {
+              const inCurrentPool = isPlanMode && currentSlotFilter && (recipePoolsBySlot[currentSlotFilter] || []).includes(recipe.id);
+              return (
+                <RecipeCard
+                  key={recipe.id}
+                  recipe={recipe as any}
+                  isSelected={isSelected(recipe.id)}
+                  isRemovable={inCurrentPool}
+                  onSelect={() => handleSelect(recipe)}
+                  onClick={() => navigate(`/recipe/${recipe.id}`)}
+                  compact
+                />
+              );
+            })}
           </div>
         )}
 
