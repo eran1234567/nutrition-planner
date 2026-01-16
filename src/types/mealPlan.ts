@@ -120,4 +120,5 @@ export function getDefaultPercentsForSlots(slotIds: MealSlotId[]): Record<MealSl
   return result as Record<MealSlotId, number>;
 }
 
-export const SERVING_MULTIPLIERS = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0] as const;
+// Finer-grained multipliers for more precise macro matching
+export const SERVING_MULTIPLIERS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0] as const;
