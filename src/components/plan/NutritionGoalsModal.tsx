@@ -378,18 +378,18 @@ export function NutritionGoalsModal({ open, onOpenChange, onSave }: NutritionGoa
         )}
 
         {step === 'meals' && (
-          <div className="space-y-6 pt-4">
+          <div className="space-y-3 pt-2">
             <div>
-              <p className="text-sm font-medium text-foreground mb-2">
+              <p className="text-sm font-medium text-foreground mb-1.5">
                 {t('onboarding.meals.planDuration', 'Plan Duration')}
               </p>
-              <div className="flex gap-3">
+              <div className="flex gap-2">
                 {PLAN_DURATION_OPTIONS.map((option) => (
                   <button
                     key={option.value}
                     type="button"
                     onClick={() => setPlanDays(option.value)}
-                    className={`flex-1 p-3 rounded-xl border-2 transition-all ${
+                    className={`flex-1 py-2 px-3 rounded-lg border-2 transition-all text-sm ${
                       planDays === option.value
                         ? 'border-primary bg-primary/10'
                         : 'border-border bg-card hover:border-muted-foreground/50'
@@ -402,49 +402,49 @@ export function NutritionGoalsModal({ open, onOpenChange, onSave }: NutritionGoa
             </div>
 
             <div>
-              <p className="text-sm font-medium text-foreground mb-2">
+              <p className="text-sm font-medium text-foreground mb-1">
                 {t('onboarding.meals.title', 'Meals Per Day')}
               </p>
-              <p className="text-sm text-muted-foreground mb-3">
+              <p className="text-xs text-muted-foreground mb-2">
                 {t('onboarding.meals.hint', 'Select which meals you want to plan for each day.')}
               </p>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {MEAL_OPTIONS.map((meal) => (
                   <button
                     key={meal.id}
                     type="button"
                     onClick={() => toggleMeal(meal.id)}
-                    className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
+                    className={`w-full flex items-center justify-between py-2.5 px-3 rounded-lg border-2 transition-all ${
                       selectedMeals.includes(meal.id)
                         ? 'border-primary bg-primary/10'
                         : 'border-border bg-card hover:border-muted-foreground/50'
                     }`}
                   >
-                    <span className="font-medium text-foreground">{meal.label}</span>
+                    <span className="text-sm font-medium text-foreground">{meal.label}</span>
                     {selectedMeals.includes(meal.id) && (
-                      <Check className="w-5 h-5 text-primary" />
+                      <Check className="w-4 h-4 text-primary" />
                     )}
                   </button>
                 ))}
               </div>
             </div>
             
-            <div className="flex gap-3">
+            <div className="flex gap-2 pt-1">
               <Button 
                 variant="outline"
-                className="flex-1"
+                className="flex-1 h-9"
                 onClick={() => setStep('macros')}
               >
-                <ArrowLeft className="w-4 h-4 mr-2" />
+                <ArrowLeft className="w-4 h-4 mr-1" />
                 {t('common.back', 'Back')}
               </Button>
               <Button 
-                className="flex-1" 
+                className="flex-1 h-9" 
                 onClick={() => setStep('distribution')}
                 disabled={selectedMeals.length === 0}
               >
                 {t('common.next', 'Next')}
-                <ArrowRight className="w-4 h-4 ml-2" />
+                <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
             </div>
           </div>
