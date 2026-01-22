@@ -69,11 +69,11 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
   const [customCalories, setCustomCalories] = useState('');
   const [customDeficitCalories, setCustomDeficitCalories] = useState('');
   
-  // Macro distribution sliders
+  // Macro distribution sliders - all adjustable
   const [proteinPerLb, setProteinPerLb] = useState(1.0); // g per lb LBM
-  const [carbsPercent, setCarbsPercent] = useState(50); // % of calories (adjustable)
-  // Fat is calculated as remaining: 100 - proteinPercent - carbsPercent
-
+  const [carbsPercent, setCarbsPercent] = useState(50); // % of calories
+  const [fatPercent, setFatPercent] = useState(30); // % of calories
+  const [lastAdjusted, setLastAdjusted] = useState<'carbs' | 'fat'>('fat'); // tracks which to auto-calc
   const [bmr, setBmr] = useState(0);
   const [tdee, setTdee] = useState(0);
   const [bodyFatCalculated, setBodyFatCalculated] = useState(0);
@@ -187,12 +187,18 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     if (dietType === 'keto') {
       setProteinPerLb(0.8);
       setCarbsPercent(5); // Very low carbs for keto
+      setFatPercent(70);
+      setLastAdjusted('carbs'); // In keto, fat is usually manually set
     } else if (dietType === 'paleo' || dietType === 'vegan' || dietType === 'none') {
       setProteinPerLb(1.2);
       setCarbsPercent(50);
+      setFatPercent(25);
+      setLastAdjusted('fat');
     } else {
       setProteinPerLb(1.0);
       setCarbsPercent(50);
+      setFatPercent(25);
+      setLastAdjusted('fat');
     }
   }, [dietType]);
 
@@ -209,16 +215,54 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     if (dietType === 'keto') {
       return { min: 2, max: 10, step: 1 }; // Very low for keto
     }
-    return { min: 30, max: 65, step: 1 };
+    return { min: 10, max: 65, step: 1 };
   };
 
-  // Calculate fat percent as remaining
-  const getFatPercentRemaining = () => {
+  // Get fat slider range based on diet type
+  const getFatRange = () => {
+    if (dietType === 'keto') {
+      return { min: 60, max: 80, step: 1 }; // High fat for keto
+    }
+    return { min: 15, max: 50, step: 1 };
+  };
+
+  // Calculate protein percent from current settings
+  const getProteinPercent = () => {
     const targetCalories = getTargetCalories();
     const proteinGrams = Math.round(leanBodyMass * proteinPerLb);
     const proteinCalories = proteinGrams * 4;
-    const proteinPercent = Math.round((proteinCalories / targetCalories) * 100);
-    return Math.max(0, 100 - proteinPercent - carbsPercent);
+    return Math.round((proteinCalories / targetCalories) * 100);
+  };
+
+  // Get the auto-calculated value (whichever was NOT last adjusted)
+  const getAutoCarbsPercent = () => {
+    const proteinPct = getProteinPercent();
+    return Math.max(0, 100 - proteinPct - fatPercent);
+  };
+
+  const getAutoFatPercent = () => {
+    const proteinPct = getProteinPercent();
+    return Math.max(0, 100 - proteinPct - carbsPercent);
+  };
+
+  // Handle carbs change - auto-adjust fat
+  const handleCarbsChange = (val: number) => {
+    setCarbsPercent(val);
+    setLastAdjusted('carbs');
+    // Auto-calculate fat
+    const proteinPct = getProteinPercent();
+    const newFat = Math.max(0, 100 - proteinPct - val);
+    setFatPercent(newFat);
+  };
+
+  // Handle fat change - auto-adjust carbs
+  const handleFatChange = (val: number) => {
+    setFatPercent(val);
+    setLastAdjusted('fat');
+    // Auto-calculate carbs
+    const proteinPct = getProteinPercent();
+    const newCarbs = Math.max(0, 100 - proteinPct - val);
+    setCarbsPercent(newCarbs);
   };
 
   // Calculate target calories based on deficit settings
@@ -259,55 +303,51 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     const proteinGrams = Math.round(leanBodyMass * proteinPerLb);
     const proteinCalories = proteinGrams * 4;
     
+    // Use the current values (one is manually set, one is auto-calculated)
+    const effectiveCarbsPct = lastAdjusted === 'carbs' ? carbsPercent : getAutoCarbsPercent();
+    const effectiveFatPct = lastAdjusted === 'fat' ? fatPercent : getAutoFatPercent();
+    
     // Calculate carbs from percentage
-    const carbCalories = Math.round(targetCalories * (carbsPercent / 100));
+    const carbCalories = Math.round(targetCalories * (effectiveCarbsPct / 100));
     const carbGrams = Math.round(carbCalories / 4);
     
-    // Fat is remaining calories
-    const remainingCalories = targetCalories - proteinCalories - carbCalories;
-    const fatGrams = Math.round(Math.max(0, remainingCalories) / 9);
+    // Calculate fat from percentage
+    const fatCalories = Math.round(targetCalories * (effectiveFatPct / 100));
+    const fatGrams = Math.round(fatCalories / 9);
     
     return {
       calories: targetCalories,
       protein: proteinGrams,
       carbs: Math.max(0, carbGrams),
-      fat: fatGrams,
+      fat: Math.max(0, fatGrams),
     };
   };
 
   // Check if macros are valid (don't exceed calories)
   const getMacroWarning = (): { title: string; detail: string } | null => {
     const targetCalories = getTargetCalories();
+    const proteinPct = getProteinPercent();
+    const effectiveCarbsPct = lastAdjusted === 'carbs' ? carbsPercent : getAutoCarbsPercent();
+    const effectiveFatPct = lastAdjusted === 'fat' ? fatPercent : getAutoFatPercent();
     
-    // Calculate protein calories and percentage
-    const proteinGrams = Math.round(leanBodyMass * proteinPerLb);
-    const proteinCalories = proteinGrams * 4;
-    const proteinPercent = Math.round((proteinCalories / targetCalories) * 100);
+    const totalPercent = proteinPct + effectiveCarbsPct + effectiveFatPct;
     
-    // Calculate carbs calories
-    const carbCalories = Math.round(targetCalories * (carbsPercent / 100));
-    
-    // Check if protein + carbs exceed target calories
-    const totalUsedCalories = proteinCalories + carbCalories;
-    const totalPercent = proteinPercent + carbsPercent;
-    const remainingPercent = 100 - totalPercent;
-    
-    if (remainingPercent < 5) {
+    if (effectiveFatPct < 10) {
       return {
         title: 'Fat too low',
-        detail: `Protein (${proteinPercent}%) + Carbs (${carbsPercent}%) = ${totalPercent}% of calories. Fat needs at least 5%. Reduce carbs.`
+        detail: `Fat is only ${effectiveFatPct}%. Minimum 10% recommended for health. Reduce carbs or protein.`
       };
     }
     
-    if (remainingPercent < 0 || totalPercent > 100) {
+    if (effectiveCarbsPct < 5) {
       return {
-        title: 'Macro settings exceed calorie target',
-        detail: `Protein (${proteinPercent}%) + Carbs (${carbsPercent}%) = ${totalPercent}%. Reduce carbs or protein.`
+        title: 'Carbs very low',
+        detail: `Carbs are only ${effectiveCarbsPct}%. This is fine for keto but review if unintentional.`
       };
     }
     
     // For keto, check if carbs are too high
-    const carbGrams = Math.round((targetCalories * (carbsPercent / 100)) / 4);
+    const carbGrams = Math.round((targetCalories * (effectiveCarbsPct / 100)) / 4);
     if (dietType === 'keto' && carbGrams > 50) {
       return {
         title: 'Carbs exceed keto limit',
@@ -355,8 +395,10 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
 
   const proteinRange = getProteinRange();
   const carbsRange = getCarbsRange();
+  const fatRange = getFatRange();
   const currentMacros = step === 'distribution' ? calculateFinalMacros() : calculatedMacros;
-  const fatPercentCalc = getFatPercentRemaining();
+  const effectiveCarbsPct = lastAdjusted === 'carbs' ? carbsPercent : getAutoCarbsPercent();
+  const effectiveFatPct = lastAdjusted === 'fat' ? fatPercent : getAutoFatPercent();
   const warning = step === 'distribution' ? getMacroWarning() : null;
 
   // Get step title
@@ -817,12 +859,15 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
               {/* Carbs Slider - Adjustable */}
               <div className="mb-2.5">
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs font-medium">Carbs: {carbsPercent}% of calories</span>
+                  <span className="text-xs font-medium">
+                    Carbs: {effectiveCarbsPct}% of calories
+                    {lastAdjusted === 'fat' && <span className="text-muted-foreground ml-1">(auto)</span>}
+                  </span>
                   <span className="text-xs text-muted-foreground">{currentMacros.carbs}g</span>
                 </div>
                 <Slider
-                  value={[carbsPercent]}
-                  onValueChange={([val]) => setCarbsPercent(val)}
+                  value={[effectiveCarbsPct]}
+                  onValueChange={([val]) => handleCarbsChange(val)}
                   min={carbsRange.min}
                   max={carbsRange.max}
                   step={carbsRange.step}
@@ -830,21 +875,23 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                 />
               </div>
 
-              {/* Fat Display Bar - Auto-calculated */}
+              {/* Fat Slider - Adjustable */}
               <div>
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs font-medium">Fat: {fatPercentCalc}% (auto)</span>
+                  <span className="text-xs font-medium">
+                    Fat: {effectiveFatPct}% of calories
+                    {lastAdjusted === 'carbs' && <span className="text-muted-foreground ml-1">(auto)</span>}
+                  </span>
                   <span className="text-xs text-muted-foreground">{currentMacros.fat}g</span>
                 </div>
-                <div className="h-2 rounded-full bg-muted overflow-hidden">
-                  <div 
-                    className="h-full rounded-full transition-all duration-200"
-                    style={{ 
-                      width: `${Math.max(0, Math.min(100, fatPercentCalc))}%`,
-                      backgroundColor: '#EC4899'
-                    }}
-                  />
-                </div>
+                <Slider
+                  value={[effectiveFatPct]}
+                  onValueChange={([val]) => handleFatChange(val)}
+                  min={fatRange.min}
+                  max={fatRange.max}
+                  step={fatRange.step}
+                  className="w-full"
+                />
               </div>
 
               {/* Warning - Compact */}
