@@ -105,7 +105,7 @@ export function MacroGapIndicator({
           Macro Balance
         </span>
         <span className="text-xs text-muted-foreground">
-          Use "Optimize" to auto-adjust
+          Use "Regenerate" to rebalance
         </span>
       </div>
       

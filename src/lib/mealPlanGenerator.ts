@@ -252,27 +252,190 @@ export function optimizeDayServings(
   };
 }
 
-function selectRecipeFromPool(
-  pool: string[],
-  recipes: Map<string, GlobalRecipe>,
-  dayIndex: number,
-  slotIndex: number,
-  recentlyUsed: Map<string, number[]> // recipeId -> [dayIndices where used for this slot]
-): string | null {
-  if (pool.length === 0) return null;
+/**
+ * Score how well a set of recipes with optimized multipliers hits daily targets.
+ * Used to find the best combination of recipes across all slots.
+ */
+function scoreRecipeCombination(
+  recipeIds: string[],
+  recipeMap: Map<string, GlobalRecipe>,
+  dailyTargets: DailyTargets
+): { score: number; slots: { recipeId: string; multiplier: number; macros: RecipeMacros }[] } {
+  const slots: { recipeId: string; multiplier: number; macros: RecipeMacros }[] = [];
   
-  // Filter out recipes used in the same slot within last 2 days
-  const availableRecipes = pool.filter(recipeId => {
-    const usedDays = recentlyUsed.get(recipeId) || [];
-    return !usedDays.some(d => Math.abs(d - dayIndex) <= 2);
+  for (const recipeId of recipeIds) {
+    const recipe = recipeMap.get(recipeId);
+    const macros = recipe ? getRecipeMacros(recipe) : null;
+    
+    if (!macros) {
+      slots.push({ recipeId, multiplier: 1, macros: { calories: 0, protein: 0, carbs: 0, fat: 0 } });
+      continue;
+    }
+    
+    slots.push({ recipeId, multiplier: 1, macros });
+  }
+  
+  // Now optimize multipliers for this combination
+  let currentTotals = slots.reduce(
+    (acc, s) => ({
+      calories: acc.calories + s.macros.calories,
+      protein: acc.protein + s.macros.protein,
+      carbs: acc.carbs + s.macros.carbs,
+      fat: acc.fat + s.macros.fat,
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  );
+  
+  // Iterative optimization for this combination
+  for (let iter = 0; iter < 30; iter++) {
+    let improved = false;
+    
+    for (let i = 0; i < slots.length; i++) {
+      const slot = slots[i];
+      const recipe = recipeMap.get(slot.recipeId);
+      const baseMacros = recipe ? getRecipeMacros(recipe) : null;
+      if (!baseMacros || baseMacros.calories === 0) continue;
+      
+      let bestMult = slot.multiplier;
+      let bestScore = calculateFitScore(currentTotals, dailyTargets);
+      
+      for (const mult of MULTIPLIERS) {
+        if (Math.abs(mult - slot.multiplier) < 0.01) continue;
+        
+        const newMacros = calculateMacrosWithMultiplier(baseMacros, mult);
+        const testTotals = {
+          calories: currentTotals.calories - slot.macros.calories + newMacros.calories,
+          protein: currentTotals.protein - slot.macros.protein + newMacros.protein,
+          carbs: currentTotals.carbs - slot.macros.carbs + newMacros.carbs,
+          fat: currentTotals.fat - slot.macros.fat + newMacros.fat,
+        };
+        
+        const score = calculateFitScore(testTotals, dailyTargets);
+        if (score < bestScore - 0.001) {
+          bestScore = score;
+          bestMult = mult;
+        }
+      }
+      
+      if (bestMult !== slot.multiplier) {
+        const baseMacrosAgain = getRecipeMacros(recipeMap.get(slot.recipeId)!)!;
+        const newMacros = calculateMacrosWithMultiplier(baseMacrosAgain, bestMult);
+        
+        currentTotals = {
+          calories: currentTotals.calories - slot.macros.calories + newMacros.calories,
+          protein: currentTotals.protein - slot.macros.protein + newMacros.protein,
+          carbs: currentTotals.carbs - slot.macros.carbs + newMacros.carbs,
+          fat: currentTotals.fat - slot.macros.fat + newMacros.fat,
+        };
+        
+        slots[i] = { ...slot, multiplier: bestMult, macros: newMacros };
+        improved = true;
+      }
+    }
+    
+    if (!improved) break;
+  }
+  
+  const finalScore = calculateFitScore(currentTotals, dailyTargets);
+  return { score: finalScore, slots };
+}
+
+/**
+ * Select the best recipes from pools that together hit daily targets.
+ * Uses a greedy approach with look-ahead optimization.
+ */
+function selectBestRecipesForDay(
+  pools: { slotId: string; recipes: string[] }[],
+  recipeMap: Map<string, GlobalRecipe>,
+  dailyTargets: DailyTargets,
+  dayIndex: number,
+  recentlyUsedBySlot: Map<string, Map<string, number[]>>
+): { slotId: string; recipeId: string; multiplier: number }[] {
+  // For each slot, get available recipes (not used within 2 days)
+  const slotCandidates = pools.map(({ slotId, recipes }) => {
+    const usedMap = recentlyUsedBySlot.get(slotId) || new Map();
+    const available = recipes.filter(recipeId => {
+      const usedDays = usedMap.get(recipeId) || [];
+      return !usedDays.some(d => Math.abs(d - dayIndex) <= 2);
+    });
+    return {
+      slotId,
+      candidates: available.length > 0 ? available : recipes,
+    };
   });
   
-  // If all recipes are recently used, allow any
-  const candidates = availableRecipes.length > 0 ? availableRecipes : pool;
+  // If small enough, try all combinations
+  const totalCombinations = slotCandidates.reduce((acc, s) => acc * Math.max(s.candidates.length, 1), 1);
   
-  // Rotate based on day and slot index for variety
-  const rotationIndex = (dayIndex + slotIndex) % candidates.length;
-  return candidates[rotationIndex];
+  if (totalCombinations <= 100 && totalCombinations > 0) {
+    // Enumerate all combinations
+    let bestCombo: { slotId: string; recipeId: string; multiplier: number }[] = [];
+    let bestScore = Infinity;
+    
+    const enumerate = (index: number, current: string[]): void => {
+      if (index === slotCandidates.length) {
+        const result = scoreRecipeCombination(current, recipeMap, dailyTargets);
+        if (result.score < bestScore) {
+          bestScore = result.score;
+          bestCombo = slotCandidates.map((s, i) => ({
+            slotId: s.slotId,
+            recipeId: current[i],
+            multiplier: result.slots[i].multiplier,
+          }));
+        }
+        return;
+      }
+      
+      const slot = slotCandidates[index];
+      if (slot.candidates.length === 0) {
+        enumerate(index + 1, [...current, '']);
+        return;
+      }
+      
+      for (const recipeId of slot.candidates) {
+        enumerate(index + 1, [...current, recipeId]);
+      }
+    };
+    
+    enumerate(0, []);
+    return bestCombo;
+  }
+  
+  // For large pools, use greedy approach with scoring
+  const result: { slotId: string; recipeId: string; multiplier: number }[] = [];
+  const selectedIds: string[] = [];
+  
+  for (const { slotId, candidates } of slotCandidates) {
+    if (candidates.length === 0) {
+      result.push({ slotId, recipeId: '', multiplier: 1 });
+      selectedIds.push('');
+      continue;
+    }
+    
+    let bestRecipe = candidates[0];
+    let bestScore = Infinity;
+    let bestMult = 1;
+    
+    for (const recipeId of candidates) {
+      const testIds = [...selectedIds, recipeId];
+      const scored = scoreRecipeCombination(testIds, recipeMap, dailyTargets);
+      if (scored.score < bestScore) {
+        bestScore = scored.score;
+        bestRecipe = recipeId;
+        bestMult = scored.slots[scored.slots.length - 1].multiplier;
+      }
+    }
+    
+    result.push({ slotId, recipeId: bestRecipe, multiplier: bestMult });
+    selectedIds.push(bestRecipe);
+  }
+  
+  // Final optimization pass on the selected combination
+  const finalScored = scoreRecipeCombination(selectedIds, recipeMap, dailyTargets);
+  return result.map((r, i) => ({
+    ...r,
+    multiplier: finalScored.slots[i]?.multiplier ?? r.multiplier,
+  }));
 }
 
 export interface GeneratePlanInput {
@@ -362,92 +525,136 @@ export function generateMealPlan(input: GeneratePlanInput): GeneratedPlan {
   
   for (let dayIndex = 0; dayIndex < numberOfDays; dayIndex++) {
     const dayLocks = lockedSlots[dayIndex] || [];
-    const slots: GeneratedSlot[] = [];
     
-    for (let slotIndex = 0; slotIndex < selectedMealSlots.length; slotIndex++) {
-      const slot = selectedMealSlots[slotIndex];
+    // Separate locked slots (keep from existing) vs unlocked slots (need to select)
+    const lockedSlotResults: GeneratedSlot[] = [];
+    const unlockedSlotInfos: { slotId: string; recipes: string[] }[] = [];
+    const exactSlotResults: GeneratedSlot[] = [];
+    
+    for (const slot of selectedMealSlots) {
       const isLocked = dayLocks.includes(slot.id);
       
       // If locked and we have existing plan, keep the existing assignment
       if (isLocked && existingPlan) {
         const existingSlot = existingPlan.days[dayIndex]?.slots.find(s => s.slotId === slot.id);
         if (existingSlot) {
-          slots.push(existingSlot);
+          lockedSlotResults.push(existingSlot);
           
           // Track as used
           const usedMap = recentlyUsedBySlot.get(slot.id)!;
           const usedDays = usedMap.get(existingSlot.recipeId) || [];
           usedMap.set(existingSlot.recipeId, [...usedDays, dayIndex]);
-          
           continue;
         }
       }
       
-      // Check for exact assignment first
+      // Check for exact assignment
       const exactAssignment = exactAssignments[dayIndex]?.[slot.id];
-      let recipeId: string | null = exactAssignment?.recipeId ?? null;
-      let servingMultiplier = exactAssignment?.servingMultiplier ?? 1.0;
-      
-      // If no exact assignment, select from pool
-      if (!recipeId) {
-        const pool = recipePoolsBySlot[slot.id] || [];
+      if (exactAssignment) {
+        const recipe = recipeMap.get(exactAssignment.recipeId);
+        const recipeMacros = recipe ? getRecipeMacros(recipe) : null;
+        
+        exactSlotResults.push({
+          slotId: slot.id,
+          recipeId: exactAssignment.recipeId,
+          servingMultiplier: exactAssignment.servingMultiplier,
+          isLocked,
+          slotTotals: recipeMacros 
+            ? calculateMacrosWithMultiplier(recipeMacros, exactAssignment.servingMultiplier)
+            : { calories: 0, protein: 0, carbs: 0, fat: 0 },
+        });
+        
+        // Track as used
         const usedMap = recentlyUsedBySlot.get(slot.id)!;
-        recipeId = selectRecipeFromPool(pool, recipeMap, dayIndex, slotIndex, usedMap);
+        const usedDays = usedMap.get(exactAssignment.recipeId) || [];
+        usedMap.set(exactAssignment.recipeId, [...usedDays, dayIndex]);
+        continue;
       }
       
-      if (!recipeId) {
-        // No recipe available for this slot
-        slots.push({
+      // Need to select from pool
+      const pool = recipePoolsBySlot[slot.id] || [];
+      if (pool.length > 0) {
+        unlockedSlotInfos.push({ slotId: slot.id, recipes: pool });
+      } else {
+        // No recipes for this slot
+        exactSlotResults.push({
           slotId: slot.id,
           recipeId: '',
           servingMultiplier: 1.0,
           isLocked: false,
           slotTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
         });
-        continue;
       }
-      
-      const recipe = recipeMap.get(recipeId);
-      const recipeMacros = recipe ? getRecipeMacros(recipe) : null;
-      
-      if (!recipeMacros) {
-        slots.push({
-          slotId: slot.id,
-          recipeId,
-          servingMultiplier: 1.0,
-          isLocked,
-          slotTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
-        });
-        continue;
-      }
-      
-      // Calculate optimal multiplier if not exact assignment
-      const slotTargets = calculateSlotTargets(dailyTargets, slot.percentOfDay);
-      
-      if (!exactAssignment) {
-        const bestFit = findBestMultiplier(recipeMacros, slotTargets);
-        servingMultiplier = bestFit.multiplier;
-      }
-      
-      const slotTotals = calculateMacrosWithMultiplier(recipeMacros, servingMultiplier);
-      
-      slots.push({
-        slotId: slot.id,
-        recipeId,
-        servingMultiplier,
-        isLocked,
-        slotTotals,
-      });
-      
-      // Track as used
-      const usedMap = recentlyUsedBySlot.get(slot.id)!;
-      const usedDays = usedMap.get(recipeId) || [];
-      usedMap.set(recipeId, [...usedDays, dayIndex]);
     }
     
-    // Optimize multipliers to hit daily targets exactly
+    // Calculate remaining targets after locked/exact slots
+    const fixedTotals = [...lockedSlotResults, ...exactSlotResults].reduce(
+      (acc, slot) => ({
+        calories: acc.calories + slot.slotTotals.calories,
+        protein: acc.protein + slot.slotTotals.protein,
+        carbs: acc.carbs + slot.slotTotals.carbs,
+        fat: acc.fat + slot.slotTotals.fat,
+      }),
+      { calories: 0, protein: 0, carbs: 0, fat: 0 }
+    );
+    
+    const remainingTargets: DailyTargets = {
+      calories: Math.max(0, dailyTargets.calories - fixedTotals.calories),
+      protein: Math.max(0, dailyTargets.protein - fixedTotals.protein),
+      carbs: Math.max(0, dailyTargets.carbs - fixedTotals.carbs),
+      fat: Math.max(0, dailyTargets.fat - fixedTotals.fat),
+    };
+    
+    // Select best recipes for unlocked slots using holistic optimization
+    let selectedSlots: GeneratedSlot[] = [];
+    
+    if (unlockedSlotInfos.length > 0) {
+      const bestSelections = selectBestRecipesForDay(
+        unlockedSlotInfos,
+        recipeMap,
+        remainingTargets,
+        dayIndex,
+        recentlyUsedBySlot
+      );
+      
+      selectedSlots = bestSelections.map(sel => {
+        const recipe = recipeMap.get(sel.recipeId);
+        const recipeMacros = recipe ? getRecipeMacros(recipe) : null;
+        
+        // Track as used
+        if (sel.recipeId) {
+          const usedMap = recentlyUsedBySlot.get(sel.slotId)!;
+          const usedDays = usedMap.get(sel.recipeId) || [];
+          usedMap.set(sel.recipeId, [...usedDays, dayIndex]);
+        }
+        
+        return {
+          slotId: sel.slotId as MealSlotId,
+          recipeId: sel.recipeId,
+          servingMultiplier: sel.multiplier,
+          isLocked: false,
+          slotTotals: recipeMacros 
+            ? calculateMacrosWithMultiplier(recipeMacros, sel.multiplier)
+            : { calories: 0, protein: 0, carbs: 0, fat: 0 },
+        };
+      });
+    }
+    
+    // Combine all slots in the right order
+    const allSlotIds = selectedMealSlots.map(s => s.id);
+    const slotResultMap = new Map<string, GeneratedSlot>();
+    
+    [...lockedSlotResults, ...exactSlotResults, ...selectedSlots].forEach(slot => {
+      slotResultMap.set(slot.slotId, slot);
+    });
+    
+    const orderedSlots = allSlotIds
+      .map(id => slotResultMap.get(id))
+      .filter((s): s is GeneratedSlot => s !== undefined);
+    
+    // Final optimization pass to fine-tune multipliers
     const optimizedSlots = optimizeDayMultipliers(
-      slots, 
+      orderedSlots, 
       recipeMap, 
       dailyTargets, 
       dayLocks
