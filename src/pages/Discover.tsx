@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { Search, Clock, Sparkles, BookOpen, ChefHat, Baby, Plus, Check, Target } from 'lucide-react';
+import { Search, Clock, Sparkles, BookOpen, ChefHat, Baby, Plus, Check, Target, UtensilsCrossed, AlertTriangle, HeartPulse, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -12,6 +12,8 @@ import { Chip } from '@/components/ui/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PlanModeHeader } from '@/components/plan/PlanModeHeader';
 import { AddToPlanModal } from '@/components/plan/AddToPlanModal';
+import { FilterDropdown } from '@/components/discover/FilterDropdown';
+import { MultiSelectDropdown } from '@/components/discover/MultiSelectDropdown';
 import { useGlobalRecipes } from '@/hooks/useGlobalRecipes';
 import { useAppStore } from '@/stores/appStore';
 import { useMealPlanStore } from '@/stores/mealPlanStore';
@@ -55,16 +57,70 @@ const ageRestrictedTerms: Record<AgeGroup, string[]> = {
   adult: [],
 };
 
-const timeFilters = [
-  { label: '< 15 min', max: 15 },
-  { label: '< 30 min', max: 30 },
-  { label: '< 45 min', max: 45 },
-  { label: '< 60 min', max: 60 },
+const timeFilterOptions = [
+  { value: '15', label: '< 15 min' },
+  { value: '30', label: '< 30 min' },
+  { value: '45', label: '< 45 min' },
+  { value: '60', label: '< 60 min' },
 ];
 
-const mealFilters = ['breakfast', 'lunch', 'dinner', 'snack'];
+const mealFilterOptions = [
+  { value: 'breakfast', label: 'Breakfast' },
+  { value: 'lunch', label: 'Lunch' },
+  { value: 'dinner', label: 'Dinner' },
+  { value: 'snack', label: 'Snack' },
+];
 
-const cuisineFilters = ['American', 'Italian', 'Mexican', 'Asian', 'Mediterranean', 'Indian', 'Japanese', 'Thai', 'French', 'Greek', 'Brazilian'];
+const cuisineFilterOptions = [
+  { value: 'American', label: 'American' },
+  { value: 'Italian', label: 'Italian' },
+  { value: 'Mexican', label: 'Mexican' },
+  { value: 'Asian', label: 'Asian' },
+  { value: 'Mediterranean', label: 'Mediterranean' },
+  { value: 'Indian', label: 'Indian' },
+  { value: 'Japanese', label: 'Japanese' },
+  { value: 'Thai', label: 'Thai' },
+  { value: 'French', label: 'French' },
+  { value: 'Greek', label: 'Greek' },
+  { value: 'Brazilian', label: 'Brazilian' },
+];
+
+const dietTypeOptions = [
+  { value: 'vegetarian', label: 'Vegetarian' },
+  { value: 'vegan', label: 'Vegan' },
+  { value: 'pescatarian', label: 'Pescatarian' },
+  { value: 'keto', label: 'Keto' },
+  { value: 'paleo', label: 'Paleo' },
+  { value: 'mediterranean', label: 'Mediterranean' },
+];
+
+const allergyOptions = [
+  { value: 'dairy', label: 'Dairy' },
+  { value: 'gluten', label: 'Gluten' },
+  { value: 'nuts', label: 'Nuts' },
+  { value: 'peanuts', label: 'Peanuts' },
+  { value: 'shellfish', label: 'Shellfish' },
+  { value: 'soy', label: 'Soy' },
+  { value: 'eggs', label: 'Eggs' },
+  { value: 'fish', label: 'Fish' },
+];
+
+const commonDislikes = [
+  { value: 'mushrooms', label: 'Mushrooms' },
+  { value: 'onions', label: 'Onions' },
+  { value: 'peppers', label: 'Peppers' },
+  { value: 'tomatoes', label: 'Tomatoes' },
+  { value: 'cilantro', label: 'Cilantro' },
+  { value: 'olives', label: 'Olives' },
+  { value: 'spicy', label: 'Spicy' },
+];
+
+const healthConsiderationOptions = [
+  { value: 'diabetes-friendly', label: 'Diabetes Friendly' },
+  { value: 'heart-healthy', label: 'Heart Healthy' },
+  { value: 'low-sodium', label: 'Low Sodium' },
+  { value: 'kidney-friendly', label: 'Kidney Friendly' },
+];
 
 interface UserRecipe {
   id: string;
@@ -143,13 +199,19 @@ export default function Discover() {
   }, [preferences, pendingOnboarding]);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTime, setSelectedTime] = useState<number | null>(null);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [selectedMealType, setSelectedMealType] = useState<string | null>(null);
   const [selectedCuisine, setSelectedCuisine] = useState<string | null>(null);
+  const [selectedDietType, setSelectedDietType] = useState<string | null>(null);
+  const [selectedAllergies, setSelectedAllergies] = useState<string[]>([]);
+  const [selectedDislikes, setSelectedDislikes] = useState<string[]>([]);
+  const [selectedHealthConsiderations, setSelectedHealthConsiderations] = useState<string[]>([]);
   const [userRecipes, setUserRecipes] = useState<UserRecipe[]>([]);
   const [recipeSource, setRecipeSource] = useState<'all' | 'my' | 'app'>('all');
 
-  const userDietType = (effectiveDietType || 'none').toLowerCase();
+  // Combine profile diet type with dropdown selection (dropdown takes priority)
+  const activeDietType = selectedDietType || (effectiveDietType === 'none' ? null : effectiveDietType);
+  const userDietType = (activeDietType || 'none').toLowerCase();
 
   const dietExclusions: Record<string, string[]> = {
     vegan: ['chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'lobster', 'crab', 'shellfish', 'seafood', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak', 'egg', 'eggs', 'dairy', 'milk', 'cheese', 'butter', 'cream', 'yogurt', 'honey'],
@@ -161,10 +223,14 @@ export default function Discover() {
     none: [],
   };
 
+  // Combine profile allergies/dislikes with dropdown selections
+  const allAllergies = [...new Set([...effectiveAllergies, ...selectedAllergies])];
+  const allDislikes = [...new Set([...effectiveDislikes, ...selectedDislikes])];
+
   const blockedTerms = useMemo(() => {
     const normalize = (v: string) => v.trim().toLowerCase();
     const dietExcluded = dietExclusions[userDietType] || [];
-    const base = [...dietExcluded, ...effectiveAllergies, ...effectiveDislikes].filter(Boolean).map(normalize).filter(Boolean);
+    const base = [...dietExcluded, ...allAllergies, ...allDislikes].filter(Boolean).map(normalize).filter(Boolean);
     const expanded = base.flatMap((term) => {
       const variants = new Set<string>();
       variants.add(term);
@@ -173,7 +239,18 @@ export default function Discover() {
       return Array.from(variants);
     });
     return Array.from(new Set(expanded)).filter(Boolean);
-  }, [effectiveAllergies, effectiveDislikes, userDietType]);
+  }, [allAllergies, allDislikes, userDietType]);
+
+  // Combine profile health preferences with dropdown selections
+  const activeHealthPreferences = useMemo(() => {
+    const basePrefs = [...healthPreferences];
+    selectedHealthConsiderations.forEach(pref => {
+      if (!basePrefs.includes(pref)) {
+        basePrefs.push(pref);
+      }
+    });
+    return basePrefs;
+  }, [healthPreferences, selectedHealthConsiderations]);
 
   const pendingAge = useMemo(() => {
     try {
@@ -275,7 +352,7 @@ export default function Discover() {
             );
             if (!matchesSearch) return false;
           }
-          if (selectedTime && recipe.total_time && recipe.total_time > selectedTime) {
+          if (selectedTime && recipe.total_time && recipe.total_time > parseInt(selectedTime)) {
             return false;
           }
           if (slotMealType && !recipe.tags.some(t => t.tag_type === 'meal' && t.tag_value === slotMealType)) {
@@ -306,7 +383,7 @@ export default function Discover() {
         );
         if (!matchesSearch) return false;
       }
-      if (selectedTime && recipe.total_time && recipe.total_time > selectedTime) {
+      if (selectedTime && recipe.total_time && recipe.total_time > parseInt(selectedTime)) {
         return false;
       }
       
@@ -335,9 +412,9 @@ export default function Discover() {
         if (matchesAgeRestricted(descLower)) return false;
         if (matchesAgeRestrictedIngredients()) return false;
       }
-      if (!recipe.isUserRecipe && healthPreferences.length > 0) {
+      if (!recipe.isUserRecipe && activeHealthPreferences.length > 0) {
         const recipeMedicalTags = (recipe.tags || []).filter(t => t.tag_type === 'medical').map(t => t.tag_value);
-        const hasAllHealthTags = healthPreferences.every(pref => recipeMedicalTags.includes(pref));
+        const hasAllHealthTags = activeHealthPreferences.every(pref => recipeMedicalTags.includes(pref));
         if (!hasAllHealthTags) return false;
       }
       return true;
@@ -354,7 +431,7 @@ export default function Discover() {
     });
 
     return recipes;
-  }, [allRecipes, searchQuery, selectedTime, selectedMealType, selectedCuisine, blockedTerms, ageBlockedTerms, userAgeGroup, healthPreferences, isPlanMode, currentSlotFilter, recipePoolsBySlot]);
+  }, [allRecipes, searchQuery, selectedTime, selectedMealType, selectedCuisine, blockedTerms, ageBlockedTerms, userAgeGroup, activeHealthPreferences, isPlanMode, currentSlotFilter, recipePoolsBySlot]);
 
   // Helper to get meal type from slot ID
   function getMealTypeForSlot(slotId: MealSlotId): string {
@@ -460,19 +537,19 @@ export default function Discover() {
           </div>
         )}
         
-        {healthPreferences.length > 0 && (
-          <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20 mb-4">
+        {activeHealthPreferences.length > 0 && (
+          <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 mb-4">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-green-600" />
+              <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
+                <HeartPulse className="w-4 h-4 text-primary" />
               </div>
               <div>
-                <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                <p className="text-sm font-medium text-primary">
                   {t('discover.healthMode', 'Health-Conscious Mode')}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {t('discover.healthFiltering', 'Prioritizing {{prefs}} recipes', { 
-                    prefs: healthPreferences.map(p => p.replace('-', ' ')).join(', ') 
+                    prefs: activeHealthPreferences.map(p => p.replace('-', ' ')).join(', ') 
                   })}
                 </p>
               </div>
@@ -507,50 +584,72 @@ export default function Discover() {
           </div>
         )}
 
-        {/* Meal type filters - hidden in plan mode when slot is selected */}
-        {(!isPlanMode || !currentSlotFilter) && (
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 mb-2">
-            {mealFilters.map(meal => (
-              <Chip
-                key={meal}
-                selected={selectedMealType === meal}
-                onClick={() => setSelectedMealType(selectedMealType === meal ? null : meal)}
-                variant="outline"
-              >
-                {t(`mealTypes.${meal}`)}
-              </Chip>
-            ))}
-          </div>
-        )}
-
-        {/* Time filters */}
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 mb-2">
-          {timeFilters.map(filter => (
-            <Chip
-              key={filter.max}
-              selected={selectedTime === filter.max}
-              onClick={() => setSelectedTime(selectedTime === filter.max ? null : filter.max)}
-              variant="outline"
-              icon={<Clock className="w-3 h-3" />}
-            >
-              {filter.label}
-            </Chip>
-          ))}
-        </div>
-
-        {/* Cuisine filters */}
+        {/* Filter Dropdowns - all in one row */}
         <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-4 mb-4">
-          {cuisineFilters.map(cuisine => (
-            <Chip
-              key={cuisine}
-              selected={selectedCuisine === cuisine}
-              onClick={() => setSelectedCuisine(selectedCuisine === cuisine ? null : cuisine)}
-              variant="outline"
-              icon={<ChefHat className="w-3 h-3" />}
-            >
-              {t(`cuisines.${cuisine.toLowerCase()}`, cuisine)}
-            </Chip>
-          ))}
+          {/* Meal Type - hidden in plan mode when slot is selected */}
+          {(!isPlanMode || !currentSlotFilter) && (
+            <FilterDropdown
+              label="Meal"
+              value={selectedMealType}
+              options={mealFilterOptions}
+              onChange={setSelectedMealType}
+              icon={<UtensilsCrossed className="w-3 h-3" />}
+            />
+          )}
+          
+          {/* Time */}
+          <FilterDropdown
+            label="Time"
+            value={selectedTime}
+            options={timeFilterOptions}
+            onChange={setSelectedTime}
+            icon={<Clock className="w-3 h-3" />}
+          />
+          
+          {/* Cuisine */}
+          <FilterDropdown
+            label="Cuisine"
+            value={selectedCuisine}
+            options={cuisineFilterOptions}
+            onChange={setSelectedCuisine}
+            icon={<ChefHat className="w-3 h-3" />}
+          />
+          
+          {/* Diet Type */}
+          <FilterDropdown
+            label="Diet Type"
+            value={selectedDietType}
+            options={dietTypeOptions}
+            onChange={setSelectedDietType}
+            icon={<Sparkles className="w-3 h-3" />}
+          />
+          
+          {/* Allergies */}
+          <MultiSelectDropdown
+            label="Allergies"
+            values={selectedAllergies}
+            options={allergyOptions}
+            onChange={setSelectedAllergies}
+            icon={<AlertTriangle className="w-3 h-3" />}
+          />
+          
+          {/* Dislikes */}
+          <MultiSelectDropdown
+            label="Dislikes"
+            values={selectedDislikes}
+            options={commonDislikes}
+            onChange={setSelectedDislikes}
+            icon={<X className="w-3 h-3" />}
+          />
+          
+          {/* Health Considerations */}
+          <MultiSelectDropdown
+            label="Health"
+            values={selectedHealthConsiderations}
+            options={healthConsiderationOptions}
+            onChange={setSelectedHealthConsiderations}
+            icon={<HeartPulse className="w-3 h-3" />}
+          />
         </div>
 
         {/* Loading skeletons */}
