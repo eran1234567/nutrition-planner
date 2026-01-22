@@ -243,9 +243,9 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
   // Get protein slider range based on diet type
   const getProteinRange = () => {
     if (dietType === 'keto') {
-      return { min: 0.6, max: 1.0, step: 0.1 };
+      return { min: 0.6, max: 1.5, step: 0.1 };
     }
-    return { min: 0.8, max: 1.4, step: 0.1 };
+    return { min: 0.8, max: 1.5, step: 0.1 };
   };
 
   // Get carbs slider range based on diet type
