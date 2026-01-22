@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { Calculator, ArrowLeft, Utensils, Flame } from 'lucide-react';
+import { Calculator, ArrowLeft, Utensils, Flame, Scale, TrendingUp, Zap, Activity, User, HelpCircle } from 'lucide-react';
 
 interface MacroCalculatorProps {
   open: boolean;
@@ -16,7 +16,7 @@ type Goal = 'lose' | 'maintain' | 'gain';
 type BodyFatMethod = 'direct' | 'navy';
 type DietType = 'none' | 'vegetarian' | 'vegan' | 'pescatarian' | 'keto' | 'paleo' | 'mediterranean';
 type DeficitType = 'standard' | 'custom_percent' | 'custom_calories';
-type Step = 'input' | 'dietary' | 'distribution' | 'result';
+type Step = 'input' | 'body-composition' | 'distribution' | 'dietary' | 'result';
 
 const activityMultipliers: Record<ActivityLevel, number> = {
   sedentary: 1.2,
@@ -72,8 +72,11 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
   const [proteinPerLb, setProteinPerLb] = useState(1.0); // g per lb LBM
   const [fatPercent, setFatPercent] = useState(25); // % of calories
 
+  const [bmr, setBmr] = useState(0);
   const [tdee, setTdee] = useState(0);
+  const [bodyFatCalculated, setBodyFatCalculated] = useState(0);
   const [leanBodyMass, setLeanBodyMass] = useState(0); // in lbs
+  const [fatMass, setFatMass] = useState(0); // in lbs
   
   const [calculatedMacros, setCalculatedMacros] = useState({
     calories: 0,
@@ -120,6 +123,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     const age = parseInt(formData.age);
     let weight = parseFloat(formData.weight);
     let height: number;
+    const weightLbs = formData.unit === 'imperial' ? parseFloat(formData.weight) : parseFloat(formData.weight) * 2.20462;
 
     if (formData.unit === 'imperial') {
       const ft = parseFloat(formData.heightFt) || 0;
@@ -137,35 +141,43 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
       bodyFat = calculateNavyBodyFat();
     }
 
-    let bmr: number;
+    let calculatedBmr: number;
     let lbm: number;
+    let fm: number;
     
     if (bodyFat !== null && bodyFat > 0) {
       const leanMassKg = weight * (1 - bodyFat / 100);
       lbm = leanMassKg / 0.453592; // Convert to lbs
-      bmr = 370 + 21.6 * leanMassKg;
+      fm = weightLbs - lbm;
+      calculatedBmr = 370 + 21.6 * leanMassKg;
+      setBodyFatCalculated(bodyFat);
     } else {
       if (formData.sex === 'male') {
-        bmr = 10 * weight + 6.25 * height - 5 * age + 5;
+        calculatedBmr = 10 * weight + 6.25 * height - 5 * age + 5;
       } else {
-        bmr = 10 * weight + 6.25 * height - 5 * age - 161;
+        calculatedBmr = 10 * weight + 6.25 * height - 5 * age - 161;
       }
       // Estimate LBM if no body fat provided (rough estimate: 75-80% of weight for males, 70-75% for females)
       const estimatedLeanPercent = formData.sex === 'male' ? 0.78 : 0.72;
-      lbm = (parseFloat(formData.weight) || 0) * (formData.unit === 'imperial' ? estimatedLeanPercent : estimatedLeanPercent / 0.453592);
+      const estimatedBodyFat = formData.sex === 'male' ? 22 : 28;
+      lbm = weightLbs * estimatedLeanPercent;
+      fm = weightLbs - lbm;
+      setBodyFatCalculated(estimatedBodyFat);
     }
 
-    const calculatedTdee = bmr * activityMultipliers[formData.activityLevel];
+    const calculatedTdee = calculatedBmr * activityMultipliers[formData.activityLevel];
     
+    setBmr(Math.round(calculatedBmr));
     setTdee(calculatedTdee);
     setLeanBodyMass(lbm);
+    setFatMass(fm);
     
     return { tdee: calculatedTdee, lbm };
   };
 
   const handleCalculateClick = () => {
     calculateBaseTdee();
-    setStep('dietary');
+    setStep('body-composition');
   };
 
   // When diet type changes, update defaults
@@ -282,6 +294,10 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     setStep('distribution');
   };
 
+  const handleContinueToDietary = () => {
+    setStep('dietary');
+  };
+
   const handleContinueToResult = () => {
     const macros = calculateFinalMacros();
     setCalculatedMacros(macros);
@@ -300,9 +316,10 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
   };
 
   const handleBack = () => {
-    if (step === 'dietary') setStep('input');
-    else if (step === 'distribution') setStep('dietary');
-    else if (step === 'result') setStep('distribution');
+    if (step === 'body-composition') setStep('input');
+    else if (step === 'distribution') setStep('body-composition');
+    else if (step === 'dietary') setStep('distribution');
+    else if (step === 'result') setStep('dietary');
   };
 
   const isFormValid = formData.age && formData.weight && 
@@ -313,22 +330,58 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
   const currentMacros = step === 'distribution' ? calculateFinalMacros() : calculatedMacros;
   const warning = step === 'distribution' ? getMacroWarning() : null;
 
+  // Get step title
+  const getStepTitle = () => {
+    switch (step) {
+      case 'input':
+        return (
+          <>
+            <Calculator className="w-5 h-5" />
+            {t('macroCalculator.title', 'Macro Calculator')}
+          </>
+        );
+      case 'body-composition':
+        return (
+          <>
+            <Scale className="w-5 h-5" />
+            Your Body Composition & Metabolism
+          </>
+        );
+      case 'distribution':
+        return (
+          <>
+            <Calculator className="w-5 h-5" />
+            {t('macroCalculator.title', 'Macro Calculator')}
+          </>
+        );
+      case 'dietary':
+        return (
+          <>
+            <Utensils className="w-5 h-5" />
+            Dietary Style
+          </>
+        );
+      case 'result':
+        return (
+          <>
+            <Calculator className="w-5 h-5" />
+            {t('macroCalculator.title', 'Macro Calculator')}
+          </>
+        );
+    }
+  };
+
+  // Helper to get unit display for body composition
+  const getWeightInKg = (lbs: number) => (lbs * 0.453592).toFixed(1);
+
+  const isYouth = parseInt(formData.age) > 0 && parseInt(formData.age) < 18;
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[98vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {step === 'dietary' ? (
-              <>
-                <Utensils className="w-5 h-5" />
-                Dietary Style
-              </>
-            ) : (
-              <>
-                <Calculator className="w-5 h-5" />
-                {t('macroCalculator.title', 'Macro Calculator')}
-              </>
-            )}
+            {getStepTitle()}
           </DialogTitle>
         </DialogHeader>
 
@@ -576,31 +629,70 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
               onClick={handleCalculateClick}
               disabled={!isFormValid}
             >
-              Calculate
+              Calculate Body Composition
             </Button>
           </div>
         )}
 
-        {step === 'dietary' && (
+        {step === 'body-composition' && (
           <div className="space-y-4 pt-2 overflow-y-auto max-h-[70vh]">
-            <p className="text-sm text-muted-foreground">Diet Type</p>
-            
-            <div className="grid grid-cols-2 gap-2">
-              {dietOptions.map((diet) => (
-                <button
-                  key={diet.value}
-                  type="button"
-                  onClick={() => setDietType(diet.value)}
-                  className={`p-3 rounded-xl border-2 text-left transition-all ${
-                    dietType === diet.value
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:bg-muted/50'
-                  } ${diet.value === 'mediterranean' ? 'col-span-1' : ''}`}
-                >
-                  <p className="font-semibold text-sm">{diet.label}</p>
-                  <p className="text-xs text-muted-foreground">{diet.description}</p>
-                </button>
-              ))}
+            {/* Adult/Youth indicator */}
+            <div className="flex justify-end">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted text-sm text-muted-foreground">
+                <User className="w-4 h-4" />
+                <span>{isYouth ? 'Youth' : 'Adult'} calculations active</span>
+                <HelpCircle className="w-4 h-4" />
+              </div>
+            </div>
+
+            {/* Body Composition Cards - Row 1 */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="p-4 rounded-xl border border-border bg-card">
+                <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                  <Scale className="w-4 h-4 text-destructive" />
+                  <span className="text-xs font-medium uppercase tracking-wide">Body Fat %</span>
+                </div>
+                <p className="text-3xl font-bold">{Math.round(bodyFatCalculated)}%</p>
+              </div>
+              
+              <div className="p-4 rounded-xl border border-border bg-card">
+                <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                  <TrendingUp className="w-4 h-4 text-amber-500" />
+                  <span className="text-xs font-medium uppercase tracking-wide">Fat Mass</span>
+                </div>
+                <p className="text-3xl font-bold">{fatMass.toFixed(1)} <span className="text-lg font-normal">lb</span></p>
+                <p className="text-sm text-muted-foreground">({getWeightInKg(fatMass)} kg)</p>
+              </div>
+              
+              <div className="p-4 rounded-xl border border-border bg-card">
+                <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                  <Zap className="w-4 h-4 text-primary" />
+                  <span className="text-xs font-medium uppercase tracking-wide">Lean Body Mass</span>
+                </div>
+                <p className="text-3xl font-bold">{leanBodyMass.toFixed(1)} <span className="text-lg font-normal">lb</span></p>
+                <p className="text-sm text-muted-foreground">({getWeightInKg(leanBodyMass)} kg)</p>
+              </div>
+            </div>
+
+            {/* Body Composition Cards - Row 2 */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-4 rounded-xl border border-border bg-card">
+                <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                  <Activity className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-xs font-medium uppercase tracking-wide">BMR</span>
+                </div>
+                <p className="text-3xl font-bold">{bmr} <span className="text-lg font-normal">cal/day</span></p>
+                <p className="text-sm text-muted-foreground">Base metabolic rate</p>
+              </div>
+              
+              <div className="p-4 rounded-xl border border-primary/30 bg-primary/5">
+                <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                  <Flame className="w-4 h-4 text-primary" />
+                  <span className="text-xs font-medium uppercase tracking-wide">TDEE</span>
+                </div>
+                <p className="text-3xl font-bold text-primary">{Math.round(tdee)} <span className="text-lg font-normal">cal/day</span></p>
+                <p className="text-sm text-muted-foreground">Total daily energy expenditure</p>
+              </div>
             </div>
 
             <div className="flex gap-2 pt-2">
@@ -757,7 +849,41 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back
               </Button>
-              <Button className="flex-1" onClick={handleContinueToResult} disabled={!!warning}>
+              <Button className="flex-1" onClick={handleContinueToDietary} disabled={!!warning}>
+                Continue
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === 'dietary' && (
+          <div className="space-y-4 pt-2 overflow-y-auto max-h-[70vh]">
+            <p className="text-sm text-muted-foreground">Diet Type</p>
+            
+            <div className="grid grid-cols-2 gap-2">
+              {dietOptions.map((diet) => (
+                <button
+                  key={diet.value}
+                  type="button"
+                  onClick={() => setDietType(diet.value)}
+                  className={`p-3 rounded-xl border-2 text-left transition-all ${
+                    dietType === diet.value
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:bg-muted/50'
+                  } ${diet.value === 'mediterranean' ? 'col-span-1' : ''}`}
+                >
+                  <p className="font-semibold text-sm">{diet.label}</p>
+                  <p className="text-xs text-muted-foreground">{diet.description}</p>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1" onClick={handleBack}>
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back
+              </Button>
+              <Button className="flex-1" onClick={handleContinueToResult}>
                 Continue
               </Button>
             </div>
