@@ -289,6 +289,17 @@ export default function Discover() {
     fish: ['fish', 'salmon', 'tuna', 'cod', 'tilapia', 'halibut', 'mackerel', 'sardine', 'anchovy', 'trout', 'bass', 'snapper', 'mahi', 'swordfish', 'catfish', 'flounder', 'sole', 'haddock', 'perch', 'pike', 'herring', 'fish sauce', 'worcestershire'],
   };
 
+  // Dislike term expansions - map category dislikes to specific ingredients
+  const dislikeExpansions: Record<string, string[]> = {
+    spicy: ['jalapeño', 'jalapeno', 'habanero', 'serrano', 'cayenne', 'chipotle', 'ghost pepper', 'scotch bonnet', 'thai chili', 'bird eye', 'hot sauce', 'sriracha', 'tabasco', 'gochujang', 'harissa', 'wasabi', 'horseradish', 'chili flake', 'red pepper flake', 'crushed red pepper', 'chili powder', 'hot pepper', 'buffalo', 'kung pao', 'szechuan', 'sichuan', 'vindaloo', 'arrabbiata', 'diablo', 'fra diavolo', 'peri peri', 'piri piri', 'jerk', 'cajun', 'blackened', 'fiery', 'extra hot', 'very hot'],
+    mushrooms: ['mushroom', 'shiitake', 'portobello', 'cremini', 'oyster mushroom', 'chanterelle', 'porcini', 'enoki', 'maitake', 'morel', 'truffle', 'funghi', 'fungi'],
+    onions: ['onion', 'shallot', 'scallion', 'green onion', 'spring onion', 'leek', 'chive', 'red onion', 'white onion', 'yellow onion', 'vidalia', 'pearl onion', 'cipollini'],
+    peppers: ['pepper', 'bell pepper', 'capsicum', 'pimento', 'pimiento', 'roasted pepper', 'stuffed pepper'],
+    tomatoes: ['tomato', 'tomatoes', 'marinara', 'pomodoro', 'sun-dried tomato', 'cherry tomato', 'grape tomato', 'roma tomato', 'tomato sauce', 'tomato paste', 'salsa', 'bruschetta', 'pico de gallo', 'gazpacho'],
+    cilantro: ['cilantro', 'coriander', 'culantro', 'fresh coriander'],
+    olives: ['olive', 'kalamata', 'black olive', 'green olive', 'tapenade', 'olivada'],
+  };
+
   const blockedTerms = useMemo(() => {
     const normalize = (v: string) => v.trim().toLowerCase();
     const currentDietExclusions = dietExclusions[userDietType] || [];
@@ -300,7 +311,14 @@ export default function Discover() {
       return [allergyLower, ...expansions];
     });
     
-    const base = [...currentDietExclusions, ...expandedAllergies, ...allDislikes].filter(Boolean).map(normalize).filter(Boolean);
+    // Expand dislike terms to include specific ingredients
+    const expandedDislikes = allDislikes.flatMap(dislike => {
+      const dislikeLower = dislike.toLowerCase();
+      const expansions = dislikeExpansions[dislikeLower] || [];
+      return [dislikeLower, ...expansions];
+    });
+    
+    const base = [...currentDietExclusions, ...expandedAllergies, ...expandedDislikes].filter(Boolean).map(normalize).filter(Boolean);
     const expanded = base.flatMap((term) => {
       const variants = new Set<string>();
       variants.add(term);
