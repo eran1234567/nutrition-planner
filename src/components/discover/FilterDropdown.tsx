@@ -36,12 +36,12 @@ export function FilterDropdown({
     >
       <SelectTrigger 
         className={cn(
-          "h-9 min-w-[100px] bg-background border-border text-sm",
+          "h-9 w-auto px-3 bg-background border-border text-sm whitespace-nowrap",
           value && "border-primary bg-primary/5",
           className
         )}
       >
-        <div className="flex items-center gap-1.5 truncate">
+        <div className="flex items-center gap-1.5">
           {icon && <span className="flex-shrink-0 opacity-60">{icon}</span>}
           <SelectValue placeholder={placeholder || label}>
             {selectedOption?.label || placeholder || label}

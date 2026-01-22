@@ -51,14 +51,14 @@ export function MultiSelectDropdown({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            "h-9 min-w-[100px] justify-between bg-background border-border text-sm font-normal",
+            "h-9 w-auto px-3 justify-between bg-background border-border text-sm font-normal whitespace-nowrap",
             values.length > 0 && "border-primary bg-primary/5",
             className
           )}
         >
-          <div className="flex items-center gap-1.5 truncate">
+          <div className="flex items-center gap-1.5">
             {icon && <span className="flex-shrink-0 opacity-60">{icon}</span>}
-            <span className="truncate">{displayText}</span>
+            <span>{displayText}</span>
           </div>
           <ChevronDown className="ml-1 h-4 w-4 shrink-0 opacity-50" />
         </Button>
