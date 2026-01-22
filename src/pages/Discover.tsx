@@ -162,6 +162,7 @@ export default function Discover() {
     numberOfDays,
     dailyTargets,
     macroGapContext,
+    macroCalculatorInputs,
   } = useMealPlanStore();
 
   // Modal state for adding to plan
@@ -187,10 +188,10 @@ export default function Discover() {
   }, []);
 
   // Get diet type from macro calculator if set (highest priority for calculated macros)
-  const { macroCalculatorInputs } = useMealPlanStore();
-  const calculatorDietType = macroCalculatorInputs?.dietType && macroCalculatorInputs.dietType !== 'none' 
-    ? macroCalculatorInputs.dietType 
-    : null;
+  const calculatorDietType =
+    macroCalculatorInputs?.dietType && macroCalculatorInputs.dietType !== 'none'
+      ? macroCalculatorInputs.dietType
+      : null;
   
   const effectiveDietType = (calculatorDietType ?? pendingOnboarding?.dietType ?? preferences?.diet_type ?? 'none') as string;
   const effectiveAllergies = pendingOnboarding?.allergies ?? preferences?.allergies ?? [];
@@ -260,6 +261,14 @@ export default function Discover() {
   // Combine profile diet type with dropdown selection (dropdown takes priority)
   const activeDietType = selectedDietType || (effectiveDietType === 'none' ? null : effectiveDietType);
   const userDietType = (activeDietType || 'none').toLowerCase();
+
+  // If the macro calculator selected a diet, sync it into the URL so the dropdown
+  // is selected and the filter persists across refresh/share.
+  useEffect(() => {
+    if (!selectedDietType && calculatorDietType) {
+      updateSearchParams('diet', calculatorDietType);
+    }
+  }, [selectedDietType, calculatorDietType, updateSearchParams]);
 
   const dietExclusions: Record<string, string[]> = {
     vegan: ['chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'lobster', 'crab', 'shellfish', 'seafood', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak', 'egg', 'eggs', 'dairy', 'milk', 'cheese', 'butter', 'cream', 'yogurt', 'honey', 'cod', 'tilapia', 'halibut', 'mackerel', 'sardine', 'anchovy', 'trout', 'bass', 'snapper', 'mahi', 'swordfish', 'catfish', 'flounder', 'sole', 'haddock', 'perch', 'pike', 'scallop', 'mussel', 'clam', 'oyster', 'calamari', 'squid', 'octopus', 'crawfish', 'crayfish'],
@@ -804,7 +813,7 @@ export default function Discover() {
           {/* Diet Type */}
           <FilterDropdown
             label="Diet Type"
-            value={selectedDietType}
+            value={activeDietType}
             options={dietTypeOptions}
             onChange={setSelectedDietType}
             icon={<Sparkles className="w-3 h-3" />}
