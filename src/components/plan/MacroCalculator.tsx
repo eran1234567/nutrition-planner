@@ -776,24 +776,21 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
 
         {step === 'distribution' && (
           <div className="space-y-3 pt-1 overflow-y-auto max-h-[80vh]">
-            {/* Dietary Style Filter - Horizontal scroll */}
-            <div>
-              <h3 className="font-semibold text-sm mb-2">Dietary Style</h3>
-              <div className="flex gap-1.5 flex-wrap">
-                {dietOptions.map((diet) => (
-                  <button
-                    key={diet.value}
-                    type="button"
-                    onClick={() => setDietType(diet.value)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                      dietType === diet.value
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted hover:bg-muted/80 text-muted-foreground'
-                    }`}
-                  >
-                    {diet.label}
-                  </button>
-                ))}
+            {/* Dietary Style Filter - Dropdown */}
+            <div className="p-3 rounded-xl border border-border bg-card">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-semibold text-sm whitespace-nowrap">Dietary Style</h3>
+                <select
+                  value={dietType}
+                  onChange={(e) => setDietType(e.target.value as DietType)}
+                  className="h-7 px-2 rounded border border-border bg-background text-xs flex-1 max-w-[180px]"
+                >
+                  {dietOptions.map((diet) => (
+                    <option key={diet.value} value={diet.value}>
+                      {diet.label}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
