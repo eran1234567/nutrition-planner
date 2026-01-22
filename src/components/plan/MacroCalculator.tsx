@@ -778,9 +778,9 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
               
               {/* Protein Slider */}
               <div className="mb-4">
-                <div className="flex justify-between items-center mb-2">
+              <div className="flex justify-between items-center mb-2">
                   <span className="text-sm font-medium">Protein: {proteinPerLb.toFixed(1)} g/lb LBM</span>
-                  <span className="text-sm text-muted-foreground">~{currentMacros.protein}g</span>
+                  <span className="text-sm text-muted-foreground">≈{currentMacros.protein}g</span>
                 </div>
                 <Slider
                   value={[proteinPerLb]}
@@ -798,9 +798,9 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
 
               {/* Fat Slider */}
               <div className="mb-4">
-                <div className="flex justify-between items-center mb-2">
+              <div className="flex justify-between items-center mb-2">
                   <span className="text-sm font-medium">Fat: {fatPercent}% of calories</span>
-                  <span className="text-sm text-muted-foreground">~{currentMacros.fat}g</span>
+                  <span className="text-sm text-muted-foreground">≈{currentMacros.fat}g</span>
                 </div>
                 <Slider
                   value={[fatPercent]}
@@ -818,7 +818,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
 
               {/* Carbs info */}
               <p className="text-sm text-muted-foreground">
-                Remaining calories will be allocated to carbohydrates (~{currentMacros.carbs}g, {Math.round((currentMacros.carbs * 4 / currentMacros.calories) * 100)}%)
+                Remaining calories will be allocated to carbohydrates (≈{currentMacros.carbs}g, {Math.round((currentMacros.carbs * 4 / currentMacros.calories) * 100)}%)
               </p>
 
               {/* Keto info */}
