@@ -229,8 +229,9 @@ export default function Discover() {
 
   const blockedTerms = useMemo(() => {
     const normalize = (v: string) => v.trim().toLowerCase();
-    const dietExcluded = dietExclusions[userDietType] || [];
-    const base = [...dietExcluded, ...allAllergies, ...allDislikes].filter(Boolean).map(normalize).filter(Boolean);
+    const currentDietExclusions = dietExclusions[userDietType] || [];
+    console.log('Diet filter active:', userDietType, 'Exclusions count:', currentDietExclusions.length);
+    const base = [...currentDietExclusions, ...allAllergies, ...allDislikes].filter(Boolean).map(normalize).filter(Boolean);
     const expanded = base.flatMap((term) => {
       const variants = new Set<string>();
       variants.add(term);
