@@ -698,52 +698,52 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
             </div>
 
             {/* Body Composition Cards - Row 1 */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="p-4 rounded-xl border border-border bg-card">
-                <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                  <Scale className="w-4 h-4 text-destructive" />
-                  <span className="text-xs font-medium uppercase tracking-wide">Body Fat %</span>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="p-3 rounded-xl border border-border bg-card">
+                <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+                  <Scale className="w-3.5 h-3.5 text-destructive" />
+                  <span className="text-[10px] font-medium uppercase tracking-wide">Body Fat %</span>
                 </div>
-                <p className="text-3xl font-bold">{Math.round(bodyFatCalculated)}%</p>
+                <p className="text-2xl font-bold">{Math.round(bodyFatCalculated)}%</p>
               </div>
               
-              <div className="p-4 rounded-xl border border-border bg-card">
-                <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                  <TrendingUp className="w-4 h-4 text-amber-500" />
-                  <span className="text-xs font-medium uppercase tracking-wide">Fat Mass</span>
+              <div className="p-3 rounded-xl border border-border bg-card">
+                <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+                  <TrendingUp className="w-3.5 h-3.5 text-amber-500" />
+                  <span className="text-[10px] font-medium uppercase tracking-wide">Fat Mass</span>
                 </div>
-                <p className="text-3xl font-bold">{fatMass.toFixed(1)} <span className="text-lg font-normal">lb</span></p>
-                <p className="text-sm text-muted-foreground">({getWeightInKg(fatMass)} kg)</p>
+                <p className="text-2xl font-bold whitespace-nowrap">{fatMass.toFixed(1)} <span className="text-sm font-normal">lb</span></p>
+                <p className="text-xs text-muted-foreground">({getWeightInKg(fatMass)} kg)</p>
               </div>
               
-              <div className="p-4 rounded-xl border border-border bg-card">
-                <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                  <Zap className="w-4 h-4 text-primary" />
-                  <span className="text-xs font-medium uppercase tracking-wide">Lean Body Mass</span>
+              <div className="p-3 rounded-xl border border-border bg-card">
+                <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+                  <Zap className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-[10px] font-medium uppercase tracking-wide">Lean Body Mass</span>
                 </div>
-                <p className="text-3xl font-bold">{leanBodyMass.toFixed(1)} <span className="text-lg font-normal">lb</span></p>
-                <p className="text-sm text-muted-foreground">({getWeightInKg(leanBodyMass)} kg)</p>
+                <p className="text-2xl font-bold whitespace-nowrap">{leanBodyMass.toFixed(1)} <span className="text-sm font-normal">lb</span></p>
+                <p className="text-xs text-muted-foreground">({getWeightInKg(leanBodyMass)} kg)</p>
               </div>
             </div>
 
             {/* Body Composition Cards - Row 2 */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-4 rounded-xl border border-border bg-card">
-                <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                  <Activity className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-xs font-medium uppercase tracking-wide">BMR</span>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-3 rounded-xl border border-border bg-card">
+                <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+                  <Activity className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="text-[10px] font-medium uppercase tracking-wide">BMR</span>
                 </div>
-                <p className="text-3xl font-bold">{bmr} <span className="text-lg font-normal">cal/day</span></p>
-                <p className="text-sm text-muted-foreground">Base metabolic rate</p>
+                <p className="text-2xl font-bold whitespace-nowrap">{bmr} <span className="text-sm font-normal">cal/day</span></p>
+                <p className="text-xs text-muted-foreground">Base metabolic rate</p>
               </div>
               
-              <div className="p-4 rounded-xl border border-primary/30 bg-primary/5">
-                <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                  <Flame className="w-4 h-4 text-primary" />
-                  <span className="text-xs font-medium uppercase tracking-wide">TDEE</span>
+              <div className="p-3 rounded-xl border border-primary/30 bg-primary/5">
+                <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+                  <Flame className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-[10px] font-medium uppercase tracking-wide">TDEE</span>
                 </div>
-                <p className="text-3xl font-bold text-primary">{Math.round(tdee)} <span className="text-lg font-normal">cal/day</span></p>
-                <p className="text-sm text-muted-foreground">Total daily energy expenditure</p>
+                <p className="text-2xl font-bold text-primary whitespace-nowrap">{Math.round(tdee)} <span className="text-sm font-normal">cal/day</span></p>
+                <p className="text-xs text-muted-foreground">Total daily energy expenditure</p>
               </div>
             </div>
 
