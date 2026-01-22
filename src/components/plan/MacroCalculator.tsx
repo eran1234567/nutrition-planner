@@ -840,7 +840,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
             <div className="p-3 rounded-xl border border-border bg-card">
               <h3 className="font-semibold text-sm mb-2">Macro Distribution</h3>
               
-              {/* Protein Slider */}
+              {/* Protein Slider - Blue */}
               <div className="mb-2.5">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-xs font-medium">Protein: {proteinPerLb.toFixed(1)} g/lb LBM</span>
@@ -852,11 +852,11 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                   min={proteinRange.min}
                   max={proteinRange.max}
                   step={proteinRange.step}
-                  className="w-full"
+                  className="w-full [&_[data-orientation=horizontal]>.bg-primary]:bg-blue-500 [&_[data-state=active]]:border-blue-500 [&>span>span]:bg-blue-500 [&>span>span>span]:border-blue-500"
                 />
               </div>
 
-              {/* Carbs Slider - Adjustable */}
+              {/* Carbs Slider - Amber */}
               <div className="mb-2.5">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-xs font-medium">
@@ -871,11 +871,11 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                   min={carbsRange.min}
                   max={carbsRange.max}
                   step={carbsRange.step}
-                  className="w-full"
+                  className="w-full [&_[data-orientation=horizontal]>.bg-primary]:bg-amber-500 [&_[data-state=active]]:border-amber-500 [&>span>span]:bg-amber-500 [&>span>span>span]:border-amber-500"
                 />
               </div>
 
-              {/* Fat Slider - Adjustable */}
+              {/* Fat Slider - Pink */}
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-xs font-medium">
@@ -890,7 +890,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                   min={fatRange.min}
                   max={fatRange.max}
                   step={fatRange.step}
-                  className="w-full"
+                  className="w-full [&_[data-orientation=horizontal]>.bg-primary]:bg-pink-500 [&_[data-state=active]]:border-pink-500 [&>span>span]:bg-pink-500 [&>span>span>span]:border-pink-500"
                 />
               </div>
 
