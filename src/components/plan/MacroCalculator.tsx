@@ -494,15 +494,15 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-xl max-h-[98vh] overflow-hidden">
-        <DialogHeader>
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md h-[600px] max-h-[85vh] overflow-hidden flex flex-col fixed-dialog-content">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             {getStepTitle()}
           </DialogTitle>
         </DialogHeader>
 
         {step === 'input' && (
-          <div className="space-y-3 pt-1">
+          <div className="flex-1 overflow-y-auto space-y-3 pt-1 min-h-0">
             <p className="text-xs text-muted-foreground">
               {t('macroCalculator.description', 'Enter your details to calculate your recommended daily macros.')}
             </p>
@@ -751,7 +751,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
         )}
 
         {step === 'body-composition' && (
-          <div className="space-y-4 pt-2 overflow-y-auto max-h-[70vh]">
+          <div className="flex-1 overflow-y-auto space-y-4 pt-2 min-h-0">
             {/* Adult/Youth indicator */}
             <div className="flex justify-end">
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted text-sm text-muted-foreground">
@@ -822,7 +822,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
         )}
 
         {step === 'distribution' && (
-          <div className="space-y-3 pt-1 overflow-y-auto max-h-[80vh]">
+          <div className="flex-1 overflow-y-auto space-y-3 pt-1 min-h-0">
             {/* Dietary Style + Calorie Deficit - Combined Row */}
             <div className="p-3 rounded-xl border border-border bg-card">
               <div className="flex items-center gap-4">

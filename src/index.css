@@ -342,4 +342,18 @@
   .thumb-zone {
     @apply mt-auto;
   }
+
+  /* Fixed dialog - prevent shifting when keyboard opens on mobile */
+  .fixed-dialog-content {
+    /* Keep position fixed at top of viewport when keyboard opens */
+    position: fixed !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) !important;
+  }
+
+  @supports (height: 100dvh) {
+    .fixed-dialog-content {
+      max-height: 85dvh !important;
+    }
+  }
 }
