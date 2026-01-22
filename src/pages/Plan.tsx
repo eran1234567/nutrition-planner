@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, ShoppingCart, RefreshCw, Settings, Sparkles, AlertTriangle, Cloud, CloudOff, Wand2 } from 'lucide-react';
+import { Plus, ShoppingCart, RefreshCw, Settings, Sparkles, AlertTriangle, Cloud, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
@@ -8,9 +8,8 @@ import { StickyActions } from '@/components/ui/StickyActions';
 import { NutritionGoalsModal } from '@/components/plan/NutritionGoalsModal';
 import { NutritionSummaryCard } from '@/components/plan/NutritionSummaryCard';
 import { PlanSlotCard } from '@/components/plan/PlanSlotCard';
-import { MacroGapSuggestions, type TopUpItem } from '@/components/plan/MacroGapSuggestions';
+import { MacroGapIndicator } from '@/components/plan/MacroGapIndicator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAppStore } from '@/stores/appStore';
 import { useMealPlanStore, type MacroGapContext } from '@/stores/mealPlanStore';
 import { useUserData } from '@/hooks/useUserData';
 import { useGlobalRecipes } from '@/hooks/useGlobalRecipes';
@@ -44,9 +43,6 @@ export default function Plan() {
     setGeneratedPlan,
     updateSlotMultiplier,
     toggleSlotLock,
-    swapRecipe,
-    addDayExtra,
-    removeDayExtra,
     setIsPlanMode,
     setCurrentSlotFilter,
     setMacroGapContext,
@@ -185,25 +181,6 @@ export default function Plan() {
     navigate('/discover');
   };
 
-  // Handle adding a top-up item to fill macro gaps
-  const handleAddTopUp = (item: TopUpItem) => {
-    addDayExtra(selectedDay, {
-      id: item.id,
-      name: item.name,
-      emoji: item.emoji,
-      macros: item.macros,
-    });
-    toast.success(`Added ${item.name}`, {
-      description: `+${item.macros.calories} cal, +${item.macros.protein}g P, +${item.macros.carbs}g C, +${item.macros.fat}g F`,
-    });
-  };
-
-  // Handle removing an extra from the day
-  const handleRemoveExtra = (extraId: string) => {
-    removeDayExtra(selectedDay, extraId);
-    toast.info('Removed item');
-  };
-
   // Regenerate unlocked slots for current day
   const handleRegenerateDay = () => {
     if (!dailyTargets || !validation.isValid) return;
@@ -245,14 +222,14 @@ export default function Plan() {
   const currentDayPlan = generatedPlan?.days[selectedDay];
   const currentDayLocks = lockedSlots[selectedDay] || [];
 
-  // Recalculate day totals using actual recipe data + extras (since stored totals may be stale)
+  // Recalculate day totals using actual recipe data (since stored totals may be stale)
   const calculatedDayTotals = useMemo(() => {
     if (!currentDayPlan || allRecipes.length === 0) {
       return { calories: 0, protein: 0, carbs: 0, fat: 0 };
     }
 
-    // Sum from recipe slots
-    const slotTotals = currentDayPlan.slots.reduce((acc, slot) => {
+    // Sum from recipe slots only (no extras - use optimizer for balancing)
+    return currentDayPlan.slots.reduce((acc, slot) => {
       const recipe = recipeMap.get(slot.recipeId);
       if (!recipe?.nutrition) return acc;
 
@@ -264,15 +241,6 @@ export default function Plan() {
         fat: acc.fat + Math.round((recipe.nutrition.fat_g ?? 0) * multiplier),
       };
     }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
-
-    // Add extras (top-up items)
-    const extras = currentDayPlan.extras || [];
-    return extras.reduce((acc, extra) => ({
-      calories: acc.calories + extra.macros.calories,
-      protein: acc.protein + extra.macros.protein,
-      carbs: acc.carbs + extra.macros.carbs,
-      fat: acc.fat + extra.macros.fat,
-    }), slotTotals);
   }, [currentDayPlan, recipeMap, allRecipes.length]);
 
   // Calculate slot totals for display (recalculated from recipe data)
@@ -429,13 +397,10 @@ export default function Plan() {
               </div>
             </div>
 
-            {/* Macro gap suggestions */}
-            <MacroGapSuggestions
+            {/* Macro balance indicator */}
+            <MacroGapIndicator
               dailyTargets={dailyTargets}
               dayTotals={calculatedDayTotals}
-              currentExtras={currentDayPlan.extras}
-              onAddTopUp={handleAddTopUp}
-              onRemoveExtra={handleRemoveExtra}
             />
 
             {/* Meal slots */}

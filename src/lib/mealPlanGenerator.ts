@@ -8,8 +8,11 @@ import type {
 } from '@/types/mealPlan';
 import type { GlobalRecipe } from '@/hooks/useGlobalRecipes';
 
-// Finer-grained multipliers for more precise macro matching
-const MULTIPLIERS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0];
+// Finer-grained multipliers for more precise macro matching (0.05 steps from 0.25 to 5.0)
+const MULTIPLIERS: number[] = [];
+for (let m = 0.25; m <= 5.0; m += 0.05) {
+  MULTIPLIERS.push(Math.round(m * 100) / 100);
+}
 
 interface RecipeMacros {
   calories: number;
@@ -48,15 +51,29 @@ function calculateMacrosWithMultiplier(macros: RecipeMacros, multiplier: number)
   };
 }
 
+/**
+ * Calculate fit score using percentage-based deviation from targets.
+ * This ensures all macros are weighted equally regardless of their absolute values.
+ * Lower score = better fit.
+ */
 function calculateFitScore(actual: RecipeMacros, target: RecipeMacros): number {
-  // Lower score = better fit
-  // Weight protein more heavily (2x)
-  return (
-    Math.abs(actual.calories - target.calories) +
-    2 * Math.abs(actual.protein - target.protein) +
-    Math.abs(actual.carbs - target.carbs) +
-    Math.abs(actual.fat - target.fat)
-  );
+  // Use percentage deviation from target for each macro
+  // This ensures all macros contribute equally to the score
+  const calorieDeviation = target.calories > 0 
+    ? Math.abs(actual.calories - target.calories) / target.calories 
+    : 0;
+  const proteinDeviation = target.protein > 0 
+    ? Math.abs(actual.protein - target.protein) / target.protein 
+    : 0;
+  const carbsDeviation = target.carbs > 0 
+    ? Math.abs(actual.carbs - target.carbs) / target.carbs 
+    : 0;
+  const fatDeviation = target.fat > 0 
+    ? Math.abs(actual.fat - target.fat) / target.fat 
+    : 0;
+  
+  // Sum of percentage deviations - all macros weighted equally
+  return calorieDeviation + proteinDeviation + carbsDeviation + fatDeviation;
 }
 
 function findBestMultiplier(
@@ -86,13 +103,16 @@ function findBestMultiplier(
  * Uses an iterative approach: find the slot with highest calorie impact 
  * and adjust its multiplier to get closer to target.
  */
+/**
+ * Optimize day's multipliers using iterative greedy optimization.
+ * Uses percentage-based scoring to balance ALL macros equally.
+ */
 function optimizeDayMultipliers(
   slots: GeneratedSlot[],
   recipeMap: Map<string, GlobalRecipe>,
   dailyTargets: DailyTargets,
   lockedSlotIds: string[]
 ): GeneratedSlot[] {
-  // Calculate initial totals
   const calculateTotals = (slotList: GeneratedSlot[]): RecipeMacros => {
     return slotList.reduce(
       (acc, slot) => ({
@@ -107,27 +127,20 @@ function optimizeDayMultipliers(
 
   let currentSlots = [...slots];
   let currentTotals = calculateTotals(currentSlots);
+  let currentScore = calculateFitScore(currentTotals, dailyTargets);
   
-  // Iteratively optimize - run multiple passes to refine
-  const maxIterations = 10;
-  for (let iter = 0; iter < maxIterations; iter++) {
-    const calorieDiff = dailyTargets.calories - currentTotals.calories;
-    
-    // If we're within 10 calories, stop
-    if (Math.abs(calorieDiff) < 10) break;
-    
-    // Find the best slot to adjust
+  // Multiple passes for thorough optimization
+  const maxIterations = 50;
+  let noImprovementCount = 0;
+  
+  for (let iter = 0; iter < maxIterations && noImprovementCount < 5; iter++) {
     let bestAdjustment: { slotIndex: number; newMultiplier: number; newScore: number } | null = null;
-    let bestOverallScore = calculateFitScore(currentTotals, dailyTargets);
+    let bestScore = currentScore;
     
     for (let i = 0; i < currentSlots.length; i++) {
       const slot = currentSlots[i];
       
-      // Skip locked slots
-      if (lockedSlotIds.includes(slot.slotId)) continue;
-      
-      // Skip slots without recipes
-      if (!slot.recipeId) continue;
+      if (lockedSlotIds.includes(slot.slotId) || !slot.recipeId) continue;
       
       const recipe = recipeMap.get(slot.recipeId);
       const recipeMacros = recipe ? getRecipeMacros(recipe) : null;
@@ -135,11 +148,10 @@ function optimizeDayMultipliers(
       
       // Try each multiplier
       for (const mult of MULTIPLIERS) {
-        if (mult === slot.servingMultiplier) continue;
+        if (Math.abs(mult - slot.servingMultiplier) < 0.01) continue;
         
         const newSlotTotals = calculateMacrosWithMultiplier(recipeMacros, mult);
         
-        // Calculate what the day totals would be with this change
         const testTotals: RecipeMacros = {
           calories: currentTotals.calories - slot.slotTotals.calories + newSlotTotals.calories,
           protein: currentTotals.protein - slot.slotTotals.protein + newSlotTotals.protein,
@@ -149,14 +161,13 @@ function optimizeDayMultipliers(
         
         const score = calculateFitScore(testTotals, dailyTargets);
         
-        if (score < bestOverallScore) {
-          bestOverallScore = score;
+        if (score < bestScore - 0.001) { // Small threshold to avoid floating point issues
+          bestScore = score;
           bestAdjustment = { slotIndex: i, newMultiplier: mult, newScore: score };
         }
       }
     }
     
-    // Apply the best adjustment found
     if (bestAdjustment) {
       const slot = currentSlots[bestAdjustment.slotIndex];
       const recipe = recipeMap.get(slot.recipeId);
@@ -173,11 +184,21 @@ function optimizeDayMultipliers(
             : s
         );
         currentTotals = calculateTotals(currentSlots);
+        currentScore = bestAdjustment.newScore;
+        noImprovementCount = 0;
       }
     } else {
-      // No improvement possible, stop
-      break;
+      noImprovementCount++;
     }
+    
+    // Check if we're close enough (all macros within 2%)
+    const allMacrosWithin2Percent = 
+      (dailyTargets.calories === 0 || Math.abs(currentTotals.calories - dailyTargets.calories) / dailyTargets.calories < 0.02) &&
+      (dailyTargets.protein === 0 || Math.abs(currentTotals.protein - dailyTargets.protein) / dailyTargets.protein < 0.02) &&
+      (dailyTargets.carbs === 0 || Math.abs(currentTotals.carbs - dailyTargets.carbs) / dailyTargets.carbs < 0.02) &&
+      (dailyTargets.fat === 0 || Math.abs(currentTotals.fat - dailyTargets.fat) / dailyTargets.fat < 0.02);
+    
+    if (allMacrosWithin2Percent) break;
   }
   
   return currentSlots;
