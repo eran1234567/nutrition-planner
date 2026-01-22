@@ -482,8 +482,13 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     }
   };
 
-  // Helper to get unit display for body composition
-  const getWeightInKg = (lbs: number) => (lbs * 0.453592).toFixed(1);
+  // Helper to get weight in user's preferred unit
+  const getWeightDisplay = (lbs: number) => {
+    if (formData.unit === 'metric') {
+      return { value: (lbs * 0.453592).toFixed(1), unit: 'kg' };
+    }
+    return { value: lbs.toFixed(1), unit: 'lb' };
+  };
 
   const isYouth = parseInt(formData.age) > 0 && parseInt(formData.age) < 18;
 
@@ -771,8 +776,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                   <TrendingUp className="w-3.5 h-3.5 text-amber-500" />
                   <span className="text-[10px] font-medium uppercase tracking-wide">Fat Mass</span>
                 </div>
-                <p className="text-2xl font-bold whitespace-nowrap">{fatMass.toFixed(1)} <span className="text-sm font-normal">lb</span></p>
-                <p className="text-xs text-muted-foreground">({getWeightInKg(fatMass)} kg)</p>
+                <p className="text-2xl font-bold whitespace-nowrap">{getWeightDisplay(fatMass).value} <span className="text-sm font-normal">{getWeightDisplay(fatMass).unit}</span></p>
               </div>
               
               <div className="p-3 rounded-xl border border-border bg-card">
@@ -780,8 +784,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                   <Zap className="w-3.5 h-3.5 text-primary" />
                   <span className="text-[10px] font-medium uppercase tracking-wide">Lean Body Mass</span>
                 </div>
-                <p className="text-2xl font-bold whitespace-nowrap">{leanBodyMass.toFixed(1)} <span className="text-sm font-normal">lb</span></p>
-                <p className="text-xs text-muted-foreground">({getWeightInKg(leanBodyMass)} kg)</p>
+                <p className="text-2xl font-bold whitespace-nowrap">{getWeightDisplay(leanBodyMass).value} <span className="text-sm font-normal">{getWeightDisplay(leanBodyMass).unit}</span></p>
               </div>
             </div>
 
