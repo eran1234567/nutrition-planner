@@ -256,8 +256,8 @@ export function NutritionGoalsModal({ open, onOpenChange, onSave }: NutritionGoa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md h-[600px] max-h-[85vh] overflow-hidden flex flex-col fixed-dialog-content">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>
             {step === 'macros' 
               ? t('onboarding.macros.title', 'Nutrition Goals')
@@ -269,7 +269,7 @@ export function NutritionGoalsModal({ open, onOpenChange, onSave }: NutritionGoa
         </DialogHeader>
         
         {step === 'macros' && (
-          <div className="space-y-6 pt-4">
+          <div className="flex-1 overflow-y-auto space-y-6 pt-4 min-h-0">
             <div>
               <p className="text-sm text-muted-foreground">
                 {t('onboarding.macros.hint', 'Set your daily calorie and macro targets.')}
@@ -378,7 +378,7 @@ export function NutritionGoalsModal({ open, onOpenChange, onSave }: NutritionGoa
         )}
 
         {step === 'meals' && (
-          <div className="space-y-3 pt-2">
+          <div className="flex-1 overflow-y-auto space-y-3 pt-2 min-h-0">
             <div>
               <p className="text-sm font-medium text-foreground mb-1.5">
                 {t('onboarding.meals.planDuration', 'Plan Duration')}
@@ -451,7 +451,7 @@ export function NutritionGoalsModal({ open, onOpenChange, onSave }: NutritionGoa
         )}
 
         {step === 'distribution' && (
-          <div className="space-y-6 pt-4">
+          <div className="flex-1 overflow-y-auto space-y-6 pt-4 min-h-0">
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-sm font-medium text-foreground">
