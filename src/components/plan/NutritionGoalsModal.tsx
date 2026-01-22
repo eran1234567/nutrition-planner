@@ -256,7 +256,7 @@ export function NutritionGoalsModal({ open, onOpenChange, onSave }: NutritionGoa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg h-[600px] max-h-[85vh] overflow-hidden flex flex-col fixed-dialog-content">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[92vh] overflow-hidden flex flex-col fixed-dialog-content">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>
             {step === 'macros' 

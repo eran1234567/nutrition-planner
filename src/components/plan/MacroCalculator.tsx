@@ -494,7 +494,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg h-[600px] max-h-[85vh] overflow-hidden flex flex-col fixed-dialog-content">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg max-h-[92vh] overflow-hidden flex flex-col fixed-dialog-content">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             {getStepTitle()}
