@@ -720,96 +720,68 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
 
         {step === 'distribution' && (
           <div className="space-y-3 pt-1 overflow-y-auto max-h-[80vh]">
-            {/* Calorie Deficit Section - Compact */}
+            {/* Calorie Deficit Section - Dropdown Style */}
             <div className="p-3 rounded-xl border border-border bg-card">
-              <h3 className="font-semibold text-sm mb-2">Calorie Deficit</h3>
-              
-              <div className="space-y-1.5">
-                <label 
-                  className={`flex items-center gap-2 cursor-pointer ${deficitType === 'standard' ? 'text-foreground' : 'text-muted-foreground'}`}
-                  onClick={() => setDeficitType('standard')}
-                >
-                  <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
-                    deficitType === 'standard' ? 'border-primary' : 'border-muted-foreground'
-                  }`}>
-                    {deficitType === 'standard' && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
-                  </div>
-                  <span className="text-xs">Standard (20% deficit)</span>
-                  <span className="text-xs text-muted-foreground">- Recommended</span>
-                </label>
-                
-                <label 
-                  className={`flex items-center gap-2 cursor-pointer ${deficitType === 'custom_percent' ? 'text-foreground' : 'text-muted-foreground'}`}
-                  onClick={() => setDeficitType('custom_percent')}
-                >
-                  <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
-                    deficitType === 'custom_percent' ? 'border-primary' : 'border-muted-foreground'
-                  }`}>
-                    {deficitType === 'custom_percent' && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
-                  </div>
-                  <span className="text-xs">Custom % deficit</span>
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-semibold text-sm whitespace-nowrap">Calorie Deficit</h3>
+                <div className="flex items-center gap-2 flex-1 justify-end">
+                  <select
+                    value={deficitType}
+                    onChange={(e) => setDeficitType(e.target.value as DeficitType)}
+                    className="h-7 px-2 rounded border border-border bg-background text-xs flex-1 max-w-[160px]"
+                  >
+                    <option value="standard">Standard (20%)</option>
+                    <option value="custom_percent">Custom %</option>
+                    <option value="custom_deficit_calories">Custom cal deficit</option>
+                    <option value="custom_calories">Set calories</option>
+                  </select>
                   {deficitType === 'custom_percent' && (
-                    <input
-                      type="number"
-                      value={customDeficitPercent}
-                      onChange={(e) => setCustomDeficitPercent(Math.min(50, Math.max(5, parseInt(e.target.value) || 0)))}
-                      className="w-14 h-6 px-1.5 rounded border border-border bg-background text-xs"
-                      min={5}
-                      max={50}
-                    />
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        value={customDeficitPercent}
+                        onChange={(e) => setCustomDeficitPercent(Math.min(50, Math.max(5, parseInt(e.target.value) || 0)))}
+                        className="w-12 h-7 px-1.5 rounded border border-border bg-background text-xs text-center"
+                        min={5}
+                        max={50}
+                      />
+                      <span className="text-xs text-muted-foreground">%</span>
+                    </div>
                   )}
-                </label>
-                
-                <label 
-                  className={`flex items-center gap-2 cursor-pointer ${deficitType === 'custom_deficit_calories' ? 'text-foreground' : 'text-muted-foreground'}`}
-                  onClick={() => setDeficitType('custom_deficit_calories')}
-                >
-                  <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
-                    deficitType === 'custom_deficit_calories' ? 'border-primary' : 'border-muted-foreground'
-                  }`}>
-                    {deficitType === 'custom_deficit_calories' && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
-                  </div>
-                  <span className="text-xs">Custom cal {formData.goal === 'lose' ? 'deficit' : 'surplus'}</span>
                   {deficitType === 'custom_deficit_calories' && (
-                    <input
-                      type="number"
-                      value={customDeficitCalories}
-                      onChange={(e) => setCustomDeficitCalories(e.target.value)}
-                      placeholder="500"
-                      className="w-16 h-6 px-1.5 rounded border border-border bg-background text-xs"
-                    />
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        value={customDeficitCalories}
+                        onChange={(e) => setCustomDeficitCalories(e.target.value)}
+                        placeholder="500"
+                        className="w-14 h-7 px-1.5 rounded border border-border bg-background text-xs text-center"
+                      />
+                      <span className="text-xs text-muted-foreground">cal</span>
+                    </div>
                   )}
-                </label>
-                
-                <label 
-                  className={`flex items-center gap-2 cursor-pointer ${deficitType === 'custom_calories' ? 'text-foreground' : 'text-muted-foreground'}`}
-                  onClick={() => setDeficitType('custom_calories')}
-                >
-                  <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
-                    deficitType === 'custom_calories' ? 'border-primary' : 'border-muted-foreground'
-                  }`}>
-                    {deficitType === 'custom_calories' && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
-                  </div>
-                  <span className="text-xs">Custom daily calories</span>
                   {deficitType === 'custom_calories' && (
-                    <input
-                      type="number"
-                      value={customCalories}
-                      onChange={(e) => setCustomCalories(e.target.value)}
-                      placeholder={String(getTargetCalories())}
-                      className="w-16 h-6 px-1.5 rounded border border-border bg-background text-xs"
-                    />
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        value={customCalories}
+                        onChange={(e) => setCustomCalories(e.target.value)}
+                        placeholder={String(getTargetCalories())}
+                        className="w-16 h-7 px-1.5 rounded border border-border bg-background text-xs text-center"
+                      />
+                      <span className="text-xs text-muted-foreground">cal</span>
+                    </div>
                   )}
-                </label>
+                </div>
               </div>
             </div>
 
-            {/* Macro Distribution Section - Compact */}
+            {/* Macro Distribution Section - Compact with Carbs bar */}
             <div className="p-3 rounded-xl border border-border bg-card">
               <h3 className="font-semibold text-sm mb-2">Macro Distribution</h3>
               
               {/* Protein Slider */}
-              <div className="mb-3">
+              <div className="mb-2.5">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-xs font-medium">Protein: {proteinPerLb.toFixed(1)} g/lb LBM</span>
                   <span className="text-xs text-muted-foreground">{currentMacros.protein}g</span>
@@ -825,7 +797,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
               </div>
 
               {/* Fat Slider */}
-              <div className="mb-2">
+              <div className="mb-2.5">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-xs font-medium">Fat: {fatPercent}% of calories</span>
                   <span className="text-xs text-muted-foreground">{currentMacros.fat}g</span>
@@ -840,10 +812,22 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                 />
               </div>
 
-              {/* Carbs info */}
-              <p className="text-xs text-muted-foreground">
-                Carbs: {currentMacros.carbs}g ({Math.round((currentMacros.carbs * 4 / currentMacros.calories) * 100)}% remaining)
-              </p>
+              {/* Carbs Display Bar - Auto-calculated */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-xs font-medium">Carbs: {Math.round((currentMacros.carbs * 4 / currentMacros.calories) * 100)}% (auto)</span>
+                  <span className="text-xs text-muted-foreground">{currentMacros.carbs}g</span>
+                </div>
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div 
+                    className="h-full rounded-full transition-all duration-200"
+                    style={{ 
+                      width: `${Math.max(0, Math.min(100, Math.round((currentMacros.carbs * 4 / currentMacros.calories) * 100)))}%`,
+                      backgroundColor: '#F59E0B'
+                    }}
+                  />
+                </div>
+              </div>
 
               {/* Warning - Compact */}
               {warning && (
