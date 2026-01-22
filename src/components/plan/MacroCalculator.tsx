@@ -16,7 +16,7 @@ type Goal = 'lose' | 'maintain' | 'gain';
 type BodyFatMethod = 'direct' | 'navy';
 type DietType = 'none' | 'vegetarian' | 'vegan' | 'pescatarian' | 'keto' | 'paleo' | 'mediterranean';
 type DeficitType = 'standard' | 'custom_percent' | 'custom_deficit_calories' | 'custom_calories';
-type Step = 'input' | 'body-composition' | 'distribution' | 'dietary' | 'result';
+type Step = 'input' | 'body-composition' | 'distribution' | 'result';
 
 const activityMultipliers: Record<ActivityLevel, number> = {
   sedentary: 1.2,
@@ -32,15 +32,26 @@ const goalMultipliers: Record<Goal, number> = {
   gain: 1.15,
 };
 
-const dietOptions: { value: DietType; label: string; description: string }[] = [
-  { value: 'none', label: 'No Restrictions', description: 'Standard balanced macros' },
-  { value: 'vegetarian', label: 'Vegetarian', description: 'No meat, includes dairy & eggs' },
-  { value: 'vegan', label: 'Vegan', description: 'Plant-based only' },
-  { value: 'pescatarian', label: 'Pescatarian', description: 'Fish & seafood, no meat' },
-  { value: 'keto', label: 'Keto', description: 'Very low carb, high fat' },
-  { value: 'paleo', label: 'Paleo', description: 'Whole foods, no processed' },
-  { value: 'mediterranean', label: 'Mediterranean', description: 'Olive oil, fish, whole grains' },
+const dietOptions: { value: DietType; label: string }[] = [
+  { value: 'none', label: 'No Restrictions' },
+  { value: 'vegetarian', label: 'Vegetarian' },
+  { value: 'vegan', label: 'Vegan' },
+  { value: 'pescatarian', label: 'Pescatarian' },
+  { value: 'keto', label: 'Keto' },
+  { value: 'paleo', label: 'Paleo' },
+  { value: 'mediterranean', label: 'Mediterranean' },
 ];
+
+// Diet-specific macro presets (percentage of calories)
+const dietMacroPresets: Record<DietType, { protein: number; carbs: number; fat: number }> = {
+  none: { protein: 30, carbs: 40, fat: 30 },
+  vegetarian: { protein: 25, carbs: 45, fat: 30 },
+  vegan: { protein: 20, carbs: 55, fat: 25 },
+  pescatarian: { protein: 30, carbs: 40, fat: 30 },
+  keto: { protein: 20, carbs: 5, fat: 75 },
+  paleo: { protein: 30, carbs: 25, fat: 45 },
+  mediterranean: { protein: 20, carbs: 45, fat: 35 },
+};
 
 export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculatorProps) {
   const { t } = useTranslation();
@@ -182,22 +193,17 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     setStep('body-composition');
   };
 
-  // When diet type changes, update defaults
+  // When diet type changes, apply preset macro percentages
   useEffect(() => {
+    const preset = dietMacroPresets[dietType];
+    setCarbsPercent(preset.carbs);
+    setFatPercent(preset.fat);
+    // For keto, reduce protein per lb since it's already high %
     if (dietType === 'keto') {
       setProteinPerLb(0.8);
-      setCarbsPercent(5); // Very low carbs for keto
-      setFatPercent(70);
       setLastAdjusted('carbs'); // In keto, fat is usually manually set
-    } else if (dietType === 'paleo' || dietType === 'vegan' || dietType === 'none') {
-      setProteinPerLb(1.2);
-      setCarbsPercent(50);
-      setFatPercent(25);
-      setLastAdjusted('fat');
     } else {
       setProteinPerLb(1.0);
-      setCarbsPercent(50);
-      setFatPercent(25);
       setLastAdjusted('fat');
     }
   }, [dietType]);
@@ -362,15 +368,13 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     setStep('distribution');
   };
 
-  const handleContinueToDietary = () => {
-    setStep('dietary');
-  };
-
+  // Skip dietary step - go directly to result
   const handleContinueToResult = () => {
     const macros = calculateFinalMacros();
     setCalculatedMacros(macros);
     setStep('result');
   };
+
 
   const handleApply = () => {
     onApply(calculatedMacros);
@@ -386,8 +390,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
   const handleBack = () => {
     if (step === 'body-composition') setStep('input');
     else if (step === 'distribution') setStep('body-composition');
-    else if (step === 'dietary') setStep('distribution');
-    else if (step === 'result') setStep('dietary');
+    else if (step === 'result') setStep('distribution');
   };
 
   const isFormValid = formData.age && formData.weight && 
@@ -423,13 +426,6 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
           <>
             <Calculator className="w-5 h-5" />
             {t('macroCalculator.title', 'Macro Calculator')}
-          </>
-        );
-      case 'dietary':
-        return (
-          <>
-            <Utensils className="w-5 h-5" />
-            Dietary Style
           </>
         );
       case 'result':
@@ -780,6 +776,27 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
 
         {step === 'distribution' && (
           <div className="space-y-3 pt-1 overflow-y-auto max-h-[80vh]">
+            {/* Dietary Style Filter - Horizontal scroll */}
+            <div>
+              <h3 className="font-semibold text-sm mb-2">Dietary Style</h3>
+              <div className="flex gap-1.5 flex-wrap">
+                {dietOptions.map((diet) => (
+                  <button
+                    key={diet.value}
+                    type="button"
+                    onClick={() => setDietType(diet.value)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                      dietType === diet.value
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                    }`}
+                  >
+                    {diet.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Calorie Deficit Section - Dropdown Style */}
             <div className="p-3 rounded-xl border border-border bg-card">
               <div className="flex items-center justify-between gap-3">
@@ -1019,46 +1036,13 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                 <ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
                 Back
               </Button>
-              <Button size="sm" className="flex-1" onClick={handleContinueToDietary} disabled={!!warning}>
+              <Button size="sm" className="flex-1" onClick={handleContinueToResult} disabled={!!warning}>
                 Continue
               </Button>
             </div>
           </div>
         )}
 
-        {step === 'dietary' && (
-          <div className="space-y-4 pt-2 overflow-y-auto max-h-[70vh]">
-            <p className="text-sm text-muted-foreground">Diet Type</p>
-            
-            <div className="grid grid-cols-2 gap-2">
-              {dietOptions.map((diet) => (
-                <button
-                  key={diet.value}
-                  type="button"
-                  onClick={() => setDietType(diet.value)}
-                  className={`p-3 rounded-xl border-2 text-left transition-all ${
-                    dietType === diet.value
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:bg-muted/50'
-                  } ${diet.value === 'mediterranean' ? 'col-span-1' : ''}`}
-                >
-                  <p className="font-semibold text-sm">{diet.label}</p>
-                  <p className="text-xs text-muted-foreground">{diet.description}</p>
-                </button>
-              ))}
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <Button variant="outline" className="flex-1" onClick={handleBack}>
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back
-              </Button>
-              <Button className="flex-1" onClick={handleContinueToResult}>
-                Continue
-              </Button>
-            </div>
-          </div>
-        )}
 
         {step === 'result' && (() => {
           const proteinCals = calculatedMacros.protein * 4;
