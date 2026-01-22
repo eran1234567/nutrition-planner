@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { Search, Clock, Sparkles, BookOpen, ChefHat, Baby, Plus, Check, Target, UtensilsCrossed, AlertTriangle, HeartPulse, X } from 'lucide-react';
@@ -17,7 +17,7 @@ import { MultiSelectDropdown } from '@/components/discover/MultiSelectDropdown';
 import { useGlobalRecipes } from '@/hooks/useGlobalRecipes';
 import { useAppStore } from '@/stores/appStore';
 import { useMealPlanStore } from '@/stores/mealPlanStore';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserData } from '@/hooks/useUserData';
 import { supabase } from '@/integrations/supabase/client';
@@ -198,16 +198,48 @@ export default function Discover() {
     return prefs;
   }, [preferences, pendingOnboarding]);
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTime, setSelectedTime] = useState<string | null>(null);
-  const [selectedMealType, setSelectedMealType] = useState<string | null>(null);
-  const [selectedCuisine, setSelectedCuisine] = useState<string | null>(null);
-  const [selectedDietType, setSelectedDietType] = useState<string | null>(null);
-  const [selectedAllergies, setSelectedAllergies] = useState<string[]>([]);
-  const [selectedDislikes, setSelectedDislikes] = useState<string[]>([]);
-  const [selectedHealthConsiderations, setSelectedHealthConsiderations] = useState<string[]>([]);
+  // Use URL search params for persistent filter state
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  // Initialize filter states from URL params
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || '');
+  const [selectedTime, setSelectedTime] = useState<string | null>(() => searchParams.get('time'));
+  const [selectedMealType, setSelectedMealType] = useState<string | null>(() => searchParams.get('meal'));
+  const [selectedCuisine, setSelectedCuisine] = useState<string | null>(() => searchParams.get('cuisine'));
+  const [selectedDietType, setSelectedDietType] = useState<string | null>(() => searchParams.get('diet'));
+  const [selectedAllergies, setSelectedAllergies] = useState<string[]>(() => {
+    const allergies = searchParams.get('allergies');
+    return allergies ? allergies.split(',').filter(Boolean) : [];
+  });
+  const [selectedDislikes, setSelectedDislikes] = useState<string[]>(() => {
+    const dislikes = searchParams.get('dislikes');
+    return dislikes ? dislikes.split(',').filter(Boolean) : [];
+  });
+  const [selectedHealthConsiderations, setSelectedHealthConsiderations] = useState<string[]>(() => {
+    const health = searchParams.get('health');
+    return health ? health.split(',').filter(Boolean) : [];
+  });
   const [userRecipes, setUserRecipes] = useState<UserRecipe[]>([]);
-  const [recipeSource, setRecipeSource] = useState<'all' | 'my' | 'app'>('all');
+  const [recipeSource, setRecipeSource] = useState<'all' | 'my' | 'app'>(() => {
+    const source = searchParams.get('source');
+    return (source === 'my' || source === 'app') ? source : 'all';
+  });
+
+  // Sync filter state to URL params
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (searchQuery) params.set('q', searchQuery);
+    if (selectedTime) params.set('time', selectedTime);
+    if (selectedMealType) params.set('meal', selectedMealType);
+    if (selectedCuisine) params.set('cuisine', selectedCuisine);
+    if (selectedDietType) params.set('diet', selectedDietType);
+    if (selectedAllergies.length > 0) params.set('allergies', selectedAllergies.join(','));
+    if (selectedDislikes.length > 0) params.set('dislikes', selectedDislikes.join(','));
+    if (selectedHealthConsiderations.length > 0) params.set('health', selectedHealthConsiderations.join(','));
+    if (recipeSource !== 'all') params.set('source', recipeSource);
+    
+    setSearchParams(params, { replace: true });
+  }, [searchQuery, selectedTime, selectedMealType, selectedCuisine, selectedDietType, selectedAllergies, selectedDislikes, selectedHealthConsiderations, recipeSource, setSearchParams]);
 
   // Combine profile diet type with dropdown selection (dropdown takes priority)
   const activeDietType = selectedDietType || (effectiveDietType === 'none' ? null : effectiveDietType);
@@ -230,7 +262,6 @@ export default function Discover() {
   const blockedTerms = useMemo(() => {
     const normalize = (v: string) => v.trim().toLowerCase();
     const currentDietExclusions = dietExclusions[userDietType] || [];
-    console.log('Diet filter active:', userDietType, 'Exclusions count:', currentDietExclusions.length);
     const base = [...currentDietExclusions, ...allAllergies, ...allDislikes].filter(Boolean).map(normalize).filter(Boolean);
     const expanded = base.flatMap((term) => {
       const variants = new Set<string>();
