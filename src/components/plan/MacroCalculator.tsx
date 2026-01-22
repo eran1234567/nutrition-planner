@@ -776,75 +776,68 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
 
         {step === 'distribution' && (
           <div className="space-y-3 pt-1 overflow-y-auto max-h-[80vh]">
-            {/* Dietary Style Filter - Dropdown */}
+            {/* Dietary Style + Calorie Deficit - Combined Row */}
             <div className="p-3 rounded-xl border border-border bg-card">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="font-semibold text-sm whitespace-nowrap">Dietary Style</h3>
-                <select
-                  value={dietType}
-                  onChange={(e) => setDietType(e.target.value as DietType)}
-                  className="h-7 px-2 rounded border border-border bg-background text-xs flex-1 max-w-[180px]"
-                >
-                  {dietOptions.map((diet) => (
-                    <option key={diet.value} value={diet.value}>
-                      {diet.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Calorie Deficit Section - Dropdown Style */}
-            <div className="p-3 rounded-xl border border-border bg-card">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="font-semibold text-sm whitespace-nowrap">Calorie Deficit</h3>
-                <div className="flex items-center gap-2 flex-1 justify-end">
+              <div className="flex items-center gap-4">
+                {/* Dietary Style */}
+                <div className="flex items-center gap-2 flex-1">
+                  <span className="text-xs font-medium whitespace-nowrap">Diet</span>
+                  <select
+                    value={dietType}
+                    onChange={(e) => setDietType(e.target.value as DietType)}
+                    className="h-7 px-2 rounded border border-border bg-background text-xs flex-1"
+                  >
+                    {dietOptions.map((diet) => (
+                      <option key={diet.value} value={diet.value}>
+                        {diet.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                {/* Divider */}
+                <div className="h-6 w-px bg-border" />
+                
+                {/* Calorie Deficit */}
+                <div className="flex items-center gap-2 flex-1">
+                  <span className="text-xs font-medium whitespace-nowrap">Deficit</span>
                   <select
                     value={deficitType}
                     onChange={(e) => setDeficitType(e.target.value as DeficitType)}
-                    className="h-7 px-2 rounded border border-border bg-background text-xs flex-1 max-w-[160px]"
+                    className="h-7 px-2 rounded border border-border bg-background text-xs flex-1"
                   >
-                    <option value="standard">Standard (20%)</option>
+                    <option value="standard">20%</option>
                     <option value="custom_percent">Custom %</option>
-                    <option value="custom_deficit_calories">Custom cal deficit</option>
-                    <option value="custom_calories">Set calories</option>
+                    <option value="custom_deficit_calories">Cal deficit</option>
+                    <option value="custom_calories">Set cal</option>
                   </select>
                   {deficitType === 'custom_percent' && (
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={customDeficitPercent}
-                        onChange={(e) => setCustomDeficitPercent(Math.min(50, Math.max(5, parseInt(e.target.value) || 0)))}
-                        className="w-12 h-7 px-1.5 rounded border border-border bg-background text-xs text-center"
-                        min={5}
-                        max={50}
-                      />
-                      <span className="text-xs text-muted-foreground">%</span>
-                    </div>
+                    <input
+                      type="number"
+                      value={customDeficitPercent}
+                      onChange={(e) => setCustomDeficitPercent(Math.min(50, Math.max(5, parseInt(e.target.value) || 0)))}
+                      className="w-10 h-7 px-1 rounded border border-border bg-background text-xs text-center"
+                      min={5}
+                      max={50}
+                    />
                   )}
                   {deficitType === 'custom_deficit_calories' && (
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={customDeficitCalories}
-                        onChange={(e) => setCustomDeficitCalories(e.target.value)}
-                        placeholder="500"
-                        className="w-14 h-7 px-1.5 rounded border border-border bg-background text-xs text-center"
-                      />
-                      <span className="text-xs text-muted-foreground">cal</span>
-                    </div>
+                    <input
+                      type="number"
+                      value={customDeficitCalories}
+                      onChange={(e) => setCustomDeficitCalories(e.target.value)}
+                      placeholder="500"
+                      className="w-12 h-7 px-1 rounded border border-border bg-background text-xs text-center"
+                    />
                   )}
                   {deficitType === 'custom_calories' && (
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        value={customCalories}
-                        onChange={(e) => setCustomCalories(e.target.value)}
-                        placeholder={String(getTargetCalories())}
-                        className="w-16 h-7 px-1.5 rounded border border-border bg-background text-xs text-center"
-                      />
-                      <span className="text-xs text-muted-foreground">cal</span>
-                    </div>
+                    <input
+                      type="number"
+                      value={customCalories}
+                      onChange={(e) => setCustomCalories(e.target.value)}
+                      placeholder={String(getTargetCalories())}
+                      className="w-14 h-7 px-1 rounded border border-border bg-background text-xs text-center"
+                    />
                   )}
                 </div>
               </div>
