@@ -7,7 +7,6 @@ import "@/lib/i18n";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
-import Onboarding from "./pages/Onboarding";
 import Discover from "./pages/Discover";
 import Recipes from "./pages/Recipes";
 import RecipeDetail from "./pages/RecipeDetail";
@@ -29,9 +28,6 @@ const App = () => (
           {/* Public routes */}
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
-          
-          {/* Semi-public routes */}
-          <Route path="/onboarding" element={<Onboarding />} />
           
           {/* Protected routes */}
           {/* Public recipe browsing */}

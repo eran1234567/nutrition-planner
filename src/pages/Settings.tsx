@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import { 
   ArrowLeft, 
   User, 
-  Utensils, 
   Target, 
   LogOut,
   ChevronRight,
@@ -24,20 +23,6 @@ const settingsItems = [
     path: '/my-recipes',
   },
   {
-    id: 'profile',
-    icon: User,
-    labelKey: 'settings.profile',
-    descKey: 'settings.profileDesc',
-    step: 0,
-  },
-  {
-    id: 'diet',
-    icon: Utensils,
-    labelKey: 'settings.diet',
-    descKey: 'settings.dietDesc',
-    step: 1,
-  },
-  {
     id: 'goals',
     icon: Target,
     labelKey: 'settings.goals',
@@ -55,8 +40,6 @@ export default function Settings() {
   const handleEditSection = (item: typeof settingsItems[0]) => {
     if (item.path) {
       navigate(item.path);
-    } else if (item.step !== undefined) {
-      navigate('/onboarding', { state: { editMode: true, startStep: item.step } });
     }
   };
 
