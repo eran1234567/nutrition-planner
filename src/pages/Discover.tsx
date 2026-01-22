@@ -201,45 +201,54 @@ export default function Discover() {
   // Use URL search params for persistent filter state
   const [searchParams, setSearchParams] = useSearchParams();
   
-  // Initialize filter states from URL params
-  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || '');
-  const [selectedTime, setSelectedTime] = useState<string | null>(() => searchParams.get('time'));
-  const [selectedMealType, setSelectedMealType] = useState<string | null>(() => searchParams.get('meal'));
-  const [selectedCuisine, setSelectedCuisine] = useState<string | null>(() => searchParams.get('cuisine'));
-  const [selectedDietType, setSelectedDietType] = useState<string | null>(() => searchParams.get('diet'));
-  const [selectedAllergies, setSelectedAllergies] = useState<string[]>(() => {
+  // Read filter values directly from URL params
+  const searchQuery = searchParams.get('q') || '';
+  const selectedTime = searchParams.get('time');
+  const selectedMealType = searchParams.get('meal');
+  const selectedCuisine = searchParams.get('cuisine');
+  const selectedDietType = searchParams.get('diet');
+  const selectedAllergies = useMemo(() => {
     const allergies = searchParams.get('allergies');
     return allergies ? allergies.split(',').filter(Boolean) : [];
-  });
-  const [selectedDislikes, setSelectedDislikes] = useState<string[]>(() => {
+  }, [searchParams]);
+  const selectedDislikes = useMemo(() => {
     const dislikes = searchParams.get('dislikes');
     return dislikes ? dislikes.split(',').filter(Boolean) : [];
-  });
-  const [selectedHealthConsiderations, setSelectedHealthConsiderations] = useState<string[]>(() => {
+  }, [searchParams]);
+  const selectedHealthConsiderations = useMemo(() => {
     const health = searchParams.get('health');
     return health ? health.split(',').filter(Boolean) : [];
-  });
-  const [userRecipes, setUserRecipes] = useState<UserRecipe[]>([]);
-  const [recipeSource, setRecipeSource] = useState<'all' | 'my' | 'app'>(() => {
+  }, [searchParams]);
+  const recipeSource = useMemo(() => {
     const source = searchParams.get('source');
     return (source === 'my' || source === 'app') ? source : 'all';
-  });
+  }, [searchParams]);
+  
+  const [userRecipes, setUserRecipes] = useState<UserRecipe[]>([]);
 
-  // Sync filter state to URL params
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (searchQuery) params.set('q', searchQuery);
-    if (selectedTime) params.set('time', selectedTime);
-    if (selectedMealType) params.set('meal', selectedMealType);
-    if (selectedCuisine) params.set('cuisine', selectedCuisine);
-    if (selectedDietType) params.set('diet', selectedDietType);
-    if (selectedAllergies.length > 0) params.set('allergies', selectedAllergies.join(','));
-    if (selectedDislikes.length > 0) params.set('dislikes', selectedDislikes.join(','));
-    if (selectedHealthConsiderations.length > 0) params.set('health', selectedHealthConsiderations.join(','));
-    if (recipeSource !== 'all') params.set('source', recipeSource);
-    
-    setSearchParams(params, { replace: true });
-  }, [searchQuery, selectedTime, selectedMealType, selectedCuisine, selectedDietType, selectedAllergies, selectedDislikes, selectedHealthConsiderations, recipeSource, setSearchParams]);
+  // Helper to update URL params
+  const updateSearchParams = useCallback((key: string, value: string | string[] | null) => {
+    const newParams = new URLSearchParams(searchParams);
+    if (value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
+      newParams.delete(key);
+    } else if (Array.isArray(value)) {
+      newParams.set(key, value.join(','));
+    } else {
+      newParams.set(key, value);
+    }
+    setSearchParams(newParams, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  // Setters that update URL params
+  const setSearchQuery = useCallback((value: string) => updateSearchParams('q', value || null), [updateSearchParams]);
+  const setSelectedTime = useCallback((value: string | null) => updateSearchParams('time', value), [updateSearchParams]);
+  const setSelectedMealType = useCallback((value: string | null) => updateSearchParams('meal', value), [updateSearchParams]);
+  const setSelectedCuisine = useCallback((value: string | null) => updateSearchParams('cuisine', value), [updateSearchParams]);
+  const setSelectedDietType = useCallback((value: string | null) => updateSearchParams('diet', value), [updateSearchParams]);
+  const setSelectedAllergies = useCallback((value: string[]) => updateSearchParams('allergies', value), [updateSearchParams]);
+  const setSelectedDislikes = useCallback((value: string[]) => updateSearchParams('dislikes', value), [updateSearchParams]);
+  const setSelectedHealthConsiderations = useCallback((value: string[]) => updateSearchParams('health', value), [updateSearchParams]);
+  const setRecipeSource = useCallback((value: 'all' | 'my' | 'app') => updateSearchParams('source', value === 'all' ? null : value), [updateSearchParams]);
 
   // Combine profile diet type with dropdown selection (dropdown takes priority)
   const activeDietType = selectedDietType || (effectiveDietType === 'none' ? null : effectiveDietType);
