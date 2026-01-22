@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { Search, Clock, Sparkles, BookOpen, ChefHat, Baby, Plus, Check, Target, UtensilsCrossed, AlertTriangle, HeartPulse, X } from 'lucide-react';
+import { Search, Clock, Sparkles, BookOpen, ChefHat, Baby, Plus, Check, Target, UtensilsCrossed, AlertTriangle, HeartPulse, X, Flame, Wheat, Droplets } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -161,6 +161,7 @@ export default function Discover() {
     recipePoolsBySlot,
     numberOfDays,
     dailyTargets,
+    macroGapContext,
   } = useMealPlanStore();
 
   // Modal state for adding to plan
@@ -523,18 +524,69 @@ export default function Discover() {
       return true;
     });
 
+    // Sort recipes - prioritize macro gap filling in plan mode
     recipes = recipes.sort((a, b) => {
       let aScore = 0;
       let bScore = 0;
+      
+      // Macro gap-aware sorting when in plan mode with gap context
+      if (isPlanMode && macroGapContext && macroGapContext.primaryGap) {
+        const aNutrition = a.nutrition;
+        const bNutrition = b.nutrition;
+        
+        if (aNutrition && bNutrition) {
+          // Score based on how well the recipe fills the primary gap
+          const getGapFillScore = (nutrition: typeof aNutrition) => {
+            if (!nutrition) return 0;
+            
+            const primaryGap = macroGapContext.primaryGap;
+            let fillScore = 0;
+            
+            // Calculate how much of the gap this recipe fills
+            if (primaryGap === 'protein' && macroGapContext.proteinGap > 0) {
+              const proteinFill = Math.min(nutrition.protein_g || 0, macroGapContext.proteinGap);
+              fillScore = (proteinFill / macroGapContext.proteinGap) * 100;
+            } else if (primaryGap === 'carbs' && macroGapContext.carbsGap > 0) {
+              const carbsFill = Math.min(nutrition.carbs_g || 0, macroGapContext.carbsGap);
+              fillScore = (carbsFill / macroGapContext.carbsGap) * 100;
+            } else if (primaryGap === 'fat' && macroGapContext.fatGap > 0) {
+              const fatFill = Math.min(nutrition.fat_g || 0, macroGapContext.fatGap);
+              fillScore = (fatFill / macroGapContext.fatGap) * 100;
+            }
+            
+            // Penalize if it overshoots other macros significantly
+            if (primaryGap !== 'protein' && macroGapContext.proteinGap <= 0) {
+              const overshoot = (nutrition.protein_g || 0) / (dailyTargets?.protein || 100);
+              if (overshoot > 0.3) fillScore -= overshoot * 10;
+            }
+            if (primaryGap !== 'carbs' && macroGapContext.carbsGap <= 0) {
+              const overshoot = (nutrition.carbs_g || 0) / (dailyTargets?.carbs || 100);
+              if (overshoot > 0.3) fillScore -= overshoot * 10;
+            }
+            if (primaryGap !== 'fat' && macroGapContext.fatGap <= 0) {
+              const overshoot = (nutrition.fat_g || 0) / (dailyTargets?.fat || 100);
+              if (overshoot > 0.3) fillScore -= overshoot * 10;
+            }
+            
+            return fillScore;
+          };
+          
+          aScore += getGapFillScore(aNutrition);
+          bScore += getGapFillScore(bNutrition);
+        }
+      }
+      
+      // Kid-friendly boost for young users
       if (userAgeGroup === 'toddler' || userAgeGroup === 'child') {
         if ((a as any).is_kid_friendly) aScore += 5;
         if ((b as any).is_kid_friendly) bScore += 5;
       }
+      
       return bScore - aScore;
     });
 
     return recipes;
-  }, [allRecipes, searchQuery, selectedTime, selectedMealType, selectedCuisine, blockedTerms, ageBlockedTerms, userAgeGroup, activeHealthPreferences, isPlanMode, currentSlotFilter, recipePoolsBySlot]);
+  }, [allRecipes, searchQuery, selectedTime, selectedMealType, selectedCuisine, blockedTerms, ageBlockedTerms, userAgeGroup, activeHealthPreferences, isPlanMode, currentSlotFilter, recipePoolsBySlot, macroGapContext, dailyTargets]);
 
   // Helper to get meal type from slot ID
   function getMealTypeForSlot(slotId: MealSlotId): string {
@@ -654,6 +706,31 @@ export default function Discover() {
                   {t('discover.healthFiltering', 'Prioritizing {{prefs}} recipes', { 
                     prefs: activeHealthPreferences.map(p => p.replace('-', ' ')).join(', ') 
                   })}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Macro gap sorting indicator */}
+        {isPlanMode && macroGapContext && macroGapContext.primaryGap && (
+          <div className="p-3 rounded-xl bg-accent/50 border border-accent mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
+                {macroGapContext.primaryGap === 'protein' && <Flame className="w-4 h-4 text-[hsl(var(--protein))]" />}
+                {macroGapContext.primaryGap === 'carbs' && <Wheat className="w-4 h-4 text-[hsl(var(--carbs))]" />}
+                {macroGapContext.primaryGap === 'fat' && <Droplets className="w-4 h-4 text-[hsl(var(--fat))]" />}
+              </div>
+              <div>
+                <p className="text-sm font-medium">
+                  Sorted by {macroGapContext.primaryGap} content
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Need ~{Math.round(
+                    macroGapContext.primaryGap === 'protein' ? macroGapContext.proteinGap :
+                    macroGapContext.primaryGap === 'carbs' ? macroGapContext.carbsGap :
+                    macroGapContext.fatGap
+                  )}g more {macroGapContext.primaryGap} to hit target
                 </p>
               </div>
             </div>

@@ -8,9 +8,10 @@ import { StickyActions } from '@/components/ui/StickyActions';
 import { NutritionGoalsModal } from '@/components/plan/NutritionGoalsModal';
 import { NutritionSummaryCard } from '@/components/plan/NutritionSummaryCard';
 import { PlanSlotCard } from '@/components/plan/PlanSlotCard';
+import { MacroGapSuggestions, type TopUpItem } from '@/components/plan/MacroGapSuggestions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAppStore } from '@/stores/appStore';
-import { useMealPlanStore } from '@/stores/mealPlanStore';
+import { useMealPlanStore, type MacroGapContext } from '@/stores/mealPlanStore';
 import { useUserData } from '@/hooks/useUserData';
 import { useGlobalRecipes } from '@/hooks/useGlobalRecipes';
 import { useMealPlanSync } from '@/hooks/useMealPlanSync';
@@ -46,6 +47,7 @@ export default function Plan() {
     swapRecipe,
     setIsPlanMode,
     setCurrentSlotFilter,
+    setMacroGapContext,
   } = useMealPlanStore();
   
   const [selectedDay, setSelectedDay] = useState(0);
@@ -150,11 +152,44 @@ export default function Plan() {
     return () => clearTimeout(timeout);
   }, [generatedPlan, activePlanId, isAuthenticated, updatePlan]);
 
-  // Handle swap - navigate to Discover with slot filter
+  // Handle swap - navigate to Discover with slot filter and macro gap context
   const handleSwapRecipe = (slotId: string) => {
+    // Calculate macro gaps to help with recipe sorting
+    const gapContext: MacroGapContext = {
+      proteinGap: dailyTargets ? dailyTargets.protein - calculatedDayTotals.protein : 0,
+      carbsGap: dailyTargets ? dailyTargets.carbs - calculatedDayTotals.carbs : 0,
+      fatGap: dailyTargets ? dailyTargets.fat - calculatedDayTotals.fat : 0,
+      caloriesGap: dailyTargets ? dailyTargets.calories - calculatedDayTotals.calories : 0,
+      primaryGap: null,
+    };
+    
+    // Determine primary gap (largest percentage shortfall)
+    if (dailyTargets) {
+      const proteinPct = gapContext.proteinGap / dailyTargets.protein;
+      const carbsPct = gapContext.carbsGap / dailyTargets.carbs;
+      const fatPct = gapContext.fatGap / dailyTargets.fat;
+      
+      if (proteinPct > 0.1 || carbsPct > 0.1 || fatPct > 0.1) {
+        const maxPct = Math.max(proteinPct, carbsPct, fatPct);
+        if (maxPct === proteinPct) gapContext.primaryGap = 'protein';
+        else if (maxPct === carbsPct) gapContext.primaryGap = 'carbs';
+        else gapContext.primaryGap = 'fat';
+      }
+    }
+    
+    setMacroGapContext(gapContext);
     setCurrentSlotFilter(slotId as any);
     setIsPlanMode(true);
     navigate('/discover');
+  };
+
+  // Handle adding a top-up item to fill macro gaps
+  const handleAddTopUp = (item: TopUpItem) => {
+    // For now, just show a toast - in future could add to a "extras" list
+    toast.success(`Added ${item.name}`, {
+      description: `+${item.macros.calories} cal, +${item.macros.protein}g P, +${item.macros.carbs}g C, +${item.macros.fat}g F`,
+    });
+    // TODO: Could persist these as "extras" for the day
   };
 
   // Regenerate unlocked slots for current day
@@ -372,6 +407,12 @@ export default function Plan() {
               </div>
             </div>
 
+            {/* Macro gap suggestions */}
+            <MacroGapSuggestions
+              dailyTargets={dailyTargets}
+              dayTotals={calculatedDayTotals}
+              onAddTopUp={handleAddTopUp}
+            />
 
             {/* Meal slots */}
             <div className="space-y-3">

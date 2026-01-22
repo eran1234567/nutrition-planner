@@ -9,6 +9,15 @@ import type {
 } from '@/types/mealPlan';
 import { getDefaultPercentsForSlots } from '@/types/mealPlan';
 
+// Macro gap context for smart recipe sorting
+export interface MacroGapContext {
+  proteinGap: number;
+  carbsGap: number;
+  fatGap: number;
+  caloriesGap: number;
+  primaryGap: 'protein' | 'carbs' | 'fat' | null;
+}
+
 interface MealPlanState {
   // Current user ID for storage isolation
   currentUserId: string | null;
@@ -30,6 +39,9 @@ interface MealPlanState {
   isPlanMode: boolean;
   currentSlotFilter: MealSlotId | null;
   lastSelectedSlot: MealSlotId | null;
+  
+  // Macro gap context for smart swaps
+  macroGapContext: MacroGapContext | null;
   
   // Actions
   setCurrentUserId: (userId: string | null) => void;
@@ -59,6 +71,7 @@ interface MealPlanState {
   setIsPlanMode: (isPlanMode: boolean) => void;
   setCurrentSlotFilter: (slotId: MealSlotId | null) => void;
   setLastSelectedSlot: (slotId: MealSlotId | null) => void;
+  setMacroGapContext: (context: MacroGapContext | null) => void;
   
   // Reset
   resetPlanState: () => void;
@@ -76,6 +89,7 @@ const initialState = {
   isPlanMode: false,
   currentSlotFilter: null,
   lastSelectedSlot: null,
+  macroGapContext: null,
 };
 
 // Helper to get user-specific storage key
@@ -250,6 +264,8 @@ export const useMealPlanStore = create<MealPlanState>()(
       setCurrentSlotFilter: (slotId) => set({ currentSlotFilter: slotId }),
       
       setLastSelectedSlot: (slotId) => set({ lastSelectedSlot: slotId }),
+      
+      setMacroGapContext: (context) => set({ macroGapContext: context }),
       
       resetPlanState: () => set({ ...initialState, currentUserId: get().currentUserId }),
     }),
