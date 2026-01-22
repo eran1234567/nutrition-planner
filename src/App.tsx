@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "@/lib/i18n";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { useAuth } from "@/hooks/useAuth";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Discover from "./pages/Discover";
@@ -18,54 +19,60 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/" element={<Index />} />
-          <Route path="/auth" element={<Auth />} />
-          
-          {/* Protected routes */}
-          {/* Public recipe browsing */}
-          <Route path="/discover" element={<Discover />} />
-          <Route path="/recipe/:id" element={<RecipeDetail />} />
-          
-          {/* Protected routes */}
-          <Route path="/my-recipes" element={
-            <ProtectedRoute>
-              <MyRecipes />
-            </ProtectedRoute>
-          } />
-          <Route path="/recipes" element={
-            <ProtectedRoute>
-              <Recipes />
-            </ProtectedRoute>
-          } />
-          <Route path="/settings" element={
-            <ProtectedRoute>
-              <Settings />
-            </ProtectedRoute>
-          } />
-          <Route path="/plan" element={
-            <ProtectedRoute>
-              <Plan />
-            </ProtectedRoute>
-          } />
-          <Route path="/grocery" element={
-            <ProtectedRoute>
-              <Grocery />
-            </ProtectedRoute>
-          } />
-          
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+  // Ensure auth is initialized even on public routes (like `/`) so user-scoped
+  // persisted stores (meal plan + macro calculator inputs) hydrate correctly.
+  useAuth();
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/" element={<Index />} />
+            <Route path="/auth" element={<Auth />} />
+            
+            {/* Protected routes */}
+            {/* Public recipe browsing */}
+            <Route path="/discover" element={<Discover />} />
+            <Route path="/recipe/:id" element={<RecipeDetail />} />
+            
+            {/* Protected routes */}
+            <Route path="/my-recipes" element={
+              <ProtectedRoute>
+                <MyRecipes />
+              </ProtectedRoute>
+            } />
+            <Route path="/recipes" element={
+              <ProtectedRoute>
+                <Recipes />
+              </ProtectedRoute>
+            } />
+            <Route path="/settings" element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            } />
+            <Route path="/plan" element={
+              <ProtectedRoute>
+                <Plan />
+              </ProtectedRoute>
+            } />
+            <Route path="/grocery" element={
+              <ProtectedRoute>
+                <Grocery />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;

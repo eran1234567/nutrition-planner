@@ -131,6 +131,20 @@ const initialState = {
 const getUserStorageKey = (userId: string | null) => 
   userId ? `meal-plan-storage-${userId}` : 'meal-plan-storage-anonymous';
 
+type PersistEnvelope<TState> = {
+  state?: Partial<TState>;
+  version?: number;
+};
+
+const safeParsePersist = <TState,>(raw: string | null): PersistEnvelope<TState> | null => {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as PersistEnvelope<TState>;
+  } catch {
+    return null;
+  }
+};
+
 export const useMealPlanStore = create<MealPlanState>()(
   persist(
     (set, get) => ({
@@ -141,6 +155,50 @@ export const useMealPlanStore = create<MealPlanState>()(
         
         // If user changed, clear old data and load new user's data
         if (currentUserId !== userId) {
+          // If the user is transitioning from anonymous -> signed-in, migrate any
+          // saved macro calculator inputs so they don't "disappear" after refresh.
+          // This commonly happens when a user applies calculator settings before
+          // auth finished initializing.
+          if (!currentUserId && userId) {
+            const anonKey = getUserStorageKey(null);
+            const userKey = getUserStorageKey(userId);
+
+            const anonRaw = localStorage.getItem(anonKey);
+            const userRaw = localStorage.getItem(userKey);
+
+            const anonParsed = safeParsePersist<MealPlanState>(anonRaw);
+            const userParsed = safeParsePersist<MealPlanState>(userRaw);
+
+            const anonMacro = anonParsed?.state?.macroCalculatorInputs ?? null;
+            const userMacro = userParsed?.state?.macroCalculatorInputs ?? null;
+
+            // If user has no saved calculator inputs, but anonymous does, merge them.
+            if (anonMacro && !userMacro) {
+              const merged: PersistEnvelope<MealPlanState> = userParsed
+                ? {
+                    ...userParsed,
+                    state: {
+                      ...(userParsed.state ?? {}),
+                      macroCalculatorInputs: anonMacro,
+                    },
+                  }
+                : {
+                    ...(anonParsed ?? {}),
+                    state: {
+                      ...(anonParsed?.state ?? {}),
+                      macroCalculatorInputs: anonMacro,
+                    },
+                  };
+
+              try {
+                localStorage.setItem(userKey, JSON.stringify(merged));
+                localStorage.removeItem(anonKey);
+              } catch (e) {
+                console.warn('Failed to migrate anonymous macro calculator inputs:', e);
+              }
+            }
+          }
+
           // Clear current state first
           set({ ...initialState, currentUserId: userId });
           
