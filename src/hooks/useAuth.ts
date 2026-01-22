@@ -23,13 +23,10 @@ export const useAuth = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         const newUserId = session?.user?.id ?? null;
-        const prevUserId = prevUserIdRef.current;
-
-        // Clear meal plan store if user changed (including logout)
-        if (prevUserId !== null && prevUserId !== newUserId) {
-          useMealPlanStore.getState().resetPlanState();
-        }
         prevUserIdRef.current = newUserId;
+
+        // Update meal plan store with current user ID - this handles data isolation
+        useMealPlanStore.getState().setCurrentUserId(newUserId);
 
         setSession(session);
         setUser(session?.user ?? null);
@@ -48,7 +45,12 @@ export const useAuth = () => {
 
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      prevUserIdRef.current = session?.user?.id ?? null;
+      const userId = session?.user?.id ?? null;
+      prevUserIdRef.current = userId;
+      
+      // Set user ID in meal plan store for data isolation
+      useMealPlanStore.getState().setCurrentUserId(userId);
+      
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
