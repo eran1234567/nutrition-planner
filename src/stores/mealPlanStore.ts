@@ -10,6 +10,9 @@ import type {
 import { getDefaultPercentsForSlots } from '@/types/mealPlan';
 
 interface MealPlanState {
+  // Current user ID for storage isolation
+  currentUserId: string | null;
+  
   // Plan configuration (from modal)
   dailyTargets: DailyTargets | null;
   selectedMealSlots: MealSlot[];
@@ -29,6 +32,7 @@ interface MealPlanState {
   lastSelectedSlot: MealSlotId | null;
   
   // Actions
+  setCurrentUserId: (userId: string | null) => void;
   setDailyTargets: (targets: DailyTargets) => void;
   setSelectedMealSlots: (slots: MealSlot[]) => void;
   setNumberOfDays: (days: number) => void;
@@ -61,6 +65,7 @@ interface MealPlanState {
 }
 
 const initialState = {
+  currentUserId: null,
   dailyTargets: null,
   selectedMealSlots: [],
   numberOfDays: 7,
@@ -73,10 +78,47 @@ const initialState = {
   lastSelectedSlot: null,
 };
 
+// Helper to get user-specific storage key
+const getUserStorageKey = (userId: string | null) => 
+  userId ? `meal-plan-storage-${userId}` : 'meal-plan-storage-anonymous';
+
 export const useMealPlanStore = create<MealPlanState>()(
   persist(
     (set, get) => ({
       ...initialState,
+      
+      setCurrentUserId: (userId) => {
+        const currentUserId = get().currentUserId;
+        
+        // If user changed, clear old data and load new user's data
+        if (currentUserId !== userId) {
+          // Clear current state first
+          set({ ...initialState, currentUserId: userId });
+          
+          // Try to load the new user's data from their storage
+          if (userId) {
+            const storageKey = getUserStorageKey(userId);
+            try {
+              const stored = localStorage.getItem(storageKey);
+              if (stored) {
+                const parsed = JSON.parse(stored);
+                if (parsed.state) {
+                  set({
+                    ...parsed.state,
+                    currentUserId: userId,
+                    // Don't persist UI state
+                    isPlanMode: false,
+                    currentSlotFilter: null,
+                    lastSelectedSlot: null,
+                  });
+                }
+              }
+            } catch (e) {
+              console.warn('Failed to load user meal plan data:', e);
+            }
+          }
+        }
+      },
       
       setDailyTargets: (targets) => set({ dailyTargets: targets }),
       
@@ -209,12 +251,33 @@ export const useMealPlanStore = create<MealPlanState>()(
       
       setLastSelectedSlot: (slotId) => set({ lastSelectedSlot: slotId }),
       
-      resetPlanState: () => set(initialState),
+      resetPlanState: () => set({ ...initialState, currentUserId: get().currentUserId }),
     }),
     {
       name: 'meal-plan-storage',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => ({
+        getItem: (name) => {
+          // Get current user from the store state
+          const state = useMealPlanStore.getState?.();
+          const userId = state?.currentUserId;
+          const key = getUserStorageKey(userId);
+          return localStorage.getItem(key);
+        },
+        setItem: (name, value) => {
+          const state = useMealPlanStore.getState?.();
+          const userId = state?.currentUserId;
+          const key = getUserStorageKey(userId);
+          localStorage.setItem(key, value);
+        },
+        removeItem: (name) => {
+          const state = useMealPlanStore.getState?.();
+          const userId = state?.currentUserId;
+          const key = getUserStorageKey(userId);
+          localStorage.removeItem(key);
+        },
+      })),
       partialize: (state) => ({
+        currentUserId: state.currentUserId,
         dailyTargets: state.dailyTargets,
         selectedMealSlots: state.selectedMealSlots,
         numberOfDays: state.numberOfDays,
