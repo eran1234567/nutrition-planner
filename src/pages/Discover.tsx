@@ -264,8 +264,8 @@ export default function Discover() {
     none: [],
   };
 
-  // Max carbs per serving for keto diet (in grams)
-  const KETO_MAX_CARBS = 15;
+  // Max carbs per serving for keto diet (in grams) - strict keto aims for ~20-30g/day total
+  const KETO_MAX_CARBS = 10;
 
   // Combine profile allergies/dislikes with dropdown selections
   const allAllergies = [...new Set([...effectiveAllergies, ...selectedAllergies])];
