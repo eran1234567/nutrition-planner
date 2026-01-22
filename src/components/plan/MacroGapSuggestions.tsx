@@ -106,7 +106,7 @@ export function MacroGapSuggestions({
     return result;
   }, [dailyTargets, dayTotals]);
 
-  // Get relevant suggestions for current gaps
+  // Get relevant suggestions for current gaps - always show options to fill remaining gap
   const suggestions = useMemo(() => {
     if (gaps.length === 0) return [];
     
@@ -124,6 +124,7 @@ export function MacroGapSuggestions({
     const relevantItems = TOP_UP_ITEMS.filter(item => item.primaryMacro === primaryGap.macro);
     
     // Sort by how much of the gap they fill without overshooting too much
+    // Use CURRENT gap (which accounts for already-added extras)
     return relevantItems
       .map(item => {
         const fillAmount = item.macros[primaryGap.macro];
@@ -136,11 +137,16 @@ export function MacroGapSuggestions({
       .map(s => s.item);
   }, [gaps, dailyTargets]);
 
-  // Filter out already-added extras from suggestions
-  const filteredSuggestions = useMemo(() => {
-    const addedIds = new Set(currentExtras.map(e => e.id));
-    return suggestions.filter(item => !addedIds.has(item.id));
-  }, [suggestions, currentExtras]);
+  // Count how many times each item has been added
+  const extraCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    currentExtras.forEach(e => {
+      // Extract base ID (remove any count suffix like "-2", "-3")
+      const baseId = e.id.replace(/-\d+$/, '');
+      counts[baseId] = (counts[baseId] || 0) + 1;
+    });
+    return counts;
+  }, [currentExtras]);
 
   // Don't render if no significant gaps AND no extras added
   if (gaps.length === 0 && currentExtras.length === 0) return null;
@@ -152,25 +158,32 @@ export function MacroGapSuggestions({
         <div className="mb-3">
           <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Added:</span>
           <div className="flex flex-wrap gap-1.5">
-            {currentExtras.map(extra => (
-              <span
-                key={extra.id}
-                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20"
-              >
-                <span>{extra.emoji}</span>
-                {extra.name}
-                <span className="text-muted-foreground">+{extra.macros.fat}g F</span>
-                {onRemoveExtra && (
-                  <button
-                    onClick={() => onRemoveExtra(extra.id)}
-                    className="ml-0.5 p-0.5 rounded-full hover:bg-primary/20 transition-colors"
-                    aria-label={`Remove ${extra.name}`}
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
-              </span>
-            ))}
+            {currentExtras.map(extra => {
+              // Determine which macro is the primary contribution
+              const primaryMacro = extra.macros.fat >= extra.macros.protein && extra.macros.fat >= extra.macros.carbs
+                ? 'fat' : extra.macros.protein >= extra.macros.carbs ? 'protein' : 'carbs';
+              const macroLabel = primaryMacro === 'fat' ? 'F' : primaryMacro === 'protein' ? 'P' : 'C';
+              
+              return (
+                <span
+                  key={extra.id}
+                  className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+                >
+                  <span>{extra.emoji}</span>
+                  {extra.name}
+                  <span className="text-muted-foreground">+{extra.macros[primaryMacro]}g {macroLabel}</span>
+                  {onRemoveExtra && (
+                    <button
+                      onClick={() => onRemoveExtra(extra.id)}
+                      className="ml-0.5 p-0.5 rounded-full hover:bg-primary/20 transition-colors"
+                      aria-label={`Remove ${extra.name}`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </span>
+              );
+            })}
           </div>
         </div>
       )}
@@ -199,23 +212,31 @@ export function MacroGapSuggestions({
             </div>
           </div>
           
-          {filteredSuggestions.length > 0 && (
+          {suggestions.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {filteredSuggestions.map(item => (
-                <Button
-                  key={item.id}
-                  variant="outline"
-                  size="sm"
-                  className="h-auto py-1.5 px-2.5 text-xs bg-card hover:bg-muted"
-                  onClick={() => onAddTopUp(item)}
-                >
-                  <span className="mr-1">{item.emoji}</span>
-                  {item.name}
-                  <span className="ml-1.5 text-muted-foreground">
-                    +{item.macros[item.primaryMacro]}g
-                  </span>
-                </Button>
-              ))}
+              {suggestions.map(item => {
+                const timesAdded = extraCounts[item.id] || 0;
+                const addLabel = timesAdded > 0 ? `+ another` : `Add`;
+                return (
+                  <Button
+                    key={item.id}
+                    variant="outline"
+                    size="sm"
+                    className="h-auto py-1.5 px-2.5 text-xs bg-card hover:bg-muted"
+                    onClick={() => {
+                      // Create unique ID for multiple additions
+                      const uniqueId = timesAdded > 0 ? `${item.id}-${timesAdded + 1}` : item.id;
+                      onAddTopUp({ ...item, id: uniqueId });
+                    }}
+                  >
+                    <span className="mr-1">{item.emoji}</span>
+                    {timesAdded > 0 ? addLabel : ''} {item.name}
+                    <span className="ml-1.5 text-muted-foreground">
+                      +{item.macros[item.primaryMacro]}g
+                    </span>
+                  </Button>
+                );
+              })}
             </div>
           )}
         </>
