@@ -844,6 +844,123 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
               )}
             </div>
 
+            {/* Live Preview Results */}
+            {(() => {
+              const proteinCals = currentMacros.protein * 4;
+              const carbsCals = currentMacros.carbs * 4;
+              const fatCals = currentMacros.fat * 9;
+              const totalCals = currentMacros.calories;
+              
+              const proteinPct = Math.round((proteinCals / totalCals) * 100);
+              const carbsPct = Math.round((carbsCals / totalCals) * 100);
+              const fatPct = 100 - proteinPct - carbsPct;
+              
+              const dailyDeficit = Math.round(tdee - totalCals);
+              const weeklyDeficit = dailyDeficit * 7;
+              const expectedLossPerWeek = (weeklyDeficit / 3500).toFixed(2);
+              
+              return (
+                <>
+                  {/* Daily Targets Header */}
+                  <div className="bg-primary/5 rounded-2xl p-4">
+                    <div className="flex items-center justify-center gap-2 mb-3">
+                      <Flame className="w-5 h-5 text-primary" />
+                      <span className="font-semibold text-foreground">Your Daily Targets</span>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-4xl font-bold text-primary">
+                        {totalCals.toLocaleString()}
+                      </div>
+                      <div className="text-sm text-muted-foreground">calories per day</div>
+                    </div>
+                  </div>
+
+                  <h3 className="font-semibold text-lg">Macro Breakdown</h3>
+                  
+                  {/* Macro percentage bar */}
+                  <div className="flex h-8 rounded-full overflow-hidden">
+                    <div 
+                      className="flex items-center justify-center text-white text-xs font-semibold"
+                      style={{ width: `${proteinPct}%`, backgroundColor: '#3B82F6' }}
+                    >
+                      {proteinPct}%
+                    </div>
+                    <div 
+                      className="flex items-center justify-center text-white text-xs font-semibold"
+                      style={{ width: `${carbsPct}%`, backgroundColor: '#F59E0B' }}
+                    >
+                      {carbsPct}%
+                    </div>
+                    <div 
+                      className="flex items-center justify-center text-white text-xs font-semibold"
+                      style={{ width: `${fatPct}%`, backgroundColor: '#EC4899' }}
+                    >
+                      {fatPct}%
+                    </div>
+                  </div>
+
+                  {/* Macro cards */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-xl border border-border overflow-hidden">
+                      <div className="h-1" style={{ backgroundColor: '#3B82F6' }} />
+                      <div className="p-3 text-center">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Protein</p>
+                        <p className="text-xl font-bold">{currentMacros.protein}g</p>
+                        <p className="text-xs text-muted-foreground">{proteinCals} cal</p>
+                        <p className="text-xs font-medium" style={{ color: '#3B82F6' }}>{proteinPct}%</p>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-border overflow-hidden">
+                      <div className="h-1" style={{ backgroundColor: '#F59E0B' }} />
+                      <div className="p-3 text-center">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Carbs</p>
+                        <p className="text-xl font-bold">{currentMacros.carbs}g</p>
+                        <p className="text-xs text-muted-foreground">{carbsCals} cal</p>
+                        <p className="text-xs font-medium" style={{ color: '#F59E0B' }}>{carbsPct}%</p>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-border overflow-hidden">
+                      <div className="h-1" style={{ backgroundColor: '#EC4899' }} />
+                      <div className="p-3 text-center">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Fat</p>
+                        <p className="text-xl font-bold">{currentMacros.fat}g</p>
+                        <p className="text-xs text-muted-foreground">{fatCals} cal</p>
+                        <p className="text-xs font-medium" style={{ color: '#EC4899' }}>{fatPct}%</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Deficit cards */}
+                  {formData.goal !== 'maintain' && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="p-3 rounded-xl border border-border text-center">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Daily {formData.goal === 'lose' ? 'Deficit' : 'Surplus'}</p>
+                        <p className={`text-lg font-bold ${formData.goal === 'lose' ? 'text-destructive' : 'text-primary'}`}>
+                          {formData.goal === 'lose' ? '-' : '+'}{Math.abs(dailyDeficit).toLocaleString()} cal
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-xl border border-border text-center">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Weekly {formData.goal === 'lose' ? 'Deficit' : 'Surplus'}</p>
+                        <p className={`text-lg font-bold ${formData.goal === 'lose' ? 'text-destructive' : 'text-primary'}`}>
+                          {formData.goal === 'lose' ? '-' : '+'}{Math.abs(weeklyDeficit).toLocaleString()} cal
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Expected weight change */}
+                  {formData.goal !== 'maintain' && (
+                    <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center gap-2">
+                      <span className="text-lg">📉</span>
+                      <span className="text-sm font-medium">
+                        Expected {formData.goal === 'lose' ? 'loss' : 'gain'}: <span className={formData.goal === 'lose' ? 'text-destructive' : 'text-primary'}>{formData.goal === 'lose' ? '-' : '+'}{Math.abs(parseFloat(expectedLossPerWeek))} lb/week</span>
+                      </span>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+
             <div className="flex gap-2 pt-2">
               <Button variant="outline" className="flex-1" onClick={handleBack}>
                 <ArrowLeft className="w-4 h-4 mr-2" />
