@@ -100,33 +100,33 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     fat: 0,
   });
 
-  // Load saved inputs when dialog opens
+  // Load saved inputs when dialog opens - with fallback values for missing fields
   useEffect(() => {
     if (open && macroCalculatorInputs) {
       setFormData({
-        age: macroCalculatorInputs.age,
-        weight: macroCalculatorInputs.weight,
-        height: macroCalculatorInputs.height,
-        heightFt: macroCalculatorInputs.heightFt,
-        heightIn: macroCalculatorInputs.heightIn,
-        sex: macroCalculatorInputs.sex,
-        activityLevel: macroCalculatorInputs.activityLevel,
-        goal: macroCalculatorInputs.goal,
-        unit: macroCalculatorInputs.unit,
-        bodyFatMethod: macroCalculatorInputs.bodyFatMethod,
-        bodyFatPercent: macroCalculatorInputs.bodyFatPercent,
-        waist: macroCalculatorInputs.waist,
-        neck: macroCalculatorInputs.neck,
-        hip: macroCalculatorInputs.hip,
+        age: macroCalculatorInputs.age ?? '',
+        weight: macroCalculatorInputs.weight ?? '',
+        height: macroCalculatorInputs.height ?? '',
+        heightFt: macroCalculatorInputs.heightFt ?? '',
+        heightIn: macroCalculatorInputs.heightIn ?? '',
+        sex: macroCalculatorInputs.sex ?? 'male',
+        activityLevel: macroCalculatorInputs.activityLevel ?? 'moderate',
+        goal: macroCalculatorInputs.goal ?? 'maintain',
+        unit: macroCalculatorInputs.unit ?? 'imperial',
+        bodyFatMethod: macroCalculatorInputs.bodyFatMethod ?? 'direct',
+        bodyFatPercent: macroCalculatorInputs.bodyFatPercent ?? '',
+        waist: macroCalculatorInputs.waist ?? '',
+        neck: macroCalculatorInputs.neck ?? '',
+        hip: macroCalculatorInputs.hip ?? '',
       });
-      setDietType(macroCalculatorInputs.dietType);
-      setDeficitType(macroCalculatorInputs.deficitType);
-      setCustomDeficitPercent(macroCalculatorInputs.customDeficitPercent);
-      setCustomCalories(macroCalculatorInputs.customCalories);
-      setCustomDeficitCalories(macroCalculatorInputs.customDeficitCalories);
-      setProteinPerLb(macroCalculatorInputs.proteinPerLb);
-      setCarbsPercent(macroCalculatorInputs.carbsPercent);
-      setFatPercent(macroCalculatorInputs.fatPercent);
+      setDietType(macroCalculatorInputs.dietType ?? 'none');
+      setDeficitType(macroCalculatorInputs.deficitType ?? 'standard');
+      setCustomDeficitPercent(macroCalculatorInputs.customDeficitPercent ?? 20);
+      setCustomCalories(macroCalculatorInputs.customCalories ?? '');
+      setCustomDeficitCalories(macroCalculatorInputs.customDeficitCalories ?? '');
+      setProteinPerLb(macroCalculatorInputs.proteinPerLb ?? 1.0);
+      setCarbsPercent(macroCalculatorInputs.carbsPercent ?? 50);
+      setFatPercent(macroCalculatorInputs.fatPercent ?? 30);
     }
   }, [open, macroCalculatorInputs]);
 
