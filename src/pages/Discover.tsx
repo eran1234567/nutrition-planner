@@ -214,8 +214,8 @@ export default function Discover() {
   const userDietType = (activeDietType || 'none').toLowerCase();
 
   const dietExclusions: Record<string, string[]> = {
-    vegan: ['chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'lobster', 'crab', 'shellfish', 'seafood', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak', 'egg', 'eggs', 'dairy', 'milk', 'cheese', 'butter', 'cream', 'yogurt', 'honey'],
-    vegetarian: ['chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'lobster', 'crab', 'shellfish', 'seafood', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak'],
+    vegan: ['chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'lobster', 'crab', 'shellfish', 'seafood', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak', 'egg', 'eggs', 'dairy', 'milk', 'cheese', 'butter', 'cream', 'yogurt', 'honey', 'cod', 'tilapia', 'halibut', 'mackerel', 'sardine', 'anchovy', 'trout', 'bass', 'snapper', 'mahi', 'swordfish', 'catfish', 'flounder', 'sole', 'haddock', 'perch', 'pike', 'scallop', 'mussel', 'clam', 'oyster', 'calamari', 'squid', 'octopus', 'crawfish', 'crayfish'],
+    vegetarian: ['chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'lobster', 'crab', 'shellfish', 'seafood', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak', 'cod', 'tilapia', 'halibut', 'mackerel', 'sardine', 'anchovy', 'trout', 'bass', 'snapper', 'mahi', 'swordfish', 'catfish', 'flounder', 'sole', 'haddock', 'perch', 'pike', 'scallop', 'mussel', 'clam', 'oyster', 'calamari', 'squid', 'octopus', 'crawfish', 'crayfish', 'poke', 'sashimi', 'moqueca', 'cioppino'],
     pescatarian: ['chicken', 'beef', 'pork', 'lamb', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak'],
     keto: [],
     paleo: ['bread', 'pasta', 'rice', 'grain', 'wheat', 'oat', 'corn', 'bean', 'lentil', 'peanut', 'soy', 'tofu', 'sugar', 'dairy', 'milk', 'cheese'],
