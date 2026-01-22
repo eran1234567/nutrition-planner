@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
-import { Plus, Droplets, Flame, Wheat } from 'lucide-react';
+import { Plus, Droplets, Flame, Wheat, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type { DailyTargets } from '@/types/mealPlan';
+import type { DailyTargets, DayExtra } from '@/types/mealPlan';
 
 interface TopUpItem {
   id: string;
@@ -52,13 +52,17 @@ interface MacroGap {
 interface MacroGapSuggestionsProps {
   dailyTargets: DailyTargets;
   dayTotals: { calories: number; protein: number; carbs: number; fat: number };
+  currentExtras?: DayExtra[];
   onAddTopUp: (item: TopUpItem) => void;
+  onRemoveExtra?: (extraId: string) => void;
 }
 
 export function MacroGapSuggestions({
   dailyTargets,
   dayTotals,
+  currentExtras = [],
   onAddTopUp,
+  onRemoveExtra,
 }: MacroGapSuggestionsProps) {
   // Calculate gaps
   const gaps = useMemo(() => {
@@ -132,49 +136,90 @@ export function MacroGapSuggestions({
       .map(s => s.item);
   }, [gaps, dailyTargets]);
 
-  // Don't render if no significant gaps
-  if (gaps.length === 0) return null;
+  // Filter out already-added extras from suggestions
+  const filteredSuggestions = useMemo(() => {
+    const addedIds = new Set(currentExtras.map(e => e.id));
+    return suggestions.filter(item => !addedIds.has(item.id));
+  }, [suggestions, currentExtras]);
+
+  // Don't render if no significant gaps AND no extras added
+  if (gaps.length === 0 && currentExtras.length === 0) return null;
 
   return (
     <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-3 mb-4">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
-          Missing:
-        </span>
-        <div className="flex flex-wrap gap-1.5">
-          {gaps.map(gap => (
-            <span
-              key={gap.macro}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
-              style={{ 
-                backgroundColor: `${gap.color}20`,
-                color: gap.color,
-              }}
-            >
-              {gap.icon}
-              {gap.label}
-            </span>
-          ))}
+      {/* Currently added extras */}
+      {currentExtras.length > 0 && (
+        <div className="mb-3">
+          <span className="text-xs font-medium text-muted-foreground mb-1.5 block">Added:</span>
+          <div className="flex flex-wrap gap-1.5">
+            {currentExtras.map(extra => (
+              <span
+                key={extra.id}
+                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+              >
+                <span>{extra.emoji}</span>
+                {extra.name}
+                <span className="text-muted-foreground">+{extra.macros.fat}g F</span>
+                {onRemoveExtra && (
+                  <button
+                    onClick={() => onRemoveExtra(extra.id)}
+                    className="ml-0.5 p-0.5 rounded-full hover:bg-primary/20 transition-colors"
+                    aria-label={`Remove ${extra.name}`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </span>
+            ))}
+          </div>
         </div>
-      </div>
-      
-      <div className="flex flex-wrap gap-2">
-        {suggestions.map(item => (
-          <Button
-            key={item.id}
-            variant="outline"
-            size="sm"
-            className="h-auto py-1.5 px-2.5 text-xs bg-card hover:bg-muted"
-            onClick={() => onAddTopUp(item)}
-          >
-            <span className="mr-1">{item.emoji}</span>
-            {item.name}
-            <span className="ml-1.5 text-muted-foreground">
-              +{item.macros[item.primaryMacro]}g
+      )}
+
+      {/* Gap indicators and suggestions - only show if there are still gaps */}
+      {gaps.length > 0 && (
+        <>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
+              Missing:
             </span>
-          </Button>
-        ))}
-      </div>
+            <div className="flex flex-wrap gap-1.5">
+              {gaps.map(gap => (
+                <span
+                  key={gap.macro}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                  style={{ 
+                    backgroundColor: `${gap.color}20`,
+                    color: gap.color,
+                  }}
+                >
+                  {gap.icon}
+                  {gap.label}
+                </span>
+              ))}
+            </div>
+          </div>
+          
+          {filteredSuggestions.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {filteredSuggestions.map(item => (
+                <Button
+                  key={item.id}
+                  variant="outline"
+                  size="sm"
+                  className="h-auto py-1.5 px-2.5 text-xs bg-card hover:bg-muted"
+                  onClick={() => onAddTopUp(item)}
+                >
+                  <span className="mr-1">{item.emoji}</span>
+                  {item.name}
+                  <span className="ml-1.5 text-muted-foreground">
+                    +{item.macros[item.primaryMacro]}g
+                  </span>
+                </Button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

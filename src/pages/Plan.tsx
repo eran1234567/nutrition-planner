@@ -45,6 +45,8 @@ export default function Plan() {
     updateSlotMultiplier,
     toggleSlotLock,
     swapRecipe,
+    addDayExtra,
+    removeDayExtra,
     setIsPlanMode,
     setCurrentSlotFilter,
     setMacroGapContext,
@@ -185,11 +187,21 @@ export default function Plan() {
 
   // Handle adding a top-up item to fill macro gaps
   const handleAddTopUp = (item: TopUpItem) => {
-    // For now, just show a toast - in future could add to a "extras" list
+    addDayExtra(selectedDay, {
+      id: item.id,
+      name: item.name,
+      emoji: item.emoji,
+      macros: item.macros,
+    });
     toast.success(`Added ${item.name}`, {
       description: `+${item.macros.calories} cal, +${item.macros.protein}g P, +${item.macros.carbs}g C, +${item.macros.fat}g F`,
     });
-    // TODO: Could persist these as "extras" for the day
+  };
+
+  // Handle removing an extra from the day
+  const handleRemoveExtra = (extraId: string) => {
+    removeDayExtra(selectedDay, extraId);
+    toast.info('Removed item');
   };
 
   // Regenerate unlocked slots for current day
@@ -233,13 +245,14 @@ export default function Plan() {
   const currentDayPlan = generatedPlan?.days[selectedDay];
   const currentDayLocks = lockedSlots[selectedDay] || [];
 
-  // Recalculate day totals using actual recipe data (since stored totals may be stale)
+  // Recalculate day totals using actual recipe data + extras (since stored totals may be stale)
   const calculatedDayTotals = useMemo(() => {
     if (!currentDayPlan || allRecipes.length === 0) {
       return { calories: 0, protein: 0, carbs: 0, fat: 0 };
     }
 
-    return currentDayPlan.slots.reduce((acc, slot) => {
+    // Sum from recipe slots
+    const slotTotals = currentDayPlan.slots.reduce((acc, slot) => {
       const recipe = recipeMap.get(slot.recipeId);
       if (!recipe?.nutrition) return acc;
 
@@ -251,6 +264,15 @@ export default function Plan() {
         fat: acc.fat + Math.round((recipe.nutrition.fat_g ?? 0) * multiplier),
       };
     }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+    // Add extras (top-up items)
+    const extras = currentDayPlan.extras || [];
+    return extras.reduce((acc, extra) => ({
+      calories: acc.calories + extra.macros.calories,
+      protein: acc.protein + extra.macros.protein,
+      carbs: acc.carbs + extra.macros.carbs,
+      fat: acc.fat + extra.macros.fat,
+    }), slotTotals);
   }, [currentDayPlan, recipeMap, allRecipes.length]);
 
   // Calculate slot totals for display (recalculated from recipe data)
@@ -411,7 +433,9 @@ export default function Plan() {
             <MacroGapSuggestions
               dailyTargets={dailyTargets}
               dayTotals={calculatedDayTotals}
+              currentExtras={currentDayPlan.extras}
               onAddTopUp={handleAddTopUp}
+              onRemoveExtra={handleRemoveExtra}
             />
 
             {/* Meal slots */}
