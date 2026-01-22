@@ -258,11 +258,14 @@ export default function Discover() {
     vegan: ['chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'lobster', 'crab', 'shellfish', 'seafood', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak', 'egg', 'eggs', 'dairy', 'milk', 'cheese', 'butter', 'cream', 'yogurt', 'honey', 'cod', 'tilapia', 'halibut', 'mackerel', 'sardine', 'anchovy', 'trout', 'bass', 'snapper', 'mahi', 'swordfish', 'catfish', 'flounder', 'sole', 'haddock', 'perch', 'pike', 'scallop', 'mussel', 'clam', 'oyster', 'calamari', 'squid', 'octopus', 'crawfish', 'crayfish'],
     vegetarian: ['chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'lobster', 'crab', 'shellfish', 'seafood', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak', 'cod', 'tilapia', 'halibut', 'mackerel', 'sardine', 'anchovy', 'trout', 'bass', 'snapper', 'mahi', 'swordfish', 'catfish', 'flounder', 'sole', 'haddock', 'perch', 'pike', 'scallop', 'mussel', 'clam', 'oyster', 'calamari', 'squid', 'octopus', 'crawfish', 'crayfish', 'poke', 'sashimi', 'moqueca', 'cioppino'],
     pescatarian: ['chicken', 'beef', 'pork', 'lamb', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak'],
-    keto: [],
+    keto: ['bread', 'pasta', 'rice', 'noodle', 'oatmeal', 'oat', 'cereal', 'granola', 'pancake', 'waffle', 'muffin', 'bagel', 'croissant', 'toast', 'tortilla', 'wrap', 'pita', 'couscous', 'quinoa', 'barley', 'wheat', 'flour', 'corn', 'potato', 'sweet potato', 'yam', 'bean', 'lentil', 'chickpea', 'hummus', 'pea', 'sugar', 'honey', 'maple syrup', 'agave', 'candy', 'cake', 'cookie', 'donut', 'pastry', 'pie', 'ice cream', 'frozen yogurt', 'banana', 'apple', 'orange', 'grape', 'mango', 'pineapple', 'watermelon', 'fruit salad', 'smoothie', 'juice', 'soda', 'açaí', 'acai', 'acai bowl', 'açaí bowl', 'oatmeal', 'porridge', 'risotto', 'polenta', 'grits', 'cornbread', 'biscuit', 'cracker', 'pretzel', 'chip', 'fries', 'french fries', 'hash brown', 'tater tot', 'breaded', 'battered', 'tempura', 'teriyaki', 'sweet and sour', 'bbq sauce', 'ketchup', 'jam', 'jelly', 'marmalade', 'dried fruit', 'raisin', 'date', 'fig', 'prune', 'apricot'],
     paleo: ['bread', 'pasta', 'rice', 'grain', 'wheat', 'oat', 'corn', 'bean', 'lentil', 'peanut', 'soy', 'tofu', 'sugar', 'dairy', 'milk', 'cheese'],
     mediterranean: [],
     none: [],
   };
+
+  // Max carbs per serving for keto diet (in grams)
+  const KETO_MAX_CARBS = 15;
 
   // Combine profile allergies/dislikes with dropdown selections
   const allAllergies = [...new Set([...effectiveAllergies, ...selectedAllergies])];
@@ -461,6 +464,12 @@ export default function Discover() {
         if (matchesAgeRestricted(titleLower)) return false;
         if (matchesAgeRestricted(descLower)) return false;
         if (matchesAgeRestrictedIngredients()) return false;
+      }
+      // Keto diet: also filter by carb content (max 15g per serving)
+      if (userDietType === 'keto' && recipe.nutrition?.carbs_g != null) {
+        if (recipe.nutrition.carbs_g > KETO_MAX_CARBS) {
+          return false;
+        }
       }
       if (!recipe.isUserRecipe && activeHealthPreferences.length > 0) {
         const recipeMedicalTags = (recipe.tags || []).filter(t => t.tag_type === 'medical').map(t => t.tag_value);
