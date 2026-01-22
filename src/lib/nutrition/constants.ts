@@ -65,7 +65,7 @@ export const ADULT_MACRO_RANGES: MacroRanges = {
 
 // Keto-specific macro ranges (same for youth and adults)
 export const KETO_MACRO_RANGES: MacroRanges = {
-  protein: { min: 0.6, max: 1.0, default: 0.8 },
+  protein: { min: 0.6, max: 1.5, default: 0.8 },
   fat: { min: 65, max: 80, default: 70 },
 };
 
