@@ -719,22 +719,22 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
         )}
 
         {step === 'distribution' && (
-          <div className="space-y-4 pt-2 overflow-y-auto max-h-[70vh]">
-            {/* Calorie Deficit Section */}
-            <div className="p-4 rounded-xl border border-border bg-card">
-              <h3 className="font-semibold mb-3">Calorie Deficit</h3>
+          <div className="space-y-3 pt-1 overflow-y-auto max-h-[80vh]">
+            {/* Calorie Deficit Section - Compact */}
+            <div className="p-3 rounded-xl border border-border bg-card">
+              <h3 className="font-semibold text-sm mb-2">Calorie Deficit</h3>
               
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <label 
                   className={`flex items-center gap-2 cursor-pointer ${deficitType === 'standard' ? 'text-foreground' : 'text-muted-foreground'}`}
                   onClick={() => setDeficitType('standard')}
                 >
-                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                  <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
                     deficitType === 'standard' ? 'border-primary' : 'border-muted-foreground'
                   }`}>
-                    {deficitType === 'standard' && <div className="w-2 h-2 rounded-full bg-primary" />}
+                    {deficitType === 'standard' && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
                   </div>
-                  <span className="text-sm">Standard (20% deficit)</span>
+                  <span className="text-xs">Standard (20% deficit)</span>
                   <span className="text-xs text-muted-foreground">- Recommended</span>
                 </label>
                 
@@ -742,18 +742,18 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                   className={`flex items-center gap-2 cursor-pointer ${deficitType === 'custom_percent' ? 'text-foreground' : 'text-muted-foreground'}`}
                   onClick={() => setDeficitType('custom_percent')}
                 >
-                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                  <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
                     deficitType === 'custom_percent' ? 'border-primary' : 'border-muted-foreground'
                   }`}>
-                    {deficitType === 'custom_percent' && <div className="w-2 h-2 rounded-full bg-primary" />}
+                    {deficitType === 'custom_percent' && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
                   </div>
-                  <span className="text-sm">Custom % deficit</span>
+                  <span className="text-xs">Custom % deficit</span>
                   {deficitType === 'custom_percent' && (
                     <input
                       type="number"
                       value={customDeficitPercent}
                       onChange={(e) => setCustomDeficitPercent(Math.min(50, Math.max(5, parseInt(e.target.value) || 0)))}
-                      className="w-16 h-7 px-2 rounded border border-border bg-background text-sm"
+                      className="w-14 h-6 px-1.5 rounded border border-border bg-background text-xs"
                       min={5}
                       max={50}
                     />
@@ -764,21 +764,19 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                   className={`flex items-center gap-2 cursor-pointer ${deficitType === 'custom_deficit_calories' ? 'text-foreground' : 'text-muted-foreground'}`}
                   onClick={() => setDeficitType('custom_deficit_calories')}
                 >
-                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                  <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
                     deficitType === 'custom_deficit_calories' ? 'border-primary' : 'border-muted-foreground'
                   }`}>
-                    {deficitType === 'custom_deficit_calories' && <div className="w-2 h-2 rounded-full bg-primary" />}
+                    {deficitType === 'custom_deficit_calories' && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
                   </div>
-                  <span className="text-sm">Custom calories {formData.goal === 'lose' ? 'deficit' : formData.goal === 'gain' ? 'surplus' : 'deficit'}</span>
+                  <span className="text-xs">Custom cal {formData.goal === 'lose' ? 'deficit' : 'surplus'}</span>
                   {deficitType === 'custom_deficit_calories' && (
                     <input
                       type="number"
                       value={customDeficitCalories}
                       onChange={(e) => setCustomDeficitCalories(e.target.value)}
                       placeholder="500"
-                      className="w-20 h-7 px-2 rounded border border-border bg-background text-sm"
-                      min={0}
-                      max={2000}
+                      className="w-16 h-6 px-1.5 rounded border border-border bg-background text-xs"
                     />
                   )}
                 </label>
@@ -787,34 +785,34 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                   className={`flex items-center gap-2 cursor-pointer ${deficitType === 'custom_calories' ? 'text-foreground' : 'text-muted-foreground'}`}
                   onClick={() => setDeficitType('custom_calories')}
                 >
-                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                  <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
                     deficitType === 'custom_calories' ? 'border-primary' : 'border-muted-foreground'
                   }`}>
-                    {deficitType === 'custom_calories' && <div className="w-2 h-2 rounded-full bg-primary" />}
+                    {deficitType === 'custom_calories' && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
                   </div>
-                  <span className="text-sm">Custom daily calories</span>
+                  <span className="text-xs">Custom daily calories</span>
                   {deficitType === 'custom_calories' && (
                     <input
                       type="number"
                       value={customCalories}
                       onChange={(e) => setCustomCalories(e.target.value)}
                       placeholder={String(getTargetCalories())}
-                      className="w-20 h-7 px-2 rounded border border-border bg-background text-sm"
+                      className="w-16 h-6 px-1.5 rounded border border-border bg-background text-xs"
                     />
                   )}
                 </label>
               </div>
             </div>
 
-            {/* Macro Distribution Section */}
-            <div className="p-4 rounded-xl border border-border bg-card">
-              <h3 className="font-semibold mb-4">Macro Distribution</h3>
+            {/* Macro Distribution Section - Compact */}
+            <div className="p-3 rounded-xl border border-border bg-card">
+              <h3 className="font-semibold text-sm mb-2">Macro Distribution</h3>
               
               {/* Protein Slider */}
-              <div className="mb-4">
-              <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium">Protein: {proteinPerLb.toFixed(1)} g/lb LBM</span>
-                  <span className="text-sm text-muted-foreground">{currentMacros.protein}g LBM</span>
+              <div className="mb-3">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-xs font-medium">Protein: {proteinPerLb.toFixed(1)} g/lb LBM</span>
+                  <span className="text-xs text-muted-foreground">{currentMacros.protein}g</span>
                 </div>
                 <Slider
                   value={[proteinPerLb]}
@@ -824,17 +822,13 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                   step={proteinRange.step}
                   className="w-full"
                 />
-                <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                  <span>{proteinRange.min} g/lb</span>
-                  <span>{proteinRange.max} g/lb</span>
-                </div>
               </div>
 
               {/* Fat Slider */}
-              <div className="mb-4">
-              <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm font-medium">Fat: {fatPercent}% of calories</span>
-                  <span className="text-sm text-muted-foreground">{currentMacros.fat}g</span>
+              <div className="mb-2">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-xs font-medium">Fat: {fatPercent}% of calories</span>
+                  <span className="text-xs text-muted-foreground">{currentMacros.fat}g</span>
                 </div>
                 <Slider
                   value={[fatPercent]}
@@ -844,41 +838,22 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                   step={fatRange.step}
                   className="w-full"
                 />
-                <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                  <span>{fatRange.min}%</span>
-                  <span>{fatRange.max}%</span>
-                </div>
               </div>
 
               {/* Carbs info */}
-              <p className="text-sm text-muted-foreground">
-                Remaining calories will be allocated to carbohydrates ({currentMacros.carbs}g, {Math.round((currentMacros.carbs * 4 / currentMacros.calories) * 100)}%)
+              <p className="text-xs text-muted-foreground">
+                Carbs: {currentMacros.carbs}g ({Math.round((currentMacros.carbs * 4 / currentMacros.calories) * 100)}% remaining)
               </p>
 
-              {/* Keto info */}
-              {dietType === 'keto' && (
-                <div className="mt-3 p-3 rounded-lg bg-primary/10 border border-primary/20">
-                  <p className="text-sm">
-                    <span className="font-semibold">Keto:</span> Carbs are limited to 20-50g net carbs per day. Remaining calories after protein and fat are minimized.
-                  </p>
-                </div>
-              )}
-
-              {/* Warning */}
+              {/* Warning - Compact */}
               {warning && (
-                <div className="mt-3 p-4 rounded-lg bg-destructive/10 border border-destructive/30">
-                  <div className="flex items-start gap-2">
-                    <span className="text-destructive text-lg">⚠️</span>
-                    <div>
-                      <p className="font-semibold text-destructive">{warning.title}</p>
-                      <p className="text-sm text-destructive/80 mt-1">{warning.detail}</p>
-                    </div>
-                  </div>
+                <div className="mt-2 p-2 rounded-lg bg-destructive/10 border border-destructive/30">
+                  <p className="text-xs text-destructive font-medium">{warning.title}</p>
                 </div>
               )}
             </div>
 
-            {/* Live Preview Results */}
+            {/* Live Preview Results - Compact */}
             {(() => {
               const proteinCals = currentMacros.protein * 4;
               const carbsCals = currentMacros.carbs * 4;
@@ -895,112 +870,107 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
               
               return (
                 <>
-                  {/* Daily Targets Header */}
-                  <div className="bg-primary/5 rounded-2xl p-4">
-                    <div className="flex items-center justify-center gap-2 mb-3">
-                      <Flame className="w-5 h-5 text-primary" />
-                      <span className="font-semibold text-foreground">Your Daily Targets</span>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-4xl font-bold text-primary">
-                        {totalCals.toLocaleString()}
+                  {/* Daily Targets Header - Compact */}
+                  <div className="bg-primary/5 rounded-xl p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Flame className="w-4 h-4 text-primary" />
+                        <span className="font-semibold text-sm">Daily Targets</span>
                       </div>
-                      <div className="text-sm text-muted-foreground">calories per day</div>
-                    </div>
-                  </div>
-
-                  <h3 className="font-semibold text-lg">Macro Breakdown</h3>
-                  
-                  {/* Macro percentage bar */}
-                  <div className="flex h-8 rounded-full overflow-hidden">
-                    <div 
-                      className="flex items-center justify-center text-white text-xs font-semibold"
-                      style={{ width: `${proteinPct}%`, backgroundColor: '#3B82F6' }}
-                    >
-                      {proteinPct}%
-                    </div>
-                    <div 
-                      className="flex items-center justify-center text-white text-xs font-semibold"
-                      style={{ width: `${carbsPct}%`, backgroundColor: '#F59E0B' }}
-                    >
-                      {carbsPct}%
-                    </div>
-                    <div 
-                      className="flex items-center justify-center text-white text-xs font-semibold"
-                      style={{ width: `${fatPct}%`, backgroundColor: '#EC4899' }}
-                    >
-                      {fatPct}%
-                    </div>
-                  </div>
-
-                  {/* Macro cards */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded-xl border border-border overflow-hidden">
-                      <div className="h-1" style={{ backgroundColor: '#3B82F6' }} />
-                      <div className="p-3 text-center">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Protein</p>
-                        <p className="text-xl font-bold">{currentMacros.protein}g</p>
-                        <p className="text-xs text-muted-foreground">{proteinCals} cal</p>
-                        <p className="text-xs font-medium" style={{ color: '#3B82F6' }}>{proteinPct}%</p>
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-border overflow-hidden">
-                      <div className="h-1" style={{ backgroundColor: '#F59E0B' }} />
-                      <div className="p-3 text-center">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Carbs</p>
-                        <p className="text-xl font-bold">{currentMacros.carbs}g</p>
-                        <p className="text-xs text-muted-foreground">{carbsCals} cal</p>
-                        <p className="text-xs font-medium" style={{ color: '#F59E0B' }}>{carbsPct}%</p>
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-border overflow-hidden">
-                      <div className="h-1" style={{ backgroundColor: '#EC4899' }} />
-                      <div className="p-3 text-center">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Fat</p>
-                        <p className="text-xl font-bold">{currentMacros.fat}g</p>
-                        <p className="text-xs text-muted-foreground">{fatCals} cal</p>
-                        <p className="text-xs font-medium" style={{ color: '#EC4899' }}>{fatPct}%</p>
+                      <div className="text-right">
+                        <span className="text-2xl font-bold text-primary">{totalCals.toLocaleString()}</span>
+                        <span className="text-xs text-muted-foreground ml-1">cal/day</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Deficit cards */}
+                  {/* Macro percentage bar + cards combined */}
+                  <div className="space-y-2">
+                    <div className="flex h-6 rounded-full overflow-hidden">
+                      <div 
+                        className="flex items-center justify-center text-white text-[10px] font-semibold"
+                        style={{ width: `${proteinPct}%`, backgroundColor: '#3B82F6' }}
+                      >
+                        {proteinPct}%
+                      </div>
+                      <div 
+                        className="flex items-center justify-center text-white text-[10px] font-semibold"
+                        style={{ width: `${carbsPct}%`, backgroundColor: '#F59E0B' }}
+                      >
+                        {carbsPct}%
+                      </div>
+                      <div 
+                        className="flex items-center justify-center text-white text-[10px] font-semibold"
+                        style={{ width: `${fatPct}%`, backgroundColor: '#EC4899' }}
+                      >
+                        {fatPct}%
+                      </div>
+                    </div>
+
+                    {/* Compact Macro cards */}
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div className="rounded-lg border border-border overflow-hidden">
+                        <div className="h-0.5" style={{ backgroundColor: '#3B82F6' }} />
+                        <div className="p-2 text-center">
+                          <p className="text-[10px] text-muted-foreground uppercase">Protein</p>
+                          <p className="text-base font-bold">{currentMacros.protein}g</p>
+                          <p className="text-[10px] text-muted-foreground">{proteinCals} cal</p>
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-border overflow-hidden">
+                        <div className="h-0.5" style={{ backgroundColor: '#F59E0B' }} />
+                        <div className="p-2 text-center">
+                          <p className="text-[10px] text-muted-foreground uppercase">Carbs</p>
+                          <p className="text-base font-bold">{currentMacros.carbs}g</p>
+                          <p className="text-[10px] text-muted-foreground">{carbsCals} cal</p>
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-border overflow-hidden">
+                        <div className="h-0.5" style={{ backgroundColor: '#EC4899' }} />
+                        <div className="p-2 text-center">
+                          <p className="text-[10px] text-muted-foreground uppercase">Fat</p>
+                          <p className="text-base font-bold">{currentMacros.fat}g</p>
+                          <p className="text-[10px] text-muted-foreground">{fatCals} cal</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Deficit + Expected - Combined single row */}
                   {formData.goal !== 'maintain' && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="p-3 rounded-xl border border-border text-center">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Daily {formData.goal === 'lose' ? 'Deficit' : 'Surplus'}</p>
-                        <p className={`text-lg font-bold ${formData.goal === 'lose' ? 'text-destructive' : 'text-primary'}`}>
-                          {formData.goal === 'lose' ? '-' : '+'}{Math.abs(dailyDeficit).toLocaleString()} cal
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-muted/50 border border-border">
+                      <div className="text-center flex-1">
+                        <p className="text-[10px] text-muted-foreground uppercase">Daily</p>
+                        <p className={`text-sm font-bold ${formData.goal === 'lose' ? 'text-destructive' : 'text-primary'}`}>
+                          {formData.goal === 'lose' ? '-' : '+'}{Math.abs(dailyDeficit).toLocaleString()}
                         </p>
                       </div>
-                      <div className="p-3 rounded-xl border border-border text-center">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Weekly {formData.goal === 'lose' ? 'Deficit' : 'Surplus'}</p>
-                        <p className={`text-lg font-bold ${formData.goal === 'lose' ? 'text-destructive' : 'text-primary'}`}>
-                          {formData.goal === 'lose' ? '-' : '+'}{Math.abs(weeklyDeficit).toLocaleString()} cal
+                      <div className="h-8 w-px bg-border" />
+                      <div className="text-center flex-1">
+                        <p className="text-[10px] text-muted-foreground uppercase">Weekly</p>
+                        <p className={`text-sm font-bold ${formData.goal === 'lose' ? 'text-destructive' : 'text-primary'}`}>
+                          {formData.goal === 'lose' ? '-' : '+'}{Math.abs(weeklyDeficit).toLocaleString()}
                         </p>
                       </div>
-                    </div>
-                  )}
-
-                  {/* Expected weight change */}
-                  {formData.goal !== 'maintain' && (
-                    <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center gap-2">
-                      <span className="text-lg">📉</span>
-                      <span className="text-sm font-medium">
-                        Expected {formData.goal === 'lose' ? 'loss' : 'gain'}: <span className={formData.goal === 'lose' ? 'text-destructive' : 'text-primary'}>{formData.goal === 'lose' ? '-' : '+'}{Math.abs(parseFloat(expectedLossPerWeek))} lb/week</span>
-                      </span>
+                      <div className="h-8 w-px bg-border" />
+                      <div className="text-center flex-1">
+                        <p className="text-[10px] text-muted-foreground uppercase">Est. {formData.goal === 'lose' ? 'Loss' : 'Gain'}</p>
+                        <p className={`text-sm font-bold ${formData.goal === 'lose' ? 'text-destructive' : 'text-primary'}`}>
+                          {Math.abs(parseFloat(expectedLossPerWeek))} lb/wk
+                        </p>
+                      </div>
                     </div>
                   )}
                 </>
               );
             })()}
 
-            <div className="flex gap-2 pt-2">
-              <Button variant="outline" className="flex-1" onClick={handleBack}>
-                <ArrowLeft className="w-4 h-4 mr-2" />
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" size="sm" className="flex-1" onClick={handleBack}>
+                <ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
                 Back
               </Button>
-              <Button className="flex-1" onClick={handleContinueToDietary} disabled={!!warning}>
+              <Button size="sm" className="flex-1" onClick={handleContinueToDietary} disabled={!!warning}>
                 Continue
               </Button>
             </div>
