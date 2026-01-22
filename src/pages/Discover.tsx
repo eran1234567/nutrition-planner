@@ -268,13 +268,39 @@ export default function Discover() {
   const KETO_MAX_CARBS = 10;
 
   // Combine profile allergies/dislikes with dropdown selections
-  const allAllergies = [...new Set([...effectiveAllergies, ...selectedAllergies])];
-  const allDislikes = [...new Set([...effectiveDislikes, ...selectedDislikes])];
+  const allAllergies = useMemo(() => 
+    [...new Set([...effectiveAllergies, ...selectedAllergies])],
+    [effectiveAllergies, selectedAllergies]
+  );
+  const allDislikes = useMemo(() => 
+    [...new Set([...effectiveDislikes, ...selectedDislikes])],
+    [effectiveDislikes, selectedDislikes]
+  );
+
+  // Allergy term expansions - map category allergies to specific ingredients
+  const allergyExpansions: Record<string, string[]> = {
+    gluten: ['wheat', 'flour', 'bread', 'pasta', 'noodle', 'barley', 'rye', 'oat', 'oatmeal', 'couscous', 'bulgur', 'farro', 'spelt', 'semolina', 'seitan', 'breaded', 'battered', 'cracker', 'pretzel', 'bagel', 'croissant', 'muffin', 'cake', 'cookie', 'pastry', 'pie crust', 'pizza', 'tortilla', 'wrap', 'panko', 'breadcrumb', 'soy sauce', 'teriyaki'],
+    dairy: ['milk', 'cheese', 'butter', 'cream', 'yogurt', 'whey', 'casein', 'lactose', 'ghee', 'ice cream', 'sour cream', 'cottage cheese', 'cream cheese', 'ricotta', 'mozzarella', 'parmesan', 'cheddar', 'feta', 'brie', 'gouda', 'swiss', 'provolone', 'mascarpone', 'half and half', 'heavy cream', 'whipped cream', 'condensed milk', 'evaporated milk', 'buttermilk', 'kefir', 'paneer', 'queso'],
+    nuts: ['almond', 'walnut', 'cashew', 'pistachio', 'pecan', 'hazelnut', 'macadamia', 'brazil nut', 'pine nut', 'chestnut', 'nut butter', 'almond butter', 'almond milk', 'almond flour', 'marzipan', 'praline', 'nougat', 'pesto'],
+    peanuts: ['peanut', 'peanut butter', 'peanut oil', 'groundnut', 'goober'],
+    shellfish: ['shrimp', 'prawn', 'lobster', 'crab', 'crayfish', 'crawfish', 'scallop', 'clam', 'mussel', 'oyster', 'squid', 'calamari', 'octopus', 'langoustine', 'cockle', 'abalone', 'whelk', 'periwinkle'],
+    soy: ['soy', 'soya', 'tofu', 'tempeh', 'edamame', 'miso', 'soy sauce', 'soy milk', 'soybean', 'soy protein', 'tamari', 'teriyaki'],
+    eggs: ['egg', 'eggs', 'mayonnaise', 'mayo', 'aioli', 'meringue', 'custard', 'quiche', 'frittata', 'omelet', 'omelette', 'hollandaise', 'bearnaise', 'egg wash', 'egg noodle'],
+    fish: ['fish', 'salmon', 'tuna', 'cod', 'tilapia', 'halibut', 'mackerel', 'sardine', 'anchovy', 'trout', 'bass', 'snapper', 'mahi', 'swordfish', 'catfish', 'flounder', 'sole', 'haddock', 'perch', 'pike', 'herring', 'fish sauce', 'worcestershire'],
+  };
 
   const blockedTerms = useMemo(() => {
     const normalize = (v: string) => v.trim().toLowerCase();
     const currentDietExclusions = dietExclusions[userDietType] || [];
-    const base = [...currentDietExclusions, ...allAllergies, ...allDislikes].filter(Boolean).map(normalize).filter(Boolean);
+    
+    // Expand allergy terms to include specific ingredients
+    const expandedAllergies = allAllergies.flatMap(allergy => {
+      const allergyLower = allergy.toLowerCase();
+      const expansions = allergyExpansions[allergyLower] || [];
+      return [allergyLower, ...expansions];
+    });
+    
+    const base = [...currentDietExclusions, ...expandedAllergies, ...allDislikes].filter(Boolean).map(normalize).filter(Boolean);
     const expanded = base.flatMap((term) => {
       const variants = new Set<string>();
       variants.add(term);
