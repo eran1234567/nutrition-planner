@@ -494,7 +494,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-md h-[600px] max-h-[85vh] overflow-hidden flex flex-col fixed-dialog-content">
+      <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-lg h-[600px] max-h-[85vh] overflow-hidden flex flex-col fixed-dialog-content">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             {getStepTitle()}
@@ -825,14 +825,14 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
           <div className="flex-1 overflow-y-auto space-y-3 pt-1 min-h-0">
             {/* Dietary Style + Calorie Deficit - Combined Row */}
             <div className="p-3 rounded-xl border border-border bg-card">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3 flex-wrap">
                 {/* Dietary Style */}
-                <div className="flex items-center gap-2 flex-1">
+                <div className="flex items-center gap-2">
                   <span className="text-xs font-medium whitespace-nowrap">Diet</span>
                   <select
                     value={dietType}
                     onChange={(e) => setDietType(e.target.value as DietType)}
-                    className="h-7 px-2 rounded border border-border bg-background text-xs flex-1"
+                    className="h-7 px-2 rounded border border-border bg-background text-xs min-w-[100px]"
                   >
                     {dietOptions.map((diet) => (
                       <option key={diet.value} value={diet.value}>
@@ -843,15 +843,15 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                 </div>
                 
                 {/* Divider */}
-                <div className="h-6 w-px bg-border" />
+                <div className="h-6 w-px bg-border hidden sm:block" />
                 
                 {/* Calorie Deficit */}
-                <div className="flex items-center gap-2 flex-1">
+                <div className="flex items-center gap-2">
                   <span className="text-xs font-medium whitespace-nowrap">Deficit</span>
                   <select
                     value={deficitType}
                     onChange={(e) => setDeficitType(e.target.value as DeficitType)}
-                    className="h-7 px-2 rounded border border-border bg-background text-xs flex-1"
+                    className="h-7 px-2 rounded border border-border bg-background text-xs min-w-[90px]"
                   >
                     <option value="standard">20%</option>
                     <option value="custom_percent">Custom %</option>
@@ -863,7 +863,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                       type="number"
                       value={customDeficitPercent}
                       onChange={(e) => setCustomDeficitPercent(Math.min(50, Math.max(5, parseInt(e.target.value) || 0)))}
-                      className="w-10 h-7 px-1 rounded border border-border bg-background text-xs text-center"
+                      className="w-12 h-7 px-1 rounded border border-border bg-background text-xs text-center"
                       min={5}
                       max={50}
                     />
@@ -874,7 +874,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                       value={customDeficitCalories}
                       onChange={(e) => setCustomDeficitCalories(e.target.value)}
                       placeholder="500"
-                      className="w-12 h-7 px-1 rounded border border-border bg-background text-xs text-center"
+                      className="w-14 h-7 px-1 rounded border border-border bg-background text-xs text-center"
                     />
                   )}
                   {deficitType === 'custom_calories' && (
@@ -883,7 +883,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                       value={customCalories}
                       onChange={(e) => setCustomCalories(e.target.value)}
                       placeholder={String(getTargetCalories())}
-                      className="w-14 h-7 px-1 rounded border border-border bg-background text-xs text-center"
+                      className="w-16 h-7 px-1 rounded border border-border bg-background text-xs text-center"
                     />
                   )}
                 </div>
