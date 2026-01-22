@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { ChevronDown, Check, X } from 'lucide-react';
+import { ChevronDown, Check, X, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Popover,
   PopoverContent,
@@ -16,6 +17,8 @@ interface MultiSelectDropdownProps {
   icon?: React.ReactNode;
   placeholder?: string;
   className?: string;
+  allowCustom?: boolean;
+  customPlaceholder?: string;
 }
 
 export function MultiSelectDropdown({
@@ -26,8 +29,11 @@ export function MultiSelectDropdown({
   icon,
   placeholder,
   className,
+  allowCustom = false,
+  customPlaceholder,
 }: MultiSelectDropdownProps) {
   const [open, setOpen] = useState(false);
+  const [customInput, setCustomInput] = useState('');
   
   const toggleValue = (value: string) => {
     if (values.includes(value)) {
@@ -36,6 +42,25 @@ export function MultiSelectDropdown({
       onChange([...values, value]);
     }
   };
+
+  const addCustomValue = () => {
+    const trimmed = customInput.trim().toLowerCase();
+    if (trimmed && !values.includes(trimmed)) {
+      onChange([...values, trimmed]);
+    }
+    setCustomInput('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addCustomValue();
+    }
+  };
+
+  // Get custom values (values not in predefined options)
+  const optionValues = options.map(o => o.value.toLowerCase());
+  const customValues = values.filter(v => !optionValues.includes(v.toLowerCase()));
   
   const displayText = values.length === 0 
     ? (placeholder || label)
@@ -63,8 +88,34 @@ export function MultiSelectDropdown({
           <ChevronDown className="ml-1 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[200px] p-0 bg-popover border border-border shadow-lg" align="start">
-        <div className="max-h-[300px] overflow-y-auto">
+      <PopoverContent className="w-[220px] p-0 bg-popover border border-border shadow-lg" align="start">
+        <div className="max-h-[350px] overflow-y-auto">
+          {/* Custom input for adding new items */}
+          {allowCustom && (
+            <div className="p-2 border-b border-border">
+              <div className="flex gap-1">
+                <Input
+                  type="text"
+                  value={customInput}
+                  onChange={(e) => setCustomInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={customPlaceholder || `Add custom ${label.toLowerCase()}...`}
+                  className="h-8 text-sm"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={addCustomValue}
+                  disabled={!customInput.trim()}
+                >
+                  <Plus className="w-3 h-3" />
+                </Button>
+              </div>
+            </div>
+          )}
+
           {values.length > 0 && (
             <button
               onClick={() => onChange([])}
@@ -74,6 +125,28 @@ export function MultiSelectDropdown({
               Clear all
             </button>
           )}
+
+          {/* Custom values (user-added) */}
+          {customValues.length > 0 && (
+            <>
+              {customValues.map((value) => (
+                <button
+                  key={value}
+                  onClick={() => toggleValue(value)}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm bg-primary/10 text-primary hover:bg-primary/20"
+                >
+                  <div className="h-4 w-4 border rounded flex items-center justify-center bg-primary border-primary">
+                    <Check className="h-3 w-3 text-primary-foreground" />
+                  </div>
+                  <span className="capitalize">{value}</span>
+                  <X className="h-3 w-3 ml-auto opacity-60 hover:opacity-100" />
+                </button>
+              ))}
+              <div className="border-b border-border" />
+            </>
+          )}
+
+          {/* Predefined options */}
           {options.map((option) => {
             const isSelected = values.includes(option.value);
             return (

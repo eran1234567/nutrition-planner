@@ -640,6 +640,8 @@ export default function Discover() {
             options={allergyOptions}
             onChange={setSelectedAllergies}
             icon={<AlertTriangle className="w-3 h-3" />}
+            allowCustom
+            customPlaceholder="Add allergy..."
           />
           
           {/* Dislikes */}
@@ -649,6 +651,8 @@ export default function Discover() {
             options={commonDislikes}
             onChange={setSelectedDislikes}
             icon={<X className="w-3 h-3" />}
+            allowCustom
+            customPlaceholder="Add dislike..."
           />
           
           {/* Health Considerations */}
