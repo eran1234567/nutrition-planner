@@ -15,7 +15,7 @@ type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'veryActive
 type Goal = 'lose' | 'maintain' | 'gain';
 type BodyFatMethod = 'direct' | 'navy';
 type DietType = 'none' | 'vegetarian' | 'vegan' | 'pescatarian' | 'keto' | 'paleo' | 'mediterranean';
-type DeficitType = 'standard' | 'custom_percent' | 'custom_calories';
+type DeficitType = 'standard' | 'custom_percent' | 'custom_deficit_calories' | 'custom_calories';
 type Step = 'input' | 'body-composition' | 'distribution' | 'dietary' | 'result';
 
 const activityMultipliers: Record<ActivityLevel, number> = {
@@ -67,6 +67,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
   const [deficitType, setDeficitType] = useState<DeficitType>('standard');
   const [customDeficitPercent, setCustomDeficitPercent] = useState(20);
   const [customCalories, setCustomCalories] = useState('');
+  const [customDeficitCalories, setCustomDeficitCalories] = useState('');
   
   // Macro distribution sliders
   const [proteinPerLb, setProteinPerLb] = useState(1.0); // g per lb LBM
@@ -216,6 +217,16 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     
     if (deficitType === 'custom_calories' && customCalories) {
       return parseInt(customCalories);
+    }
+    
+    if (deficitType === 'custom_deficit_calories' && customDeficitCalories) {
+      const deficitCals = parseInt(customDeficitCalories);
+      if (formData.goal === 'lose') {
+        return Math.round(tdee - deficitCals);
+      } else if (formData.goal === 'gain') {
+        return Math.round(tdee + deficitCals);
+      }
+      return Math.round(tdee);
     }
     
     if (deficitType === 'custom_percent') {
@@ -741,10 +752,33 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                     <input
                       type="number"
                       value={customDeficitPercent}
-                      onChange={(e) => setCustomDeficitPercent(parseInt(e.target.value) || 0)}
+                      onChange={(e) => setCustomDeficitPercent(Math.min(50, Math.max(5, parseInt(e.target.value) || 0)))}
                       className="w-16 h-7 px-2 rounded border border-border bg-background text-sm"
                       min={5}
                       max={50}
+                    />
+                  )}
+                </label>
+                
+                <label 
+                  className={`flex items-center gap-2 cursor-pointer ${deficitType === 'custom_deficit_calories' ? 'text-foreground' : 'text-muted-foreground'}`}
+                  onClick={() => setDeficitType('custom_deficit_calories')}
+                >
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                    deficitType === 'custom_deficit_calories' ? 'border-primary' : 'border-muted-foreground'
+                  }`}>
+                    {deficitType === 'custom_deficit_calories' && <div className="w-2 h-2 rounded-full bg-primary" />}
+                  </div>
+                  <span className="text-sm">Custom calories {formData.goal === 'lose' ? 'deficit' : formData.goal === 'gain' ? 'surplus' : 'deficit'}</span>
+                  {deficitType === 'custom_deficit_calories' && (
+                    <input
+                      type="number"
+                      value={customDeficitCalories}
+                      onChange={(e) => setCustomDeficitCalories(e.target.value)}
+                      placeholder="500"
+                      className="w-20 h-7 px-2 rounded border border-border bg-background text-sm"
+                      min={0}
+                      max={2000}
                     />
                   )}
                 </label>
