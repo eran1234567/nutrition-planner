@@ -44,9 +44,23 @@ export interface GeneratedSlot {
   };
 }
 
+// Top-up item added to fill macro gaps
+export interface DayExtra {
+  id: string;
+  name: string;
+  emoji: string;
+  macros: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+}
+
 export interface GeneratedDay {
   dayIndex: number;
   slots: GeneratedSlot[];
+  extras?: DayExtra[]; // Top-up items for filling macro gaps
   dayTotals: {
     calories: number;
     protein: number;

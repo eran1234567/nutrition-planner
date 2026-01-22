@@ -5,6 +5,7 @@ import type {
   MealSlotId, 
   DailyTargets, 
   GeneratedPlan,
+  DayExtra,
   MEAL_SLOT_DEFINITIONS,
 } from '@/types/mealPlan';
 import { getDefaultPercentsForSlots } from '@/types/mealPlan';
@@ -96,6 +97,8 @@ interface MealPlanState {
   updateSlotMultiplier: (dayIndex: number, slotId: string, multiplier: number) => void;
   toggleSlotLock: (dayIndex: number, slotId: string) => void;
   swapRecipe: (dayIndex: number, slotId: string, newRecipeId: string) => void;
+  addDayExtra: (dayIndex: number, extra: DayExtra) => void;
+  removeDayExtra: (dayIndex: number, extraId: string) => void;
   
   // Mode actions
   setIsPlanMode: (isPlanMode: boolean) => void;
@@ -284,6 +287,35 @@ export const useMealPlanStore = create<MealPlanState>()(
           });
           
           return { ...day, slots: newSlots };
+        });
+        
+        return {
+          generatedPlan: { ...state.generatedPlan, days: newDays },
+        };
+      }),
+      
+      addDayExtra: (dayIndex, extra) => set((state) => {
+        if (!state.generatedPlan) return state;
+        
+        const newDays = state.generatedPlan.days.map(day => {
+          if (day.dayIndex !== dayIndex) return day;
+          const currentExtras = day.extras || [];
+          // Prevent duplicates
+          if (currentExtras.some(e => e.id === extra.id)) return day;
+          return { ...day, extras: [...currentExtras, extra] };
+        });
+        
+        return {
+          generatedPlan: { ...state.generatedPlan, days: newDays },
+        };
+      }),
+      
+      removeDayExtra: (dayIndex, extraId) => set((state) => {
+        if (!state.generatedPlan) return state;
+        
+        const newDays = state.generatedPlan.days.map(day => {
+          if (day.dayIndex !== dayIndex) return day;
+          return { ...day, extras: (day.extras || []).filter(e => e.id !== extraId) };
         });
         
         return {
