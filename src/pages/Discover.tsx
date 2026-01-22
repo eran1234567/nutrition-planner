@@ -652,6 +652,13 @@ export default function Discover() {
           />
         </div>
 
+        {/* Recipe count */}
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm text-muted-foreground">
+            <span className="font-semibold text-foreground">{filteredRecipes.length}</span> recipes found
+          </p>
+        </div>
+
         {/* Loading skeletons */}
         {isLoadingGlobal && (
           <div className="grid grid-cols-2 gap-3">
