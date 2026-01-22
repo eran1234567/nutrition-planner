@@ -355,7 +355,11 @@ export default function Discover() {
           if (selectedTime && recipe.total_time && recipe.total_time > parseInt(selectedTime)) {
             return false;
           }
-          if (slotMealType && !recipe.tags.some(t => t.tag_type === 'meal' && t.tag_value === slotMealType)) {
+          // Lunch and dinner are interchangeable
+          const mealTypesToMatch = slotMealType === 'lunch' || slotMealType === 'dinner' 
+            ? ['lunch', 'dinner'] 
+            : [slotMealType];
+          if (slotMealType && !recipe.tags.some(t => t.tag_type === 'meal' && mealTypesToMatch.includes(t.tag_value))) {
             return false;
           }
           if (selectedCuisine && recipe.cuisine?.toLowerCase() !== selectedCuisine.toLowerCase()) {
@@ -387,9 +391,14 @@ export default function Discover() {
         return false;
       }
       
-      // Apply meal type filter (both in normal mode and plan mode without slot filter)
-      if (selectedMealType && !recipe.tags.some(t => t.tag_type === 'meal' && t.tag_value === selectedMealType)) {
-        return false;
+      // Apply meal type filter (lunch and dinner are interchangeable)
+      if (selectedMealType) {
+        const mealTypesToMatch = selectedMealType === 'lunch' || selectedMealType === 'dinner' 
+          ? ['lunch', 'dinner'] 
+          : [selectedMealType];
+        if (!recipe.tags.some(t => t.tag_type === 'meal' && mealTypesToMatch.includes(t.tag_value))) {
+          return false;
+        }
       }
       if (selectedCuisine && recipe.cuisine?.toLowerCase() !== selectedCuisine.toLowerCase()) {
         return false;
