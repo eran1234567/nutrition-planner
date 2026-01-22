@@ -71,7 +71,8 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
   
   // Macro distribution sliders
   const [proteinPerLb, setProteinPerLb] = useState(1.0); // g per lb LBM
-  const [fatPercent, setFatPercent] = useState(25); // % of calories
+  const [carbsPercent, setCarbsPercent] = useState(50); // % of calories (adjustable)
+  // Fat is calculated as remaining: 100 - proteinPercent - carbsPercent
 
   const [bmr, setBmr] = useState(0);
   const [tdee, setTdee] = useState(0);
@@ -185,13 +186,13 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
   useEffect(() => {
     if (dietType === 'keto') {
       setProteinPerLb(0.8);
-      setFatPercent(70);
+      setCarbsPercent(5); // Very low carbs for keto
     } else if (dietType === 'paleo' || dietType === 'vegan' || dietType === 'none') {
       setProteinPerLb(1.2);
-      setFatPercent(25);
+      setCarbsPercent(50);
     } else {
       setProteinPerLb(1.0);
-      setFatPercent(25);
+      setCarbsPercent(50);
     }
   }, [dietType]);
 
@@ -203,12 +204,21 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     return { min: 0.8, max: 1.4, step: 0.1 };
   };
 
-  // Get fat slider range based on diet type
-  const getFatRange = () => {
+  // Get carbs slider range based on diet type
+  const getCarbsRange = () => {
     if (dietType === 'keto') {
-      return { min: 65, max: 80, step: 1 };
+      return { min: 2, max: 10, step: 1 }; // Very low for keto
     }
-    return { min: 20, max: 35, step: 1 };
+    return { min: 30, max: 65, step: 1 };
+  };
+
+  // Calculate fat percent as remaining
+  const getFatPercentRemaining = () => {
+    const targetCalories = getTargetCalories();
+    const proteinGrams = Math.round(leanBodyMass * proteinPerLb);
+    const proteinCalories = proteinGrams * 4;
+    const proteinPercent = Math.round((proteinCalories / targetCalories) * 100);
+    return Math.max(0, 100 - proteinPercent - carbsPercent);
   };
 
   // Calculate target calories based on deficit settings
@@ -249,13 +259,13 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     const proteinGrams = Math.round(leanBodyMass * proteinPerLb);
     const proteinCalories = proteinGrams * 4;
     
-    // Calculate fat
-    const fatCalories = Math.round(targetCalories * (fatPercent / 100));
-    const fatGrams = Math.round(fatCalories / 9);
+    // Calculate carbs from percentage
+    const carbCalories = Math.round(targetCalories * (carbsPercent / 100));
+    const carbGrams = Math.round(carbCalories / 4);
     
-    // Remaining goes to carbs
-    const remainingCalories = targetCalories - proteinCalories - fatCalories;
-    const carbGrams = Math.round(remainingCalories / 4);
+    // Fat is remaining calories
+    const remainingCalories = targetCalories - proteinCalories - carbCalories;
+    const fatGrams = Math.round(Math.max(0, remainingCalories) / 9);
     
     return {
       calories: targetCalories,
@@ -274,27 +284,34 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     const proteinCalories = proteinGrams * 4;
     const proteinPercent = Math.round((proteinCalories / targetCalories) * 100);
     
-    // Calculate fat calories
-    const fatCalories = Math.round(targetCalories * (fatPercent / 100));
+    // Calculate carbs calories
+    const carbCalories = Math.round(targetCalories * (carbsPercent / 100));
     
-    // Check if protein + fat exceed target calories
-    const totalUsedCalories = proteinCalories + fatCalories;
-    const totalPercent = proteinPercent + fatPercent;
-    const remainingCalories = targetCalories - totalUsedCalories;
+    // Check if protein + carbs exceed target calories
+    const totalUsedCalories = proteinCalories + carbCalories;
+    const totalPercent = proteinPercent + carbsPercent;
+    const remainingPercent = 100 - totalPercent;
     
-    if (remainingCalories < 0 || totalPercent >= 100) {
+    if (remainingPercent < 5) {
       return {
-        title: 'Macro settings exceed calorie target',
-        detail: `Protein (${proteinPercent}%) + Fat (${fatPercent}%) = ${totalPercent}% of calories. Reduce protein factor or fat percentage so total ≤ 100%.`
+        title: 'Fat too low',
+        detail: `Protein (${proteinPercent}%) + Carbs (${carbsPercent}%) = ${totalPercent}% of calories. Fat needs at least 5%. Reduce carbs.`
       };
     }
     
-    // For keto, check if remaining carbs are too high (shouldn't happen with keto settings)
-    const carbGrams = Math.round(remainingCalories / 4);
+    if (remainingPercent < 0 || totalPercent > 100) {
+      return {
+        title: 'Macro settings exceed calorie target',
+        detail: `Protein (${proteinPercent}%) + Carbs (${carbsPercent}%) = ${totalPercent}%. Reduce carbs or protein.`
+      };
+    }
+    
+    // For keto, check if carbs are too high
+    const carbGrams = Math.round((targetCalories * (carbsPercent / 100)) / 4);
     if (dietType === 'keto' && carbGrams > 50) {
       return {
         title: 'Carbs exceed keto limit',
-        detail: `Net carbs (${carbGrams}g) exceed the 20-50g keto limit. Consider reducing protein or increasing fat.`
+        detail: `Net carbs (${carbGrams}g) exceed the 20-50g keto limit. Reduce carbs percentage.`
       };
     }
     
@@ -337,8 +354,9 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     (formData.unit === 'imperial' ? (formData.heightFt || formData.heightIn) : formData.height);
 
   const proteinRange = getProteinRange();
-  const fatRange = getFatRange();
+  const carbsRange = getCarbsRange();
   const currentMacros = step === 'distribution' ? calculateFinalMacros() : calculatedMacros;
+  const fatPercentCalc = getFatPercentRemaining();
   const warning = step === 'distribution' ? getMacroWarning() : null;
 
   // Get step title
@@ -796,34 +814,34 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                 />
               </div>
 
-              {/* Fat Slider */}
+              {/* Carbs Slider - Adjustable */}
               <div className="mb-2.5">
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs font-medium">Fat: {fatPercent}% of calories</span>
-                  <span className="text-xs text-muted-foreground">{currentMacros.fat}g</span>
+                  <span className="text-xs font-medium">Carbs: {carbsPercent}% of calories</span>
+                  <span className="text-xs text-muted-foreground">{currentMacros.carbs}g</span>
                 </div>
                 <Slider
-                  value={[fatPercent]}
-                  onValueChange={([val]) => setFatPercent(val)}
-                  min={fatRange.min}
-                  max={fatRange.max}
-                  step={fatRange.step}
+                  value={[carbsPercent]}
+                  onValueChange={([val]) => setCarbsPercent(val)}
+                  min={carbsRange.min}
+                  max={carbsRange.max}
+                  step={carbsRange.step}
                   className="w-full"
                 />
               </div>
 
-              {/* Carbs Display Bar - Auto-calculated */}
+              {/* Fat Display Bar - Auto-calculated */}
               <div>
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs font-medium">Carbs: {Math.round((currentMacros.carbs * 4 / currentMacros.calories) * 100)}% (auto)</span>
-                  <span className="text-xs text-muted-foreground">{currentMacros.carbs}g</span>
+                  <span className="text-xs font-medium">Fat: {fatPercentCalc}% (auto)</span>
+                  <span className="text-xs text-muted-foreground">{currentMacros.fat}g</span>
                 </div>
                 <div className="h-2 rounded-full bg-muted overflow-hidden">
                   <div 
                     className="h-full rounded-full transition-all duration-200"
                     style={{ 
-                      width: `${Math.max(0, Math.min(100, Math.round((currentMacros.carbs * 4 / currentMacros.calories) * 100)))}%`,
-                      backgroundColor: '#F59E0B'
+                      width: `${Math.max(0, Math.min(100, fatPercentCalc))}%`,
+                      backgroundColor: '#EC4899'
                     }}
                   />
                 </div>
