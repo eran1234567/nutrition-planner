@@ -186,7 +186,13 @@ export default function Discover() {
     }
   }, []);
 
-  const effectiveDietType = (pendingOnboarding?.dietType ?? preferences?.diet_type ?? 'none') as string;
+  // Get diet type from macro calculator if set (highest priority for calculated macros)
+  const { macroCalculatorInputs } = useMealPlanStore();
+  const calculatorDietType = macroCalculatorInputs?.dietType && macroCalculatorInputs.dietType !== 'none' 
+    ? macroCalculatorInputs.dietType 
+    : null;
+  
+  const effectiveDietType = (calculatorDietType ?? pendingOnboarding?.dietType ?? preferences?.diet_type ?? 'none') as string;
   const effectiveAllergies = pendingOnboarding?.allergies ?? preferences?.allergies ?? [];
   const effectiveDislikes = pendingOnboarding?.dislikes ?? preferences?.dislikes ?? [];
 
