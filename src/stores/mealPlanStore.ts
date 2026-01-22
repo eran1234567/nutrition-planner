@@ -18,6 +18,33 @@ export interface MacroGapContext {
   primaryGap: 'protein' | 'carbs' | 'fat' | null;
 }
 
+// Macro calculator inputs for persistence
+export interface MacroCalculatorInputs {
+  age: string;
+  weight: string;
+  height: string;
+  heightFt: string;
+  heightIn: string;
+  sex: 'male' | 'female';
+  activityLevel: 'sedentary' | 'light' | 'moderate' | 'active' | 'veryActive';
+  goal: 'lose' | 'maintain' | 'gain';
+  unit: 'metric' | 'imperial';
+  bodyFatMethod: 'direct' | 'navy';
+  bodyFatPercent: string;
+  waist: string;
+  neck: string;
+  hip: string;
+  // Distribution step values
+  dietType: 'none' | 'vegetarian' | 'vegan' | 'pescatarian' | 'keto' | 'paleo' | 'mediterranean';
+  deficitType: 'standard' | 'custom_percent' | 'custom_deficit_calories' | 'custom_calories';
+  customDeficitPercent: number;
+  customCalories: string;
+  customDeficitCalories: string;
+  proteinPerLb: number;
+  carbsPercent: number;
+  fatPercent: number;
+}
+
 interface MealPlanState {
   // Current user ID for storage isolation
   currentUserId: string | null;
@@ -42,6 +69,9 @@ interface MealPlanState {
   
   // Macro gap context for smart swaps
   macroGapContext: MacroGapContext | null;
+  
+  // Macro calculator saved inputs
+  macroCalculatorInputs: MacroCalculatorInputs | null;
   
   // Actions
   setCurrentUserId: (userId: string | null) => void;
@@ -72,6 +102,7 @@ interface MealPlanState {
   setCurrentSlotFilter: (slotId: MealSlotId | null) => void;
   setLastSelectedSlot: (slotId: MealSlotId | null) => void;
   setMacroGapContext: (context: MacroGapContext | null) => void;
+  setMacroCalculatorInputs: (inputs: MacroCalculatorInputs | null) => void;
   
   // Reset
   resetPlanState: () => void;
@@ -90,6 +121,7 @@ const initialState = {
   currentSlotFilter: null,
   lastSelectedSlot: null,
   macroGapContext: null,
+  macroCalculatorInputs: null,
 };
 
 // Helper to get user-specific storage key
@@ -267,6 +299,8 @@ export const useMealPlanStore = create<MealPlanState>()(
       
       setMacroGapContext: (context) => set({ macroGapContext: context }),
       
+      setMacroCalculatorInputs: (inputs) => set({ macroCalculatorInputs: inputs }),
+      
       resetPlanState: () => set({ ...initialState, currentUserId: get().currentUserId }),
     }),
     {
@@ -301,6 +335,7 @@ export const useMealPlanStore = create<MealPlanState>()(
         exactAssignments: state.exactAssignments,
         generatedPlan: state.generatedPlan,
         lockedSlots: state.lockedSlots,
+        macroCalculatorInputs: state.macroCalculatorInputs,
       }),
     }
   )

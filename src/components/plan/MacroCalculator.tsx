@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Calculator, ArrowLeft, Utensils, Flame, Scale, TrendingUp, Zap, Activity, User, HelpCircle } from 'lucide-react';
+import { useMealPlanStore, type MacroCalculatorInputs } from '@/stores/mealPlanStore';
 
 interface MacroCalculatorProps {
   open: boolean;
@@ -55,6 +56,7 @@ const dietMacroPresets: Record<DietType, { protein: number; carbs: number; fat: 
 
 export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculatorProps) {
   const { t } = useTranslation();
+  const { macroCalculatorInputs, setMacroCalculatorInputs } = useMealPlanStore();
   const [step, setStep] = useState<Step>('input');
   
   const [formData, setFormData] = useState({
@@ -97,6 +99,36 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     carbs: 0,
     fat: 0,
   });
+
+  // Load saved inputs when dialog opens
+  useEffect(() => {
+    if (open && macroCalculatorInputs) {
+      setFormData({
+        age: macroCalculatorInputs.age,
+        weight: macroCalculatorInputs.weight,
+        height: macroCalculatorInputs.height,
+        heightFt: macroCalculatorInputs.heightFt,
+        heightIn: macroCalculatorInputs.heightIn,
+        sex: macroCalculatorInputs.sex,
+        activityLevel: macroCalculatorInputs.activityLevel,
+        goal: macroCalculatorInputs.goal,
+        unit: macroCalculatorInputs.unit,
+        bodyFatMethod: macroCalculatorInputs.bodyFatMethod,
+        bodyFatPercent: macroCalculatorInputs.bodyFatPercent,
+        waist: macroCalculatorInputs.waist,
+        neck: macroCalculatorInputs.neck,
+        hip: macroCalculatorInputs.hip,
+      });
+      setDietType(macroCalculatorInputs.dietType);
+      setDeficitType(macroCalculatorInputs.deficitType);
+      setCustomDeficitPercent(macroCalculatorInputs.customDeficitPercent);
+      setCustomCalories(macroCalculatorInputs.customCalories);
+      setCustomDeficitCalories(macroCalculatorInputs.customDeficitCalories);
+      setProteinPerLb(macroCalculatorInputs.proteinPerLb);
+      setCarbsPercent(macroCalculatorInputs.carbsPercent);
+      setFatPercent(macroCalculatorInputs.fatPercent);
+    }
+  }, [open, macroCalculatorInputs]);
 
   // Calculate body fat using US Navy method
   const calculateNavyBodyFat = (): number | null => {
@@ -370,6 +402,33 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
 
   const handleApply = () => {
     const macros = calculateFinalMacros();
+    
+    // Save inputs for next time
+    setMacroCalculatorInputs({
+      age: formData.age,
+      weight: formData.weight,
+      height: formData.height,
+      heightFt: formData.heightFt,
+      heightIn: formData.heightIn,
+      sex: formData.sex,
+      activityLevel: formData.activityLevel,
+      goal: formData.goal,
+      unit: formData.unit,
+      bodyFatMethod: formData.bodyFatMethod,
+      bodyFatPercent: formData.bodyFatPercent,
+      waist: formData.waist,
+      neck: formData.neck,
+      hip: formData.hip,
+      dietType,
+      deficitType,
+      customDeficitPercent,
+      customCalories,
+      customDeficitCalories,
+      proteinPerLb,
+      carbsPercent,
+      fatPercent,
+    });
+    
     onApply(macros);
     onOpenChange(false);
     setStep('input');
