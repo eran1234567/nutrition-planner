@@ -154,7 +154,7 @@ export interface GeneratePlanInput {
   exactAssignments: Record<number, Record<string, { recipeId: string; servingMultiplier: number }>>;
   recipes: GlobalRecipe[];
   numberOfDays: number;
-  dietType: DietType;
+  dietType?: DietType; // Optional - defaults to 'default'
   lockedSlots?: Record<number, string[]>;
   existingPlan?: { days: { dayIndex: number; slots: GeneratedSlot[] }[] } | null;
 }
