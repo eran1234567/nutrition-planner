@@ -339,6 +339,30 @@ export default function Discover() {
     return true;
   };
 
+  // Helper to check if a recipe meets paleo criteria (no grains, legumes, dairy, etc.)
+  const isPaleoFriendly = useCallback((ingredients: Array<{ name?: string; normalized_name?: string | null }> | undefined): boolean => {
+    if (!ingredients || ingredients.length === 0) return false;
+    
+    const paleoExcluded = dietExclusions.paleo;
+    
+    return !ingredients.some(ing => {
+      const ingName = (ing.normalized_name || ing.name || '').toLowerCase();
+      return paleoExcluded.some(excluded => ingName.includes(excluded));
+    });
+  }, []);
+
+  // Helper to check if a recipe meets mediterranean criteria
+  const isMediterraneanFriendly = useCallback((ingredients: Array<{ name?: string; normalized_name?: string | null }> | undefined): boolean => {
+    if (!ingredients || ingredients.length === 0) return false;
+    
+    const medExcluded = dietExclusions.mediterranean;
+    
+    return !ingredients.some(ing => {
+      const ingName = (ing.normalized_name || ing.name || '').toLowerCase();
+      return medExcluded.some(excluded => ingName.includes(excluded));
+    });
+  }, []);
+
   // Combine profile allergies/dislikes with dropdown selections
   const allAllergies = useMemo(() => 
     [...new Set([...effectiveAllergies, ...selectedAllergies])],
@@ -1019,18 +1043,31 @@ export default function Discover() {
               const inCurrentPool = isPlanMode && currentSlotFilter && (recipePoolsBySlot[currentSlotFilter] || []).includes(recipe.id);
               const isChildUser = userAgeGroup === 'toddler' || userAgeGroup === 'child';
               
-              // Build diet badges array from recipe tags + keto macro check
+              // Build diet badges array from auto-detection + tags
               const recipeDietTags = (recipe.tags || [])
                 .filter((t: { tag_type: string; tag_value: string }) => t.tag_type === 'diet')
                 .map((t: { tag_type: string; tag_value: string }) => t.tag_value.toLowerCase());
               
-              // Add keto badge if passes strict macro check (even if not tagged)
+              // Build badges with auto-detection for keto, paleo, mediterranean
               const dietBadges: string[] = [];
+              
+              // Keto: auto-detect from macros
               if (isKetoFriendly(recipe.nutrition)) {
                 dietBadges.push('keto');
               }
-              // Add other diet badges from tags (avoid duplicating keto)
-              ['vegan', 'vegetarian', 'pescatarian', 'paleo', 'mediterranean'].forEach(diet => {
+              
+              // Paleo: auto-detect from ingredients or use tag
+              if (recipeDietTags.includes('paleo') || isPaleoFriendly(recipe.ingredients)) {
+                dietBadges.push('paleo');
+              }
+              
+              // Mediterranean: auto-detect from ingredients or use tag
+              if (recipeDietTags.includes('mediterranean') || isMediterraneanFriendly(recipe.ingredients)) {
+                dietBadges.push('mediterranean');
+              }
+              
+              // Vegan, vegetarian, pescatarian: rely on tags only (require explicit tagging)
+              ['vegan', 'vegetarian', 'pescatarian'].forEach(diet => {
                 if (recipeDietTags.includes(diet) && !dietBadges.includes(diet)) {
                   dietBadges.push(diet);
                 }
