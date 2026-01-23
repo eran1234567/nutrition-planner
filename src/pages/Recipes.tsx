@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Plus, Upload, Link, Camera, PenLine, BookOpen, Loader2, Trash2, X, MoreVertical, Pencil } from 'lucide-react';
+import { Plus, Upload, Link, Camera, PenLine, BookOpen, Loader2, Trash2, MoreVertical, Pencil } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
 import { supabase } from '@/integrations/supabase/client';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -26,6 +26,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/components/ui/drawer';
 import { Input } from '@/components/ui/input';
 
 interface RecipeNutrition {
@@ -54,7 +60,7 @@ export default function Recipes() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
-  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showAddDrawer, setShowAddDrawer] = useState(false);
   const [showLinkInput, setShowLinkInput] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [userRecipes, setUserRecipes] = useState<UserRecipe[]>([]);
@@ -167,18 +173,21 @@ export default function Recipes() {
     switch (action) {
       case 'upload':
         fileInputRef.current?.click();
+        setShowAddDrawer(false);
         break;
       case 'link':
+        // Keep drawer open, show link input inside it
         setShowLinkInput(true);
         break;
       case 'camera':
         cameraInputRef.current?.click();
+        setShowAddDrawer(false);
         break;
       case 'manual':
         navigate('/recipe/new');
+        setShowAddDrawer(false);
         break;
     }
-    setShowAddMenu(false);
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -240,8 +249,7 @@ export default function Recipes() {
 
         if (error) throw error;
 
-        // Show processing state
-        setShowAddMenu(true);
+        // Keep drawer open to show progress
         setProcessingUpload({ name: file.name, progress: 10 });
 
         if (fileContent) {
@@ -268,10 +276,10 @@ export default function Recipes() {
             toast.error(data?.error || t('myRecipes.parseError', 'Failed to parse recipe'));
           }
 
-          // Close after short delay
+          // Close drawer after short delay
           setTimeout(() => {
             setProcessingUpload(null);
-            setShowAddMenu(false);
+            setShowAddDrawer(false);
           }, 500);
         } else {
           toast.error(t('myRecipes.unsupportedFile', 'Unsupported file type'));
@@ -320,8 +328,7 @@ export default function Recipes() {
       setLinkUrl('');
       setShowLinkInput(false);
       
-      // Show processing state
-      setShowAddMenu(true);
+      // Keep drawer open to show progress
       setProcessingUpload({ name: parsedUrl.hostname, progress: 10 });
 
       // Simulate progress
@@ -346,10 +353,10 @@ export default function Recipes() {
         toast.error(data?.error || t('myRecipes.parseError', 'Failed to parse recipe'));
       }
 
-      // Close after short delay
+      // Close drawer after short delay
       setTimeout(() => {
         setProcessingUpload(null);
-        setShowAddMenu(false);
+        setShowAddDrawer(false);
       }, 500);
     } catch (error) {
       toast.error(t('myRecipes.linkError', 'Failed to save link'));
@@ -435,90 +442,6 @@ export default function Recipes() {
           }
         />
 
-        {/* Add Recipe Menu */}
-        {showAddMenu && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-6 p-4 bg-card rounded-xl border border-border"
-          >
-            {processingUpload ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">{t('recipes.processing', 'Processing Recipe')}</h3>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => {
-                      setProcessingUpload(null);
-                      setShowAddMenu(false);
-                    }}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground truncate">{processingUpload.name}</p>
-                <Progress value={processingUpload.progress} className="h-2" />
-                <p className="text-xs text-muted-foreground text-center">
-                  {processingUpload.progress < 100 
-                    ? t('recipes.parsingRecipe', 'Parsing recipe...') 
-                    : t('recipes.parsingComplete', 'Complete!')}
-                </p>
-              </div>
-            ) : (
-              <>
-                <h3 className="font-semibold mb-3">{t('recipes.addRecipe')}</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {addOptions.map((option) => (
-                    <button
-                      key={option.label}
-                      onClick={() => handleAddOption(option.action)}
-                      className="flex items-center gap-3 p-3 rounded-lg bg-muted hover:bg-secondary transition-colors text-left"
-                    >
-                      <div className="w-10 h-10 rounded-lg bg-primary-soft flex items-center justify-center">
-                        <option.icon className="w-5 h-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-sm">{option.label}</p>
-                        <p className="text-xs text-muted-foreground">{option.desc}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </motion.div>
-        )}
-
-        {/* Link Input Modal */}
-        {showLinkInput && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-6 p-4 bg-card rounded-xl border border-border space-y-3"
-          >
-            <h3 className="font-semibold">{t('recipes.pasteLink', 'Paste Recipe Link')}</h3>
-            <div className="flex gap-2">
-              <Input
-                type="url"
-                placeholder="https://..."
-                value={linkUrl}
-                onChange={(e) => setLinkUrl(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddLink()}
-                autoFocus
-                className="flex-1"
-              />
-              <Button onClick={handleAddLink} disabled={!linkUrl.trim()}>
-                {t('common.add', 'Add')}
-              </Button>
-              <Button variant="ghost" onClick={() => { setShowLinkInput(false); setLinkUrl(''); }}>
-                {t('common.cancel', 'Cancel')}
-              </Button>
-            </div>
-          </motion.div>
-        )}
-
         {/* Empty State */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16">
@@ -574,19 +497,83 @@ export default function Recipes() {
       </div>
 
       {/* Floating Add Button */}
-      <AnimatePresence>
-        {!showAddMenu && (
-          <motion.button
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            onClick={() => setShowAddMenu(true)}
-            className="fixed bottom-24 right-4 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors z-20"
-          >
-            <Plus className="w-6 h-6" />
-          </motion.button>
-        )}
-      </AnimatePresence>
+      <motion.button
+        onClick={() => setShowAddDrawer(true)}
+        className="fixed bottom-24 right-4 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors z-20"
+        whileTap={{ scale: 0.95 }}
+      >
+        <Plus className="w-6 h-6" />
+      </motion.button>
+
+      {/* Add Recipe Drawer */}
+      <Drawer open={showAddDrawer} onOpenChange={(open) => {
+        setShowAddDrawer(open);
+        if (!open) {
+          setShowLinkInput(false);
+          setLinkUrl('');
+        }
+      }}>
+        <DrawerContent className="pb-8">
+          <DrawerHeader className="pb-2">
+            <DrawerTitle>
+              {processingUpload 
+                ? t('recipes.processing', 'Processing Recipe')
+                : t('recipes.addRecipe', 'Add Recipe')
+              }
+            </DrawerTitle>
+          </DrawerHeader>
+          <div className="px-4">
+            {processingUpload ? (
+              <div className="space-y-3 py-4">
+                <p className="text-sm text-muted-foreground truncate">{processingUpload.name}</p>
+                <Progress value={processingUpload.progress} className="h-2" />
+                <p className="text-xs text-muted-foreground text-center">
+                  {processingUpload.progress < 100 
+                    ? t('recipes.parsingRecipe', 'Parsing recipe...') 
+                    : t('recipes.parsingComplete', 'Complete!')}
+                </p>
+              </div>
+            ) : showLinkInput ? (
+              <div className="space-y-3 py-2">
+                <Input
+                  type="url"
+                  placeholder="https://..."
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddLink()}
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <Button onClick={handleAddLink} disabled={!linkUrl.trim()} className="flex-1">
+                    {t('common.add', 'Add')}
+                  </Button>
+                  <Button variant="outline" onClick={() => { setShowLinkInput(false); setLinkUrl(''); }}>
+                    {t('common.cancel', 'Cancel')}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 py-2">
+                {addOptions.map((option) => (
+                  <button
+                    key={option.label}
+                    onClick={() => handleAddOption(option.action)}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-muted hover:bg-secondary transition-colors text-left"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <option.icon className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">{option.label}</p>
+                      <p className="text-xs text-muted-foreground">{option.desc}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </DrawerContent>
+      </Drawer>
 
       <BottomNav />
 
