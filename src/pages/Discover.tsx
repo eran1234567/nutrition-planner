@@ -1013,6 +1013,7 @@ export default function Discover() {
           <div className="grid grid-cols-2 gap-3">
             {filteredRecipes.map((recipe) => {
               const inCurrentPool = isPlanMode && currentSlotFilter && (recipePoolsBySlot[currentSlotFilter] || []).includes(recipe.id);
+              const showKeto = userDietType === 'keto' && isKetoFriendly(recipe.nutrition);
               return (
                 <RecipeCard
                   key={recipe.id}
@@ -1022,6 +1023,7 @@ export default function Discover() {
                   onSelect={() => handleSelect(recipe)}
                   onClick={() => navigate(`/recipe/${recipe.id}`)}
                   compact
+                  showKetoBadge={showKeto}
                 />
               );
             })}
