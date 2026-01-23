@@ -75,7 +75,7 @@ export function RecipeCard({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       className={cn(
-        'recipe-card cursor-pointer',
+        'recipe-card cursor-pointer h-full flex flex-col',
         isSelected && 'ring-2 ring-primary ring-offset-2'
       )}
       onClick={onClick}
@@ -165,9 +165,9 @@ export function RecipeCard({
       </div>
 
       {/* Content */}
-      <div className={cn('p-3', compact && 'p-2')}>
+      <div className={cn('p-3 flex-1 flex flex-col', compact && 'p-2')}>
         <h3 className={cn(
-          'font-semibold text-foreground line-clamp-2 mb-2',
+          'font-semibold text-foreground line-clamp-2 mb-2 min-h-[2.5rem]',
           compact ? 'text-sm' : 'text-base'
         )}>
           {recipe.title}
