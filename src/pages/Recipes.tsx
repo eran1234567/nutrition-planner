@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Plus, Upload, Link, Camera, PenLine, BookOpen, Loader2, Trash2, MoreVertical, Pencil, Search, Clock, UtensilsCrossed, ChefHat, Sparkles, AlertTriangle, HeartPulse } from 'lucide-react';
+import { Plus, Upload, Link, Camera, PenLine, BookOpen, Loader2, Trash2, Pencil, Search, Clock, UtensilsCrossed, ChefHat, Sparkles, AlertTriangle, HeartPulse } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -743,27 +743,6 @@ export default function Recipes() {
       <div className="page-container">
         <PageHeader
           title={t('recipes.myRecipes')}
-          rightAction={
-            <div className="flex items-center gap-1">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="icon" variant="ghost">
-                    <MoreVertical className="h-5 w-5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem 
-                    onClick={() => setDeleteAllDialogOpen(true)}
-                    className="text-destructive focus:text-destructive"
-                    disabled={userRecipes.length === 0}
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    {t('recipes.deleteAll', 'Delete All Recipes')}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          }
         />
 
         {/* Search */}
@@ -907,14 +886,35 @@ export default function Recipes() {
         )}
       </div>
 
-      {/* Floating Add Button */}
-      <motion.button
-        onClick={() => setShowAddDrawer(true)}
-        className="fixed bottom-24 right-4 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors z-20"
-        whileTap={{ scale: 0.95 }}
-      >
-        <Plus className="w-6 h-6" />
-      </motion.button>
+      {/* Floating Action Menu */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <motion.button
+            className="fixed bottom-24 right-4 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors z-20"
+            whileTap={{ scale: 0.95 }}
+          >
+            <Plus className="w-6 h-6" />
+          </motion.button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48 mb-2">
+          <DropdownMenuItem onClick={() => setShowAddDrawer(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            {t('recipes.addRecipe', 'Add Recipe')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => navigate('/my-recipes')}>
+            <Upload className="w-4 h-4 mr-2" />
+            {t('recipes.manageSources', 'Manage Sources')}
+          </DropdownMenuItem>
+          <DropdownMenuItem 
+            onClick={() => setDeleteAllDialogOpen(true)}
+            className="text-destructive focus:text-destructive"
+            disabled={userRecipes.length === 0}
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            {t('recipes.deleteAll', 'Delete All Recipes')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {/* Add Recipe Drawer */}
       <Drawer open={showAddDrawer} onOpenChange={(open) => {
