@@ -374,7 +374,10 @@ export default function Discover() {
 
   const blockedTerms = useMemo(() => {
     const normalize = (v: string) => v.trim().toLowerCase();
-    const currentDietExclusions = dietExclusions[userDietType] || [];
+    // For keto, keyword-based diet exclusions (like "fried rice") are too aggressive and
+    // hide legit keto recipes (e.g., cauliflower rice). Keto compliance is enforced by
+    // strict macro validation (isKetoFriendly) later in filtering.
+    const currentDietExclusions = userDietType === 'keto' ? [] : (dietExclusions[userDietType] || []);
     
     // Expand allergy terms to include specific ingredients
     const expandedAllergies = allAllergies.flatMap(allergy => {
@@ -472,7 +475,8 @@ export default function Discover() {
           servings: r.servings,
           difficulty: r.difficulty,
           cuisine: r.cuisine,
-          nutrition: r.recipe_nutrition?.[0] || undefined,
+          // recipe_nutrition is one-to-one and can come back as an object (or null)
+          nutrition: (Array.isArray(r.recipe_nutrition) ? r.recipe_nutrition?.[0] : r.recipe_nutrition) || undefined,
           ingredients: r.recipe_ingredients || [],
           tags: r.recipe_tags || [],
           isUserRecipe: true,
