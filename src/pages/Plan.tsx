@@ -19,7 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { format, addDays, startOfWeek } from 'date-fns';
 import { generateMealPlan, validatePlanInputs } from '@/lib/mealPlanGenerator/index';
-import type { GeneratedSlot } from '@/types/mealPlan';
+import type { GeneratedSlot, GeneratedDay } from '@/types/mealPlan';
 import { toast } from 'sonner';
 import type { GlobalRecipe } from '@/hooks/useGlobalRecipes';
 
@@ -196,17 +196,83 @@ export default function Plan() {
     navigate('/discover');
   };
 
-  // Regenerate unlocked slots for current day
-  const handleRegenerateDay = () => {
-    if (!dailyTargets || !validation.isValid) return;
-    handleGeneratePlan();
-  };
-
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const days = Array.from({ length: numberOfDays }, (_, i) => addDays(weekStart, i));
 
   const currentDayPlan = generatedPlan?.days[selectedDay];
   const currentDayLocks = lockedSlots[selectedDay] || [];
+
+  // Rebalance: Re-optimize multipliers for current day while keeping the same recipes
+  const handleRebalanceDay = useCallback(() => {
+    if (!dailyTargets || !generatedPlan || !currentDayPlan) return;
+    
+    setIsGenerating(true);
+    
+    setTimeout(() => {
+      try {
+        // Import solveDay to re-optimize multipliers
+        import('@/lib/mealPlanGenerator/solver').then(({ solveDay }) => {
+          // Build slots from current plan with existing recipe assignments
+          const slotsToSolve = currentDayPlan.slots.map(slot => ({
+            slotId: slot.slotId,
+            recipeId: slot.recipeId,
+            multiplier: 1, // Reset to 1 so solver can re-optimize
+            isLocked: currentDayLocks.includes(slot.slotId),
+          }));
+          
+          // Run solver on these exact recipes
+          const dayResult = solveDay({
+            dayIndex: selectedDay,
+            slots: slotsToSolve,
+            targets: dailyTargets,
+            dietType: effectivePlanDietType,
+            recipes: allRecipes,
+            recipePool: allRecipes, // Full pool for swap suggestions
+          });
+          
+          // Convert DayResult to GeneratedDay format
+          const generatedDay: GeneratedDay = {
+            dayIndex: dayResult.dayIndex,
+            slots: dayResult.meals.map(meal => ({
+              slotId: meal.slot,
+              recipeId: meal.recipeId,
+              servingMultiplier: meal.multiplier,
+              isLocked: meal.isLocked,
+              slotTotals: meal.totals,
+            })),
+            extras: dayResult.addOns.map(addon => ({
+              id: addon.id,
+              name: addon.name,
+              emoji: addon.emoji,
+              macros: addon.macros,
+            })),
+            dayTotals: dayResult.totals,
+            deltaVsTarget: dayResult.deltas,
+          };
+          
+          // Update the plan with new multipliers and extras
+          const updatedDays = [...generatedPlan.days];
+          updatedDays[selectedDay] = generatedDay;
+          
+          setGeneratedPlan({
+            ...generatedPlan,
+            days: updatedDays,
+          });
+          
+          toast.success('Serving sizes rebalanced!');
+          setIsGenerating(false);
+        }).catch(error => {
+          console.error('Error rebalancing:', error);
+          toast.error('Failed to rebalance');
+          setIsGenerating(false);
+        });
+      } catch (error) {
+        console.error('Error rebalancing:', error);
+        toast.error('Failed to rebalance');
+        setIsGenerating(false);
+      }
+    }, 100);
+  }, [dailyTargets, generatedPlan, currentDayPlan, selectedDay, currentDayLocks, effectivePlanDietType, allRecipes, setGeneratedPlan]);
 
   // Recalculate day totals using actual recipe data (since stored totals may be stale)
   const calculatedDayTotals = useMemo(() => {
@@ -410,11 +476,11 @@ export default function Plan() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={handleRegenerateDay}
+                onClick={handleRebalanceDay}
                 disabled={isGenerating}
               >
                 <RefreshCw className={cn('w-4 h-4 mr-1', isGenerating && 'animate-spin')} />
-                Regenerate
+                Rebalance
               </Button>
             </div>
 
