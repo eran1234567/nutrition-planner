@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -9,6 +9,7 @@ import { Plus, Check, Calendar, AlertTriangle } from 'lucide-react';
 import { useMealPlanStore } from '@/stores/mealPlanStore';
 import { useGlobalRecipes } from '@/hooks/useGlobalRecipes';
 import type { MealSlotId } from '@/types/mealPlan';
+import { MEAL_SLOT_DEFINITIONS, getDefaultPercentsForSlots, type MealSlot } from '@/types/mealPlan';
 
 interface AddToPlanModalProps {
   open: boolean;
@@ -42,11 +43,42 @@ export function AddToPlanModal({
     swapContext,
     setSwapContext,
     setIsPlanMode,
+    setSelectedMealSlots,
+    setNumberOfDays,
   } = useMealPlanStore();
   const { data: globalRecipes = [] } = useGlobalRecipes();
+
+  // If the user hasn't configured goals/slots yet, allow planning with sensible defaults.
+  const fallbackSlots: MealSlot[] = useMemo(() => {
+    const slotIds: MealSlotId[] = ['breakfast', 'lunch', 'dinner'];
+    const percents = getDefaultPercentsForSlots(slotIds);
+    return slotIds.map((id) => ({
+      id,
+      label: MEAL_SLOT_DEFINITIONS[id].label,
+      percentOfDay: percents[id] || 0,
+      type: MEAL_SLOT_DEFINITIONS[id].type,
+    }));
+  }, []);
+
+  const availableSlots = selectedMealSlots.length > 0 ? selectedMealSlots : fallbackSlots;
+  const effectiveNumberOfDays = Math.max(1, numberOfDays || 7);
+
+  // Ensure slots/days exist when opening the modal (no-goals flow)
+  useEffect(() => {
+    if (!open) return;
+
+    if (selectedMealSlots.length === 0) {
+      setSelectedMealSlots(fallbackSlots);
+    }
+
+    // If days are missing/invalid, default to 7
+    if (!numberOfDays || numberOfDays < 1) {
+      setNumberOfDays(7);
+    }
+  }, [open, selectedMealSlots.length, numberOfDays, setSelectedMealSlots, setNumberOfDays, fallbackSlots]);
   
   // Use defaultSlot if provided, otherwise use last selected slot, otherwise first available
-  const initialSlot = defaultSlot || lastSelectedSlot || (selectedMealSlots.length > 0 ? selectedMealSlots[0].id : null);
+  const initialSlot = defaultSlot || lastSelectedSlot || (availableSlots.length > 0 ? availableSlots[0].id : null);
   const [selectedSlot, setSelectedSlot] = useState<MealSlotId | null>(initialSlot);
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('pool');
   const [selectedDays, setSelectedDays] = useState<number[]>([0]);
@@ -54,19 +86,17 @@ export function AddToPlanModal({
   const [conflictingDays, setConflictingDays] = useState<{ dayIndex: number; existingRecipeName: string }[]>([]);
 
   // Sync selected slot when modal opens
-  useMemo(() => {
-    if (open && selectedMealSlots.length > 0) {
-      // Use defaultSlot if provided, otherwise keep lastSelectedSlot, otherwise use first slot
-      const slotToUse = defaultSlot || lastSelectedSlot || selectedMealSlots[0].id;
-      // Only update if the slot exists in selectedMealSlots
-      const isValidSlot = selectedMealSlots.some(s => s.id === slotToUse);
-      if (isValidSlot && selectedSlot !== slotToUse) {
-        setSelectedSlot(slotToUse);
-      } else if (!isValidSlot) {
-        setSelectedSlot(selectedMealSlots[0].id);
-      }
-    }
-  }, [open, defaultSlot, lastSelectedSlot, selectedMealSlots]);
+  useEffect(() => {
+    if (!open || availableSlots.length === 0) return;
+
+    // Use defaultSlot if provided, otherwise keep lastSelectedSlot, otherwise use first slot
+    const slotToUse = defaultSlot || lastSelectedSlot || availableSlots[0].id;
+
+    // Only update if the slot exists in availableSlots
+    const isValidSlot = availableSlots.some((s) => s.id === slotToUse);
+    const nextSlot = isValidSlot ? slotToUse : availableSlots[0].id;
+    if (selectedSlot !== nextSlot) setSelectedSlot(nextSlot);
+  }, [open, defaultSlot, lastSelectedSlot, availableSlots, selectedSlot]);
 
   const isAlreadyInPool = selectedSlot 
     ? (recipePoolsBySlot[selectedSlot] || []).includes(recipeId) 
@@ -156,24 +186,7 @@ export function AddToPlanModal({
     performAdd();
   };
 
-  if (selectedMealSlots.length === 0) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Add to Plan</DialogTitle>
-          </DialogHeader>
-          <div className="py-6 text-center">
-            <p className="text-muted-foreground">
-              Please set up your meal plan first by configuring your nutrition goals.
-            </p>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-
-  const slotLabel = selectedMealSlots.find(s => s.id === selectedSlot)?.label || '';
+  const slotLabel = availableSlots.find(s => s.id === selectedSlot)?.label || '';
 
   return (
     <>
@@ -196,7 +209,7 @@ export function AddToPlanModal({
             <div>
               <p className="text-sm font-medium mb-2">Which meal?</p>
               <div className="flex flex-wrap gap-2">
-                {selectedMealSlots.map(slot => (
+                {availableSlots.map(slot => (
                   <Chip
                     key={slot.id}
                     selected={selectedSlot === slot.id}
@@ -255,7 +268,7 @@ export function AddToPlanModal({
                   Select one or more days
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {Array.from({ length: numberOfDays }, (_, i) => (
+                  {Array.from({ length: effectiveNumberOfDays }, (_, i) => (
                     <Chip
                       key={i}
                       selected={selectedDays.includes(i)}
