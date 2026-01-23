@@ -136,13 +136,6 @@ export default function Plan() {
     }, 300);
   }, [dailyTargets, validation.isValid, selectedMealSlots, recipePoolsBySlot, exactAssignments, allRecipes, numberOfDays, lockedSlots, generatedPlan, effectivePlanDietType, setGeneratedPlan, setIsPlanMode, isAuthenticated, savePlan]);
 
-  // Auto-generate when coming from Discover with valid recipes
-  useEffect(() => {
-    if (isPlanMode && validation.isValid && !generatedPlan) {
-      handleGeneratePlan();
-    }
-  }, [isPlanMode, validation.isValid, generatedPlan, handleGeneratePlan]);
-
   // Handle multiplier change (now supports custom values)
   const handleSetMultiplier = (dayIndex: number, slotId: string, newMultiplier: number) => {
     updateSlotMultiplier(dayIndex, slotId, newMultiplier);
@@ -238,6 +231,36 @@ export default function Plan() {
       fat: slotTotals.fat + extrasTotals.fat,
     };
   }, [currentDayPlan, recipeMap, allRecipes.length]);
+
+  // Auto-generate when coming from Discover with valid recipes
+  // Also auto-optimize if the existing plan has significant macro gaps
+  useEffect(() => {
+    if (!validation.isValid || isGenerating) return;
+    
+    // Case 1: Coming from Discover with no plan yet
+    if (isPlanMode && !generatedPlan) {
+      handleGeneratePlan();
+      return;
+    }
+    
+    // Case 2: Plan exists but has significant gaps - auto-optimize
+    if (generatedPlan && dailyTargets && !isPlanMode) {
+      const day = generatedPlan.days[selectedDay];
+      if (!day) return;
+      
+      // Check if the plan needs optimization (gaps > 15%)
+      const calorieGap = Math.abs(calculatedDayTotals.calories - dailyTargets.calories) / dailyTargets.calories;
+      const proteinGap = Math.abs(calculatedDayTotals.protein - dailyTargets.protein) / dailyTargets.protein;
+      
+      // Only auto-optimize if there are significant gaps and the solver hasn't run recently
+      // (check if all slots are still at 1.0x multiplier - indicates solver hasn't run)
+      const allDefaultMultipliers = day.slots.every(slot => slot.servingMultiplier === 1);
+      
+      if (allDefaultMultipliers && (calorieGap > 0.15 || proteinGap > 0.15)) {
+        handleGeneratePlan();
+      }
+    }
+  }, [isPlanMode, validation.isValid, generatedPlan, handleGeneratePlan, isGenerating, dailyTargets, calculatedDayTotals, selectedDay]);
 
   // Calculate slot totals for display (recalculated from recipe data)
   const getSlotTotals = useCallback((slot: GeneratedSlot) => {
