@@ -227,10 +227,6 @@ export const useMealPlanStore = create<MealPlanState>()(
                   set({
                     ...parsed.state,
                     currentUserId: userId,
-                    // Don't persist UI state
-                    isPlanMode: false,
-                    currentSlotFilter: null,
-                    lastSelectedSlot: null,
                   });
                 }
               }

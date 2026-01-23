@@ -252,6 +252,14 @@ export default function Discover() {
 
   // Use URL search params for persistent filter state
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // Enter plan mode reliably when coming from Plan → "Add Recipes"
+  const isPlanModeFromUrl = searchParams.get('planMode') === '1';
+  useEffect(() => {
+    if (isPlanModeFromUrl && !isPlanMode) {
+      setIsPlanMode(true);
+    }
+  }, [isPlanModeFromUrl, isPlanMode, setIsPlanMode]);
   
   // Read filter values directly from URL params
   const searchQuery = searchParams.get('q') || '';
@@ -795,6 +803,14 @@ export default function Discover() {
   };
 
   const { removeFromPool } = useMealPlanStore();
+
+  const openAddToPlanModal = (recipe: any) => {
+    setAddToPlanModal({
+      open: true,
+      recipeId: recipe.id,
+      recipeName: recipe.title,
+    });
+  };
   
   const handleSelect = (recipe: any) => {
     if (isPlanMode) {
@@ -812,11 +828,7 @@ export default function Discover() {
         return;
       }
       // Open add to plan modal
-      setAddToPlanModal({
-        open: true,
-        recipeId: recipe.id,
-        recipeName: recipe.title,
-      });
+      openAddToPlanModal(recipe);
     } else {
       if (isSelected(recipe.id)) {
         removeSelectedMeal(recipe.id);
@@ -826,8 +838,27 @@ export default function Discover() {
     }
   };
 
+  const handleRecipeCardClick = (recipe: any) => {
+    // In plan mode, tapping the card should assign (not navigate away)
+    if (isPlanMode) {
+      if (swapContext) {
+        swapRecipe(swapContext.dayIndex, swapContext.slotId, recipe.id);
+        setSwapContext(null);
+        setIsPlanMode(false);
+        navigate('/plan');
+        return;
+      }
+
+      openAddToPlanModal(recipe);
+      return;
+    }
+
+    navigate(`/recipe/${recipe.id}`);
+  };
+
   const handleExitPlanMode = () => {
     setIsPlanMode(false);
+    updateSearchParams('planMode', null);
   };
 
   const totalPoolRecipes = useMemo(() => {
@@ -1125,7 +1156,7 @@ export default function Discover() {
                   isSelected={isSelected(recipe.id)}
                   isRemovable={inCurrentPool}
                   onSelect={() => handleSelect(recipe)}
-                  onClick={() => navigate(`/recipe/${recipe.id}`)}
+                  onClick={() => handleRecipeCardClick(recipe)}
                   compact
                   dietBadges={dietBadges}
                   showKidBadge={isChildUser}
