@@ -621,9 +621,9 @@ const MyRecipes = () => {
           <Button 
             className="w-full" 
             size="lg"
-            onClick={() => navigate('/discover')}
+            onClick={() => navigate('/recipes')}
           >
-            {t('myRecipes.continue', 'Continue to Discover')}
+            {t('myRecipes.continue', 'Continue to My Recipes')}
             <ChevronRight className="w-4 h-4 ml-2" />
           </Button>
         </div>
