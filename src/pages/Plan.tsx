@@ -8,7 +8,6 @@ import { StickyActions } from '@/components/ui/StickyActions';
 import { NutritionGoalsModal } from '@/components/plan/NutritionGoalsModal';
 import { NutritionSummaryCard } from '@/components/plan/NutritionSummaryCard';
 import { PlanSlotCard } from '@/components/plan/PlanSlotCard';
-import { RecipePoolsSummary } from '@/components/plan/RecipePoolsSummary';
 import { MacroGapIndicator } from '@/components/plan/MacroGapIndicator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMealPlanStore, type MacroGapContext } from '@/stores/mealPlanStore';
@@ -416,6 +415,103 @@ export default function Plan() {
   const hasPlan = generatedPlan && generatedPlan.days.length > 0;
   const hasRecipesInPools = Object.values(recipePoolsBySlot).some(pool => pool.length > 0);
 
+  // Fallback slots when user hasn't configured any
+  const fallbackSlots: MealSlot[] = useMemo(() => {
+    const slotIds: MealSlotId[] = ['breakfast', 'lunch', 'dinner'];
+    const percents = getDefaultPercentsForSlots(slotIds);
+    return slotIds.map((id) => ({
+      id,
+      label: MEAL_SLOT_DEFINITIONS[id].label,
+      percentOfDay: percents[id] || 0,
+      type: MEAL_SLOT_DEFINITIONS[id].type,
+    }));
+  }, []);
+
+  const effectiveSlots = selectedMealSlots.length > 0 ? selectedMealSlots : fallbackSlots;
+
+  // Build a "preview plan" from pools when there's no generated plan yet.
+  // This lets us show PlanSlotCard UI with photos/macros even without goals.
+  const previewDaySlots: GeneratedSlot[] = useMemo(() => {
+    if (hasPlan) return []; // Not needed when we have a real plan
+
+    return effectiveSlots
+      .map((slot): GeneratedSlot | null => {
+        const pool = recipePoolsBySlot[slot.id] || [];
+        if (pool.length === 0) return null;
+        const recipeId = pool[0]; // First recipe in pool
+        const recipe = recipeMap.get(recipeId);
+        const multiplier = 1;
+        const nutrition = recipe?.nutrition;
+        return {
+          slotId: slot.id,
+          recipeId,
+          servingMultiplier: multiplier,
+          isLocked: false,
+          slotTotals: {
+            calories: Math.round((nutrition?.calories ?? 0) * multiplier),
+            protein: Math.round((nutrition?.protein_g ?? 0) * multiplier),
+            carbs: Math.round((nutrition?.carbs_g ?? 0) * multiplier),
+            fat: Math.round((nutrition?.fat_g ?? 0) * multiplier),
+          },
+        };
+      })
+      .filter((s): s is GeneratedSlot => s !== null);
+  }, [hasPlan, effectiveSlots, recipePoolsBySlot, recipeMap]);
+
+  // Local multipliers for preview mode (before plan is generated)
+  const [previewMultipliers, setPreviewMultipliers] = useState<Record<string, number>>({});
+
+  const handlePreviewMultiplier = (slotId: string, multiplier: number) => {
+    setPreviewMultipliers((prev) => ({ ...prev, [slotId]: multiplier }));
+  };
+
+  // Compute preview slot with live multiplier
+  const getPreviewSlotWithMultiplier = (slot: GeneratedSlot): GeneratedSlot => {
+    const mult = previewMultipliers[slot.slotId] ?? slot.servingMultiplier;
+    const recipe = recipeMap.get(slot.recipeId);
+    const nutrition = recipe?.nutrition;
+    return {
+      ...slot,
+      servingMultiplier: mult,
+      slotTotals: {
+        calories: Math.round((nutrition?.calories ?? 0) * mult),
+        protein: Math.round((nutrition?.protein_g ?? 0) * mult),
+        carbs: Math.round((nutrition?.carbs_g ?? 0) * mult),
+        fat: Math.round((nutrition?.fat_g ?? 0) * mult),
+      },
+    };
+  };
+
+  // Day totals for preview mode
+  const previewDayTotals = useMemo(() => {
+    return previewDaySlots.reduce(
+      (acc, slot) => {
+        const s = getPreviewSlotWithMultiplier(slot);
+        return {
+          calories: acc.calories + s.slotTotals.calories,
+          protein: acc.protein + s.slotTotals.protein,
+          carbs: acc.carbs + s.slotTotals.carbs,
+          fat: acc.fat + s.slotTotals.fat,
+        };
+      },
+      { calories: 0, protein: 0, carbs: 0, fat: 0 }
+    );
+  }, [previewDaySlots, previewMultipliers, recipeMap]);
+
+  // Swap handler for preview mode
+  const handlePreviewSwap = (slotId: string) => {
+    const slotDef = effectiveSlots.find((s) => s.id === slotId);
+    setCurrentSlotFilter(slotId as MealSlotId);
+    setSwapContext({
+      dayIndex: selectedDay,
+      slotId: slotId as MealSlotId,
+      originalRecipeName: recipeMap.get(recipePoolsBySlot[slotId]?.[0] ?? '')?.title || 'this meal',
+      slotLabel: slotDef?.label || slotId,
+    });
+    setIsPlanMode(true);
+    navigate('/discover');
+  };
+
   // Show loading skeleton while syncing from database
   if (isSyncLoading) {
     return (
@@ -494,8 +590,8 @@ export default function Plan() {
           onSetGoals={() => setShowGoalsModal(true)}
         />
 
-        {/* Validation errors */}
-        {!validation.isValid && selectedMealSlots.length > 0 && (
+        {/* Validation errors - only show when goals ARE set but recipes missing */}
+        {!validation.isValid && dailyTargets && selectedMealSlots.length > 0 && validation.missingSlots.length > 0 && (
           <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 mb-4">
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
@@ -557,8 +653,68 @@ export default function Plan() {
               })}
             </div>
           </div>
+        ) : previewDaySlots.length > 0 ? (
+          /* Preview mode - show PlanSlotCards from pools even without goals */
+          <div className="space-y-4">
+            {/* Lightweight "Set goals" banner */}
+            {!dailyTargets && (
+              <div className="p-4 rounded-xl bg-muted/50 border border-border flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Settings className="w-4 h-4 text-primary" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Set your nutrition goals for personalized macro tracking
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setShowGoalsModal(true)}>
+                  Set Goals
+                </Button>
+              </div>
+            )}
+
+            {/* Day header */}
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">{format(days[selectedDay], 'EEEE, MMM d')}</h2>
+            </div>
+
+            {/* Meal slots from preview */}
+            <div className="space-y-3">
+              {previewDaySlots.map((slot) => {
+                const slotDef = effectiveSlots.find(s => s.id === slot.slotId);
+                const recipe = recipeMap.get(slot.recipeId) || null;
+                const slotWithMult = getPreviewSlotWithMultiplier(slot);
+
+                return (
+                  <PlanSlotCard
+                    key={slot.slotId}
+                    slot={slotWithMult}
+                    slotLabel={slotDef?.label || slot.slotId}
+                    recipe={recipe}
+                    isLocked={false}
+                    onToggleLock={() => {}}
+                    onSetMultiplier={(mult) => handlePreviewMultiplier(slot.slotId, mult)}
+                    onSwap={() => handlePreviewSwap(slot.slotId)}
+                  />
+                );
+              })}
+            </div>
+
+            {/* Generate prompt if goals are set */}
+            {dailyTargets && validation.isValid && (
+              <div className="py-4 text-center">
+                <Button 
+                  onClick={handleGeneratePlan}
+                  disabled={isGenerating}
+                >
+                  <Sparkles className={cn('w-4 h-4 mr-2', isGenerating && 'animate-pulse')} />
+                  {isGenerating ? 'Generating...' : 'Generate Plan'}
+                </Button>
+              </div>
+            )}
+          </div>
         ) : (
-          /* Empty state - no plan yet */
+          /* Truly empty state - no recipes at all */
           <div className="space-y-4">
             {/* Lightweight "Set goals later" banner when goals are missing */}
             {!dailyTargets && (
@@ -577,25 +733,9 @@ export default function Plan() {
               </div>
             )}
 
-            {/* Show recipe pools even without goals set */}
-            <RecipePoolsSummary />
-
-            {/* Prompt to add or generate */}
+            {/* Prompt to add recipes */}
             <div className="py-8 text-center">
-              {!hasRecipesInPools ? (
-                <p className="text-muted-foreground">Use the button below to add recipes</p>
-              ) : (
-                <>
-                  <p className="text-muted-foreground mb-4">Generate your meal plan</p>
-                  <Button 
-                    onClick={handleGeneratePlan}
-                    disabled={!validation.isValid || isGenerating}
-                  >
-                    <Sparkles className={cn('w-4 h-4 mr-2', isGenerating && 'animate-pulse')} />
-                    {isGenerating ? 'Generating...' : 'Generate Plan'}
-                  </Button>
-                </>
-              )}
+              <p className="text-muted-foreground">Use the button below to add recipes</p>
             </div>
           </div>
         )}
