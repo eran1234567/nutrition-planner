@@ -166,12 +166,15 @@ export function RecipeCard({
 
       {/* Content */}
       <div className={cn('p-3 flex-1 flex flex-col', compact && 'p-2')}>
-        <h3 className={cn(
-          'font-semibold text-foreground line-clamp-2 mb-2 min-h-[2.5rem]',
-          compact ? 'text-sm' : 'text-base'
-        )}>
-          {recipe.title}
-        </h3>
+        {/* Fixed height title area to ensure consistent alignment */}
+        <div className="h-[3rem] mb-2">
+          <h3 className={cn(
+            'font-semibold text-foreground line-clamp-2',
+            compact ? 'text-sm' : 'text-base'
+          )}>
+            {recipe.title}
+          </h3>
+        </div>
 
         {/* Nutrition per serving */}
         {hasNutrition && (
