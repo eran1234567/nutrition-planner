@@ -1014,6 +1014,7 @@ export default function Discover() {
             {filteredRecipes.map((recipe) => {
               const inCurrentPool = isPlanMode && currentSlotFilter && (recipePoolsBySlot[currentSlotFilter] || []).includes(recipe.id);
               const showKeto = userDietType === 'keto' && isKetoFriendly(recipe.nutrition);
+              const isChildUser = userAgeGroup === 'toddler' || userAgeGroup === 'child';
               return (
                 <RecipeCard
                   key={recipe.id}
@@ -1024,6 +1025,7 @@ export default function Discover() {
                   onClick={() => navigate(`/recipe/${recipe.id}`)}
                   compact
                   showKetoBadge={showKeto}
+                  showKidBadge={isChildUser}
                 />
               );
             })}

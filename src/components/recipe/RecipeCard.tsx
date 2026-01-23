@@ -32,6 +32,7 @@ interface RecipeCardProps {
   onDelete?: () => void;
   compact?: boolean;
   showKetoBadge?: boolean;
+  showKidBadge?: boolean;
 }
 
 export function RecipeCard({ 
@@ -42,7 +43,8 @@ export function RecipeCard({
   onClick,
   onDelete,
   compact = false,
-  showKetoBadge = false
+  showKetoBadge = false,
+  showKidBadge = false
 }: RecipeCardProps) {
   const nutrition = recipe.nutrition;
   const [imageError, setImageError] = useState(false);
@@ -130,14 +132,9 @@ export function RecipeCard({
               Keto
             </span>
           )}
-          {recipe.is_kid_friendly && (
+          {showKidBadge && recipe.is_kid_friendly && (
             <span className="px-2 py-0.5 rounded-full bg-warning/90 text-warning-foreground text-2xs font-medium">
               👶 Kid
-            </span>
-          )}
-          {recipe.is_meal_prep_friendly && (
-            <span className="px-2 py-0.5 rounded-full bg-primary/90 text-primary-foreground text-2xs font-medium">
-              📦 Prep
             </span>
           )}
         </div>
