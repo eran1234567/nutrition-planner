@@ -108,7 +108,7 @@ const allergyOptions = [
 const commonDislikes = [
   { value: 'mushrooms', label: 'Mushrooms' },
   { value: 'onions', label: 'Onions' },
-  { value: 'peppers', label: 'Peppers' },
+  { value: 'peppers', label: 'Bell Peppers' },
   { value: 'tomatoes', label: 'Tomatoes' },
   { value: 'cilantro', label: 'Cilantro' },
   { value: 'olives', label: 'Olives' },
@@ -390,7 +390,7 @@ export default function Discover() {
     spicy: ['jalapeño', 'jalapeno', 'habanero', 'serrano', 'cayenne', 'chipotle', 'ghost pepper', 'scotch bonnet', 'thai chili', 'bird eye', 'hot sauce', 'sriracha', 'tabasco', 'gochujang', 'harissa', 'wasabi', 'horseradish', 'chili flake', 'red pepper flake', 'crushed red pepper', 'chili powder', 'hot pepper', 'buffalo', 'kung pao', 'szechuan', 'sichuan', 'vindaloo', 'arrabbiata', 'diablo', 'fra diavolo', 'peri peri', 'piri piri', 'jerk', 'cajun', 'blackened', 'fiery', 'extra hot', 'very hot'],
     mushrooms: ['mushroom', 'shiitake', 'portobello', 'cremini', 'oyster mushroom', 'chanterelle', 'porcini', 'enoki', 'maitake', 'morel', 'truffle', 'funghi', 'fungi'],
     onions: ['onion', 'shallot', 'scallion', 'green onion', 'spring onion', 'leek', 'chive', 'red onion', 'white onion', 'yellow onion', 'vidalia', 'pearl onion', 'cipollini'],
-    peppers: ['bell pepper', 'red pepper', 'green pepper', 'yellow pepper', 'orange pepper', 'sweet pepper', 'capsicum', 'pimento', 'pimiento', 'roasted pepper', 'stuffed pepper', 'poblano', 'anaheim pepper', 'banana pepper', 'cubanelle'],
+    peppers: ['bell pepper', 'red bell pepper', 'green bell pepper', 'yellow bell pepper', 'orange bell pepper', 'sweet pepper', 'capsicum', 'pimento', 'pimiento', 'roasted pepper', 'roasted red pepper', 'stuffed pepper', 'poblano', 'anaheim pepper', 'banana pepper', 'cubanelle'],
     tomatoes: ['tomato', 'tomatoes', 'marinara', 'pomodoro', 'sun-dried tomato', 'cherry tomato', 'grape tomato', 'roma tomato', 'tomato sauce', 'tomato paste', 'salsa', 'bruschetta', 'pico de gallo', 'gazpacho'],
     cilantro: ['cilantro', 'coriander', 'culantro', 'fresh coriander'],
     olives: ['olive', 'kalamata', 'black olive', 'green olive', 'tapenade', 'olivada'],
