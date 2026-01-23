@@ -47,6 +47,7 @@ export default function Plan() {
     setIsPlanMode,
     setCurrentSlotFilter,
     setMacroGapContext,
+    setSwapContext,
   } = useMealPlanStore();
   
   const [selectedDay, setSelectedDay] = useState(0);
@@ -179,6 +180,8 @@ export default function Plan() {
     
     setMacroGapContext(gapContext);
     setCurrentSlotFilter(slotId as any);
+    // Set swap context so AddToPlanModal knows to directly replace the recipe
+    setSwapContext({ dayIndex: selectedDay, slotId: slotId as any });
     setIsPlanMode(true);
     navigate('/discover');
   };

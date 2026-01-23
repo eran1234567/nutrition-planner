@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
@@ -27,15 +28,20 @@ export function AddToPlanModal({
   defaultSlot 
 }: AddToPlanModalProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { 
     selectedMealSlots, 
     numberOfDays, 
     addToPool, 
     setExactAssignment,
+    swapRecipe,
     recipePoolsBySlot,
     exactAssignments,
     lastSelectedSlot,
     setLastSelectedSlot,
+    swapContext,
+    setSwapContext,
+    setIsPlanMode,
   } = useMealPlanStore();
   const { data: globalRecipes = [] } = useGlobalRecipes();
   
@@ -45,7 +51,7 @@ export function AddToPlanModal({
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('pool');
   const [selectedDays, setSelectedDays] = useState<number[]>([0]);
   const [showReplaceConfirm, setShowReplaceConfirm] = useState(false);
-  const [conflictingDays, setConflictingDays] = useState<{ dayIndex: number; existingRecipeName: string }[]>([]);
+  const [conflictingDays, setConflictingDays] = useState<{ dayIndex: number; existingRecipeName: string }[]>();
 
   // Sync selected slot when modal opens
   useMemo(() => {
@@ -107,6 +113,16 @@ export function AddToPlanModal({
 
     // Remember this slot for next time
     setLastSelectedSlot(selectedSlot);
+
+    // If we have swap context, directly replace the recipe in the generated plan
+    if (swapContext) {
+      swapRecipe(swapContext.dayIndex, swapContext.slotId, recipeId);
+      setSwapContext(null);
+      setIsPlanMode(false);
+      onOpenChange(false);
+      navigate('/plan');
+      return;
+    }
 
     if (assignmentMode === 'pool') {
       addToPool(selectedSlot, recipeId);
