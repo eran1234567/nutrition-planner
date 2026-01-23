@@ -41,6 +41,16 @@ interface RecipeNutrition {
   fat_g: number | null;
 }
 
+interface RecipeIngredient {
+  name: string;
+  normalized_name: string | null;
+}
+
+interface RecipeTag {
+  tag_type: string;
+  tag_value: string;
+}
+
 interface UserRecipe {
   id: string;
   title: string;
@@ -53,7 +63,89 @@ interface UserRecipe {
   is_kid_friendly: boolean | null;
   is_meal_prep_friendly: boolean | null;
   nutrition?: RecipeNutrition | null;
+  ingredients?: RecipeIngredient[];
+  tags?: RecipeTag[];
 }
+
+// Diet exclusions for auto-detection
+const dietExclusions = {
+  paleo: ['wheat', 'flour', 'bread', 'pasta', 'rice', 'corn', 'oat', 'grain', 'barley', 'rye', 'quinoa', 'legume', 'bean', 'lentil', 'pea', 'peanut', 'soy', 'tofu', 'milk', 'cheese', 'yogurt', 'cream', 'butter', 'dairy', 'sugar', 'syrup', 'honey', 'canola', 'vegetable oil', 'soybean oil'],
+  mediterranean: ['bacon', 'sausage', 'hot dog', 'salami', 'pepperoni', 'processed meat', 'lard', 'margarine', 'candy', 'soda', 'white bread', 'white rice', 'onigiri']
+};
+
+// Keto thresholds
+const KETO_MAX_CARBS = 8;
+const KETO_MAX_CARB_PERCENT = 10;
+const KETO_MAX_PROTEIN_PERCENT = 35;
+const KETO_MIN_FAT_PERCENT = 60;
+
+// Helper to check if a recipe meets strict keto macro criteria
+const isKetoFriendly = (nutrition: RecipeNutrition | null | undefined): boolean => {
+  if (!nutrition) return false;
+  
+  const carbs = nutrition.carbs_g ?? 0;
+  const protein = nutrition.protein_g ?? 0;
+  const fat = nutrition.fat_g ?? 0;
+  
+  if (carbs > KETO_MAX_CARBS) return false;
+  
+  const proteinCals = protein * 4;
+  const fatCals = fat * 9;
+  const carbCals = carbs * 4;
+  const totalMacroCals = proteinCals + fatCals + carbCals;
+  
+  if (totalMacroCals <= 0) return false;
+  
+  const carbPercent = (carbCals / totalMacroCals) * 100;
+  const proteinPercent = (proteinCals / totalMacroCals) * 100;
+  const fatPercent = (fatCals / totalMacroCals) * 100;
+  
+  return carbPercent <= KETO_MAX_CARB_PERCENT && 
+         proteinPercent <= KETO_MAX_PROTEIN_PERCENT && 
+         fatPercent >= KETO_MIN_FAT_PERCENT;
+};
+
+const isPaleoFriendly = (ingredients: RecipeIngredient[] | undefined): boolean => {
+  if (!ingredients || ingredients.length === 0) return false;
+  return !ingredients.some(ing => {
+    const ingName = (ing.normalized_name || ing.name || '').toLowerCase();
+    return dietExclusions.paleo.some(excluded => ingName.includes(excluded));
+  });
+};
+
+const isMediterraneanFriendly = (ingredients: RecipeIngredient[] | undefined): boolean => {
+  if (!ingredients || ingredients.length === 0) return false;
+  return !ingredients.some(ing => {
+    const ingName = (ing.normalized_name || ing.name || '').toLowerCase();
+    return dietExclusions.mediterranean.some(excluded => ingName.includes(excluded));
+  });
+};
+
+// Build diet badges for a recipe
+const getDietBadges = (recipe: UserRecipe): string[] => {
+  const badges: string[] = [];
+  const recipeDietTags = (recipe.tags || [])
+    .filter(t => t.tag_type === 'diet')
+    .map(t => t.tag_value.toLowerCase());
+  
+  // Keto: auto-detect from macros
+  if (isKetoFriendly(recipe.nutrition)) badges.push('keto');
+  
+  // Paleo: auto-detect from ingredients or use tag
+  if (recipeDietTags.includes('paleo') || isPaleoFriendly(recipe.ingredients)) badges.push('paleo');
+  
+  // Mediterranean: auto-detect from ingredients or use tag
+  if (recipeDietTags.includes('mediterranean') || isMediterraneanFriendly(recipe.ingredients)) badges.push('mediterranean');
+  
+  // Vegan, vegetarian, pescatarian: rely on tags
+  ['vegan', 'vegetarian', 'pescatarian'].forEach(diet => {
+    if (recipeDietTags.includes(diet) && !badges.includes(diet)) {
+      badges.push(diet);
+    }
+  });
+  
+  return badges;
+};
 
 export default function Recipes() {
   const { t } = useTranslation();
@@ -375,7 +467,9 @@ export default function Recipes() {
       .from('recipes')
       .select(`
         id,title,description,image_url,prep_time,cook_time,total_time,servings,is_kid_friendly,is_meal_prep_friendly,
-        recipe_nutrition(calories,protein_g,carbs_g,fat_g)
+        recipe_nutrition(calories,protein_g,carbs_g,fat_g),
+        recipe_ingredients(name,normalized_name),
+        recipe_tags(tag_type,tag_value)
       `)
       .eq('owner_user_id', user.id)
       .eq('is_deleted', false)
@@ -386,12 +480,14 @@ export default function Recipes() {
       if (import.meta.env.DEV) console.error('Failed to fetch recipes:', error);
       toast.error(t('recipes.loadError', 'Failed to load recipes'));
     } else if (recipes) {
-      // Map recipes with nutrition
-      const recipesWithNutrition = recipes.map((r: any) => ({
+      // Map recipes with nutrition, ingredients and tags
+      const recipesWithData = recipes.map((r: any) => ({
         ...r,
-        nutrition: r.recipe_nutrition || null,
+        nutrition: Array.isArray(r.recipe_nutrition) ? r.recipe_nutrition[0] : r.recipe_nutrition || null,
+        ingredients: r.recipe_ingredients || [],
+        tags: r.recipe_tags || [],
       }));
-      setUserRecipes(recipesWithNutrition);
+      setUserRecipes(recipesWithData);
     }
     setLoading(false);
   };
@@ -475,6 +571,7 @@ export default function Recipes() {
                       is_meal_prep_friendly: recipe.is_meal_prep_friendly || false,
                       nutrition: recipe.nutrition,
                     }} 
+                    dietBadges={getDietBadges(recipe)}
                     onClick={() => navigate(`/recipe/${recipe.id}`)}
                     onDelete={() => handleDeleteClick(recipe)}
                   />
