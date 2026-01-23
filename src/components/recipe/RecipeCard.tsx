@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, Users, Check, Plus, Trash2, Minus } from 'lucide-react';
+import { Clock, Users, Check, Plus, Trash2, Minus, Flame } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
@@ -31,6 +31,7 @@ interface RecipeCardProps {
   onClick?: () => void;
   onDelete?: () => void;
   compact?: boolean;
+  showKetoBadge?: boolean;
 }
 
 export function RecipeCard({ 
@@ -40,7 +41,8 @@ export function RecipeCard({
   onSelect, 
   onClick,
   onDelete,
-  compact = false 
+  compact = false,
+  showKetoBadge = false
 }: RecipeCardProps) {
   const nutrition = recipe.nutrition;
   const [imageError, setImageError] = useState(false);
@@ -122,6 +124,12 @@ export function RecipeCard({
 
         {/* Tags */}
         <div className="absolute bottom-2 right-2 flex gap-1">
+          {showKetoBadge && (
+            <span className="px-2 py-0.5 rounded-full bg-emerald-500/90 text-white text-2xs font-semibold flex items-center gap-0.5">
+              <Flame className="w-3 h-3" />
+              Keto
+            </span>
+          )}
           {recipe.is_kid_friendly && (
             <span className="px-2 py-0.5 rounded-full bg-warning/90 text-warning-foreground text-2xs font-medium">
               👶 Kid
