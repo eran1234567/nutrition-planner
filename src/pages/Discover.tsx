@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { Search, Clock, Sparkles, BookOpen, ChefHat, Baby, Plus, Check, Target, UtensilsCrossed, AlertTriangle, HeartPulse, X, Flame, Wheat, Droplets } from 'lucide-react';
+import { Search, Clock, Sparkles, BookOpen, ChefHat, Baby, Plus, Check, Target, UtensilsCrossed, AlertTriangle, HeartPulse, X, Flame, Wheat, Droplets, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -163,6 +163,9 @@ export default function Discover() {
     dailyTargets,
     macroGapContext,
     macroCalculatorInputs,
+    swapContext,
+    setSwapContext,
+    swapRecipe,
   } = useMealPlanStore();
 
   // Modal state for adding to plan
@@ -628,6 +631,14 @@ export default function Discover() {
   
   const handleSelect = (recipe: any) => {
     if (isPlanMode) {
+      // If in swap mode, directly replace the recipe and go back to Plan
+      if (swapContext) {
+        swapRecipe(swapContext.dayIndex, swapContext.slotId, recipe.id);
+        setSwapContext(null);
+        setIsPlanMode(false);
+        navigate('/plan');
+        return;
+      }
       // If viewing a specific slot and recipe is in that slot's pool, remove it
       if (currentSlotFilter && isInPool(recipe.id)) {
         removeFromPool(currentSlotFilter, recipe.id);
@@ -670,8 +681,38 @@ export default function Discover() {
         />
 
         {/* Plan Mode Header */}
-        {isPlanMode && (
+        {isPlanMode && !swapContext && (
           <PlanModeHeader onExit={handleExitPlanMode} />
+        )}
+
+        {/* Swap Mode Banner */}
+        {swapContext && (
+          <div className="p-4 rounded-xl bg-primary/10 border border-primary/30 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                <RefreshCw className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-foreground">
+                  Choose a new {swapContext.slotLabel}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Replacing "{swapContext.originalRecipeName}"
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSwapContext(null);
+                  setIsPlanMode(false);
+                  navigate('/plan');
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
         )}
 
         {/* Search */}
@@ -910,8 +951,8 @@ export default function Discover() {
         )}
       </div>
 
-      {/* Sticky Actions */}
-      <StickyActions show={true}>
+      {/* Sticky Actions - hidden in swap mode */}
+      <StickyActions show={!swapContext}>
         {isPlanMode ? (
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm">

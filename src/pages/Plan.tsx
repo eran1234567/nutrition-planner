@@ -178,10 +178,20 @@ export default function Plan() {
       }
     }
     
+    // Find the current recipe name and slot label for the swap banner
+    const slot = currentDayPlan?.slots.find(s => s.slotId === slotId);
+    const originalRecipe = slot ? recipeMap.get(slot.recipeId) : null;
+    const slotDef = selectedMealSlots.find(s => s.id === slotId);
+    
     setMacroGapContext(gapContext);
     setCurrentSlotFilter(slotId as any);
-    // Set swap context so AddToPlanModal knows to directly replace the recipe
-    setSwapContext({ dayIndex: selectedDay, slotId: slotId as any });
+    // Set swap context with recipe name for the banner
+    setSwapContext({ 
+      dayIndex: selectedDay, 
+      slotId: slotId as any,
+      originalRecipeName: originalRecipe?.title || 'this meal',
+      slotLabel: slotDef?.label || slotId,
+    });
     setIsPlanMode(true);
     navigate('/discover');
   };
