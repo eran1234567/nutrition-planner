@@ -2,13 +2,14 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Check, Loader2, Pencil, Leaf, Fish, Drumstick, Sun } from 'lucide-react';
+import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Loader2, Pencil, Leaf, Fish, Drumstick, Sun, CalendarPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { RecipeEditor } from '@/components/recipe/RecipeEditor';
+import { AddToPlanModal } from '@/components/plan/AddToPlanModal';
 import { useRecipeById } from '@/hooks/useGlobalRecipes';
-import { useAppStore } from '@/stores/appStore';
+import { useMealPlanStore } from '@/stores/mealPlanStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import type { Recipe } from '@/types';
@@ -42,8 +43,9 @@ export default function RecipeDetail() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { selectedMeals, addSelectedMeal, removeSelectedMeal } = useAppStore();
+  const { selectedMealSlots } = useMealPlanStore();
   const [isEditing, setIsEditing] = useState(false);
+  const [showAddToPlanModal, setShowAddToPlanModal] = useState(false);
 
   // Get requested servings from URL (for coming from Plan page)
   // This is the actual number of servings needed, not a multiplier
@@ -68,7 +70,9 @@ export default function RecipeDetail() {
 
   // Determine if this is the user's own recipe (editable)
   const isUserRecipe = recipe?.owner_user_id === user?.id;
-  const isSelected = recipe ? selectedMeals.some(r => r.id === recipe.id) : false;
+  
+  // Check if user has a meal plan configured
+  const hasMealPlanSetup = selectedMealSlots.length > 0;
 
   // Nutrition is ALWAYS per serving - never scaled
   // The nutrition values in the database represent what you get from one serving
@@ -176,13 +180,8 @@ export default function RecipeDetail() {
     return formatted.toString();
   };
 
-  const handleToggleSelect = () => {
-    if (!recipe) return;
-    if (isSelected) {
-      removeSelectedMeal(recipe.id);
-    } else {
-      addSelectedMeal(recipe as any);
-    }
+  const handleAddToPlan = () => {
+    setShowAddToPlanModal(true);
   };
 
   const handleSaveEdit = (updatedRecipe: Recipe) => {
@@ -234,19 +233,22 @@ export default function RecipeDetail() {
             <button
               onClick={() => setIsEditing(true)}
               className="w-10 h-10 rounded-full bg-card/90 backdrop-blur flex items-center justify-center"
+              title="Edit recipe"
             >
               <Pencil className="w-5 h-5" />
             </button>
           )}
           <button
-            onClick={handleToggleSelect}
+            onClick={handleAddToPlan}
+            disabled={!hasMealPlanSetup}
             className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-              isSelected
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-card/90 backdrop-blur text-foreground'
+              hasMealPlanSetup
+                ? 'bg-card/90 backdrop-blur text-foreground hover:bg-card'
+                : 'bg-muted/60 text-muted-foreground cursor-not-allowed'
             }`}
+            title={hasMealPlanSetup ? "Add to meal plan" : "Set up meal plan first"}
           >
-            {isSelected ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+            <CalendarPlus className="w-5 h-5" />
           </button>
         </div>
       </div>
@@ -407,26 +409,29 @@ export default function RecipeDetail() {
 
               {/* Add to plan button */}
               <Button
-                onClick={handleToggleSelect}
-                className={`w-full h-12 ${isSelected ? 'bg-muted text-foreground hover:bg-muted/80' : 'gradient-primary'}`}
+                onClick={handleAddToPlan}
+                disabled={!hasMealPlanSetup}
+                className={`w-full h-12 ${hasMealPlanSetup ? 'gradient-primary' : ''}`}
+                variant={hasMealPlanSetup ? 'default' : 'secondary'}
                 size="lg"
               >
-                {isSelected ? (
-                  <>
-                    <Check className="w-5 h-5 mr-2" />
-                    Added to Plan
-                  </>
-                ) : (
-                  <>
-                    <Plus className="w-5 h-5 mr-2" />
-                    Add to Plan
-                  </>
-                )}
+                <CalendarPlus className="w-5 h-5 mr-2" />
+                {hasMealPlanSetup ? 'Add to Plan' : 'Set Up Plan First'}
               </Button>
             </>
           )}
         </motion.div>
       </div>
+
+      {/* Add to Plan Modal */}
+      {recipe && (
+        <AddToPlanModal
+          open={showAddToPlanModal}
+          onOpenChange={setShowAddToPlanModal}
+          recipeId={recipe.id}
+          recipeName={recipe.title}
+        />
+      )}
 
       <BottomNav />
     </div>
