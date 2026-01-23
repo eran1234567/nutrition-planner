@@ -632,7 +632,7 @@ export default function Discover() {
       if (selectedCuisine && recipe.cuisine?.toLowerCase() !== selectedCuisine.toLowerCase()) {
         return false;
       }
-      if (!recipe.isUserRecipe && blockedTerms.length > 0) {
+      if (blockedTerms.length > 0) {
         const titleLower = recipe.title.toLowerCase();
         const ingredientNames = (recipe.ingredients || []).map((ing) => (ing.normalized_name || ing.name || '').toLowerCase());
         const matchesBlocked = (text: string) => blockedTerms.some((term) => text.includes(term));
@@ -640,7 +640,7 @@ export default function Discover() {
         if (matchesBlocked(titleLower)) return false;
         if (matchesBlockedIngredients()) return false;
       }
-      if (!recipe.isUserRecipe && ageBlockedTerms.length > 0) {
+      if (ageBlockedTerms.length > 0) {
         const titleLower = recipe.title.toLowerCase();
         const descLower = (recipe.description || '').toLowerCase();
         const ingredientNames = (recipe.ingredients || []).map((ing) => (ing.normalized_name || ing.name || '').toLowerCase());
