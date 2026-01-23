@@ -265,12 +265,6 @@ export const useMealPlanStore = create<MealPlanState>()(
         const parsed = safeParsePersist<MealPlanState>(localStorage.getItem(storageKey));
         const loadedState = (parsed?.state ?? null) as Partial<MealPlanState> | null;
 
-        const nextState: MealPlanState = {
-          ...(initialState as MealPlanState),
-          ...(loadedState ?? {}),
-          currentUserId: userId,
-        };
-
         if (import.meta.env.DEV) {
           console.log('[MealPlanStore] setCurrentUserId → hydrate', {
             from: currentUserId,
@@ -280,7 +274,12 @@ export const useMealPlanStore = create<MealPlanState>()(
           });
         }
 
-        set(nextState, true);
+        // Merge loaded state with initial state (only data fields, not functions)
+        set({
+          ...initialState,
+          ...(loadedState ?? {}),
+          currentUserId: userId,
+        });
       },
       
       setDailyTargets: (targets) => set({ dailyTargets: targets }),
