@@ -39,10 +39,9 @@ export function PlanSlotCard({
 
   const handleRecipeClick = () => {
     if (recipe) {
-      // Pass the actual number of servings needed (multiplier × recipe base servings)
-      // so the detail page can calculate the correct scaling
-      const actualServingsNeeded = slot.servingMultiplier * (recipe.servings || 1);
-      navigate(`/recipe/${recipe.id}?servings=${actualServingsNeeded}`);
+      // servingMultiplier IS the number of servings needed for this meal plan slot
+      // Pass it directly so the detail page can scale ingredients accordingly
+      navigate(`/recipe/${recipe.id}?servings=${slot.servingMultiplier}`);
     }
   };
 
