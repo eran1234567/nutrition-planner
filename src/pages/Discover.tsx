@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { Search, Clock, Sparkles, BookOpen, ChefHat, Baby, Plus, Check, Target, UtensilsCrossed, AlertTriangle, HeartPulse, X, Flame, Wheat, Droplets, RefreshCw } from 'lucide-react';
+import { Search, Clock, Sparkles, BookOpen, ChefHat, Baby, Plus, Check, Target, UtensilsCrossed, AlertTriangle, HeartPulse, X, Flame, Wheat, Droplets, RefreshCw, LogOut } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -152,7 +152,7 @@ interface UserRecipe {
 export default function Discover() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, signOut } = useAuth();
   const { profile, preferences } = useUserData();
   const { selectedMeals, addSelectedMeal, removeSelectedMeal } = useAppStore();
   const { 
@@ -876,6 +876,19 @@ export default function Discover() {
         <PageHeader
           title={isPlanMode ? t('plan.selectRecipes', 'Select Recipes') : t('discover.title')}
           subtitle={isPlanMode ? undefined : t('discover.subtitle')}
+          rightAction={
+            isAuthenticated && !isPlanMode ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => signOut()}
+                className="gap-2 text-muted-foreground hover:text-foreground"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">{t('auth.signOut', 'Sign Out')}</span>
+              </Button>
+            ) : undefined
+          }
         />
 
         {/* Plan Mode Header */}
