@@ -68,6 +68,8 @@ function roundToStep(value: number, step: number): number {
 
 // ============================================================================
 // Stage 1: Calorie Fit with Selected Recipes Only
+// For KETO: Keep multipliers at 1x or lower to respect carb cap, use add-ons for calories
+// For DEFAULT: Scale multipliers to hit calorie target
 // ============================================================================
 
 interface MealState {
@@ -81,12 +83,14 @@ interface MealState {
 }
 
 /**
- * Adjusts multipliers to match target calories within tolerance.
- * Starts all at 1.0, then scales up/down based on calorie efficiency.
+ * For non-keto: Adjusts multipliers to match target calories within tolerance.
+ * For keto: Keeps multipliers at or below 1.0 to respect carb cap.
  */
 function fitCalories(
   meals: MealState[],
   targetCalories: number,
+  targets: DailyTargets,
+  dietType: DietType,
   config: SolverConfig
 ): MealState[] {
   const result = meals.map(m => ({ ...m }));
@@ -94,11 +98,56 @@ function fitCalories(
   
   if (unlockedMeals.length === 0) return result;
   
+  const isKeto = dietType === 'keto' || dietType === 'low_carb';
+  
+  // ===== KETO: Enforce carb cap FIRST, keep multipliers <= 1.0 =====
+  if (isKeto) {
+    const carbCap = targets.carbs;
+    const maxAllowedCarbs = carbCap + config.ketoCarbCapOvershootGrams;
+    
+    // Start all at 1.0, check carbs
+    let currentCarbs = result.reduce(
+      (sum, m) => sum + scaleMacros(m.baseMacros, m.multiplier).carbs,
+      0
+    );
+    
+    // If over carb cap, reduce multipliers starting with highest-carb meals
+    if (currentCarbs > maxAllowedCarbs) {
+      const sortedByCarbs = [...unlockedMeals]
+        .sort((a, b) => b.baseMacros.carbs - a.baseMacros.carbs);
+      
+      for (const meal of sortedByCarbs) {
+        if (currentCarbs <= maxAllowedCarbs) break;
+        
+        const mealIndex = result.findIndex(m => m.slotId === meal.slotId);
+        if (mealIndex === -1) continue;
+        
+        // Reduce multiplier to bring carbs under cap
+        for (let mult = result[mealIndex].multiplier - config.multiplierStep; 
+             mult >= config.minMultiplier; 
+             mult -= config.multiplierStep) {
+          const newMult = roundToStep(mult, config.multiplierStep);
+          const newCarbs = result.reduce((sum, m, i) => 
+            sum + scaleMacros(m.baseMacros, i === mealIndex ? newMult : m.multiplier).carbs, 0
+          );
+          
+          result[mealIndex] = { ...result[mealIndex], multiplier: newMult };
+          currentCarbs = newCarbs;
+          
+          if (currentCarbs <= maxAllowedCarbs) break;
+        }
+      }
+    }
+    
+    // For keto, do NOT increase multipliers to hit calories - use add-ons instead
+    return result;
+  }
+  
+  // ===== NON-KETO: Fit calories by adjusting multipliers =====
   const tolerance = targetCalories * config.calorieTolerancePercent;
   const maxIterations = 100;
   
   for (let iter = 0; iter < maxIterations; iter++) {
-    // Calculate current total
     const currentTotal = result.reduce(
       (sum, m) => sum + scaleMacros(m.baseMacros, m.multiplier).calories,
       0
@@ -106,19 +155,15 @@ function fitCalories(
     
     const delta = targetCalories - currentTotal;
     
-    // Check if within tolerance
     if (Math.abs(delta) <= tolerance) break;
     
-    // Sort unlocked meals by calorie efficiency (calories per serving)
+    // Sort unlocked meals by calorie efficiency
     const sortedUnlocked = [...unlockedMeals].sort((a, b) => {
-      // For increasing: prioritize high-calorie meals
-      // For decreasing: prioritize low-calorie meals (so we reduce them more)
       return delta > 0 
         ? b.caloriesPerServing - a.caloriesPerServing
         : a.caloriesPerServing - b.caloriesPerServing;
     });
     
-    // Adjust the most efficient meal
     const targetMeal = sortedUnlocked[0];
     const mealIndex = result.findIndex(m => m.slotId === targetMeal.slotId);
     
@@ -127,24 +172,20 @@ function fitCalories(
     const meal = result[mealIndex];
     const currentMealCals = scaleMacros(meal.baseMacros, meal.multiplier).calories;
     
-    // Calculate desired new calories for this meal
-    const desiredDelta = delta * 0.5; // Take half the gap at a time for stability
+    const desiredDelta = delta * 0.5;
     const desiredNewCals = currentMealCals + desiredDelta;
     const desiredMultiplier = meal.baseMacros.calories > 0 
       ? desiredNewCals / meal.baseMacros.calories 
       : 1;
     
-    // Clamp and round to step
     const newMultiplier = roundToStep(
       clamp(desiredMultiplier, config.minMultiplier, config.maxMultiplier),
       config.multiplierStep
     );
     
-    // Update if different
     if (Math.abs(newMultiplier - meal.multiplier) >= config.multiplierStep / 2) {
       result[mealIndex] = { ...meal, multiplier: newMultiplier };
     } else {
-      // Can't adjust further, try next meal
       break;
     }
   }
@@ -245,46 +286,112 @@ function applyMacroCorrestions(
     }
   }
   
-  // ===== Apply Add-Ons to fill macro gaps =====
+  // ===== Apply Add-Ons to fill macro and calorie gaps =====
   totals = getMealTotals();
   const addOnTotals = { calories: 0, protein: 0, carbs: 0, fat: 0 };
-  
-  // Determine priority order based on diet
-  const macroPriority: Array<'protein' | 'carbs' | 'fat'> = isKeto
-    ? ['fat', 'protein'] // Keto: minimize carbs, prioritize fat, then protein
-    : ['protein', 'carbs', 'fat']; // Default: protein first
   
   let addOnCount = 0;
   let oilButterCount = 0;
   let powderCount = 0;
   
+  // ===== KETO: Use fat add-ons to hit BOTH calorie and fat targets =====
+  if (isKeto) {
+    // Calculate calorie gap (since we kept multipliers low for carb cap)
+    const calorieGap = targets.calories - totals.calories;
+    const fatGap = targets.fat - totals.fat;
+    
+    // For keto, primarily use fat sources to fill calorie gap
+    if (calorieGap > 50 || fatGap > 10) {
+      const fatAddOns = getAddOnsByPrimaryMacro('fat');
+      
+      // Sort by calorie efficiency (prefer pure fats like olive oil, butter)
+      const sortedFatAddOns = [...fatAddOns].sort((a, b) => 
+        (b.macrosPerUnit.calories / (b.macrosPerUnit.carbs || 0.1)) - 
+        (a.macrosPerUnit.calories / (a.macrosPerUnit.carbs || 0.1))
+      );
+      
+      let remainingCalorieGap = calorieGap;
+      
+      for (const addOn of sortedFatAddOns) {
+        if (addOnCount >= config.maxAddOnsPerDay * 2) break; // Allow more for keto
+        if (remainingCalorieGap < 50) break;
+        
+        const isOilButter = ['olive-oil', 'butter', 'coconut-oil'].includes(addOn.id);
+        if (isOilButter && oilButterCount >= config.maxOilButterTbspPerDay * 1.5) continue;
+        
+        // Skip high-carb add-ons for keto
+        if (addOn.macrosPerUnit.carbs > 1) continue;
+        
+        // Calculate how much we need based on calorie gap
+        const caloriesPerUnit = addOn.macrosPerUnit.calories;
+        if (caloriesPerUnit <= 0) continue;
+        
+        const unitsNeeded = remainingCalorieGap / caloriesPerUnit;
+        const quantity = roundToStep(
+          clamp(unitsNeeded, addOn.stepSize, addOn.maxPerDay * 1.5), // Allow more for keto
+          addOn.stepSize
+        );
+        
+        if (quantity < addOn.stepSize) continue;
+        
+        const macros = calculateAddOnMacros(addOn, quantity);
+        
+        // Skip if adds too many carbs
+        if (macros.carbs > 3) continue;
+        
+        addOns.push({
+          id: `${addOn.id}-${Date.now()}-${addOnCount}`,
+          addOnId: addOn.id,
+          name: addOn.name,
+          emoji: addOn.emoji,
+          quantity,
+          unit: addOn.unit,
+          slot: 'day',
+          macros,
+          reason: `Add fat to hit calorie target (keto)`,
+        });
+        
+        addOnTotals.calories += macros.calories;
+        addOnTotals.fat += macros.fat;
+        addOnTotals.carbs += macros.carbs;
+        addOnTotals.protein += macros.protein;
+        
+        remainingCalorieGap -= macros.calories;
+        addOnCount++;
+        if (isOilButter) oilButterCount += quantity;
+      }
+    }
+  }
+  
+  // ===== For both diets: Fill remaining macro gaps =====
+  const macroPriority: Array<'protein' | 'carbs' | 'fat'> = isKeto
+    ? ['fat', 'protein'] // Keto: fat then protein (skip carbs)
+    : ['protein', 'carbs', 'fat']; // Default: protein first
+  
   for (const macro of macroPriority) {
-    if (addOnCount >= config.maxAddOnsPerDay) break;
+    if (addOnCount >= config.maxAddOnsPerDay + (isKeto ? 3 : 0)) break;
     
     const currentValue = totals[macro] + addOnTotals[macro];
     const targetValue = targets[macro];
     const gap = targetValue - currentValue;
     
-    // Only add if we're significantly below target (>5% gap)
+    // Only add if significantly below target (>5% gap)
     if (gap <= targetValue * 0.05) continue;
     
     // Skip carbs for keto
     if (isKeto && macro === 'carbs') continue;
     
-    // Find suitable add-ons
     const candidates = getAddOnsByPrimaryMacro(macro);
     
     for (const addOn of candidates) {
-      if (addOnCount >= config.maxAddOnsPerDay) break;
+      if (addOnCount >= config.maxAddOnsPerDay + (isKeto ? 3 : 0)) break;
       
-      // Check category limits
       const isOilButter = ['olive-oil', 'butter', 'coconut-oil'].includes(addOn.id);
       const isPowder = ['whey-isolate', 'collagen-peptides'].includes(addOn.id);
       
-      if (isOilButter && oilButterCount >= config.maxOilButterTbspPerDay) continue;
+      if (isOilButter && oilButterCount >= config.maxOilButterTbspPerDay * (isKeto ? 1.5 : 1)) continue;
       if (isPowder && powderCount >= config.maxPowderScoopsPerDay) continue;
       
-      // Calculate how much we need
       const macroPerUnit = addOn.macrosPerUnit[macro];
       if (macroPerUnit <= 0) continue;
       
@@ -298,14 +405,13 @@ function applyMacroCorrestions(
       
       const macros = calculateAddOnMacros(addOn, quantity);
       
-      // Check if this would push carbs over for keto
+      // Check carbs for keto
       if (isKeto && macros.carbs > 2) continue;
       
-      // Check calorie impact doesn't overshoot
+      // Check calorie impact
       const newCalories = totals.calories + addOnTotals.calories + macros.calories;
-      if (newCalories > targets.calories * (1 + config.calorieTolerancePercent * 2)) continue;
+      if (newCalories > targets.calories * (1 + config.calorieTolerancePercent * 3)) continue;
       
-      // Apply add-on
       addOns.push({
         id: `${addOn.id}-${Date.now()}-${addOnCount}`,
         addOnId: addOn.id,
@@ -327,7 +433,7 @@ function applyMacroCorrestions(
       if (isOilButter) oilButterCount += quantity;
       if (isPowder) powderCount += quantity;
       
-      break; // One add-on per macro gap
+      break;
     }
   }
   
@@ -634,8 +740,8 @@ export function solveDay(input: SolveDayInput): DayResult {
     };
   });
   
-  // Stage 1: Fit calories
-  const afterCalorieFit = fitCalories(initialMeals, targets.calories, config);
+  // Stage 1: Fit calories (keto keeps multipliers low, non-keto scales freely)
+  const afterCalorieFit = fitCalories(initialMeals, targets.calories, targets, dietType, config);
   
   // Stage 2: Apply macro corrections with add-ons
   const { meals: correctedMeals, addOns, flags: correctionFlags } = applyMacroCorrestions(
