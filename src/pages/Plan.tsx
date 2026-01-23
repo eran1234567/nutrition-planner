@@ -18,7 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { format, addDays, startOfWeek } from 'date-fns';
-import { generateMealPlan, validatePlanInputs } from '@/lib/mealPlanGenerator';
+import { generateMealPlan, validatePlanInputs } from '@/lib/mealPlanGenerator/index';
 import type { GeneratedSlot } from '@/types/mealPlan';
 import { toast } from 'sonner';
 import type { GlobalRecipe } from '@/hooks/useGlobalRecipes';
@@ -73,13 +73,14 @@ export default function Plan() {
   }, [allRecipes]);
 
   // Validate plan inputs
+  // Validate plan inputs
   const validation = useMemo(() => {
     if (!dailyTargets || selectedMealSlots.length === 0) {
-      return { isValid: false, errors: ['Set up your nutrition goals first'], missingSlots: [] };
+      return { isValid: false, errors: ['Set up your nutrition goals first'], missingSlots: [] as string[] };
     }
     return validatePlanInputs({
       dailyTargets,
-      selectedMealSlots,
+      selectedMealSlots: selectedMealSlots.map(s => ({ id: s.id, label: s.label })),
       recipePoolsBySlot,
       exactAssignments,
       recipes: allRecipes,

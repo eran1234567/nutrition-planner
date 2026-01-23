@@ -3,9 +3,27 @@
 // Refactored with staged solver, add-ons support, and feasibility detection
 // ============================================================================
 
-export * from './types';
-export * from './addOnsLibrary';
-export * from './solver';
+export type { 
+  DietType, 
+  PlanStatus, 
+  RecipeMacros, 
+  AddOn, 
+  AppliedAddOn, 
+  SwapSuggestion, 
+  AddOnSuggestion, 
+  PlanSuggestions, 
+  PlanFlag, 
+  PlanFlagDetail, 
+  PlanMeal, 
+  DayResult, 
+  PlanResult, 
+  ValidationResult,
+  SolverConfig,
+} from './types';
+export { DEFAULT_SOLVER_CONFIG } from './types';
+export { ADD_ONS_LIBRARY, getAddOnById, getAddOnsByPrimaryMacro, calculateAddOnMacros, getSuggestedAddOnsForGap } from './addOnsLibrary';
+export { solveDay } from './solver';
+export type { SolveDayInput } from './solver';
 
 import type { GlobalRecipe } from '@/hooks/useGlobalRecipes';
 import type { 
@@ -31,7 +49,16 @@ import { solveDay } from './solver';
 // Validation
 // ============================================================================
 
-export function validatePlanInputs(input: Partial<GeneratePlanInput> & Pick<GeneratePlanInput, 'dailyTargets' | 'selectedMealSlots' | 'recipePoolsBySlot' | 'exactAssignments' | 'recipes' | 'numberOfDays'>): ValidationResult {
+export interface ValidatePlanInput {
+  dailyTargets: DailyTargets;
+  selectedMealSlots: { id: string; label: string }[];
+  recipePoolsBySlot: Record<string, string[]>;
+  exactAssignments: Record<number, Record<string, { recipeId: string; servingMultiplier: number }>>;
+  recipes: GlobalRecipe[];
+  numberOfDays: number;
+}
+
+export function validatePlanInputs(input: ValidatePlanInput): ValidationResult {
   const errors: string[] = [];
   const missingSlots: string[] = [];
   
