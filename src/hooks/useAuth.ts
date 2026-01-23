@@ -3,6 +3,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
 import { useMealPlanStore } from '@/stores/mealPlanStore';
 
+// NOTE: This hook is used in many components (ProtectedRoute + pages).
+// With React StrictMode, effects can mount/unmount/mount during dev, and multiple
+// callers would otherwise register multiple auth listeners. Those listeners can
+// race and temporarily set session/userId to null, wiping user-scoped persisted
+// stores (e.g., macro calculator inputs).
+//
+// To keep persisted state stable, we initialize auth listeners only once per app.
+let authListenerInitialized = false;
+
 export const useAuth = () => {
   const { 
     user, 
@@ -19,6 +28,12 @@ export const useAuth = () => {
   const prevUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // Initialize auth listeners exactly once for the whole app.
+    // (Do not unsubscribe on component unmount; this avoids StrictMode double-invoke
+    // breaking the singleton listener in development.)
+    if (authListenerInitialized) return;
+    authListenerInitialized = true;
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
@@ -58,8 +73,8 @@ export const useAuth = () => {
       }
       setIsLoading(false);
     });
-
-    return () => subscription.unsubscribe();
+    // Intentionally no cleanup (see singleton note above)
+    void subscription;
   }, [setUser, setSession, setProfile, setIsLoading]);
 
   const fetchProfile = async (userId: string) => {

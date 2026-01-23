@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Calculator, ArrowLeft, Utensils, Flame, Scale, TrendingUp, Zap, Activity, User, HelpCircle } from 'lucide-react';
 import { useMealPlanStore, type MacroCalculatorInputs } from '@/stores/mealPlanStore';
+import { useAuthStore } from '@/stores/authStore';
 
 interface MacroCalculatorProps {
   open: boolean;
@@ -57,6 +58,7 @@ const dietMacroPresets: Record<DietType, { protein: number; carbs: number; fat: 
 export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculatorProps) {
   const { t } = useTranslation();
   const { macroCalculatorInputs, setMacroCalculatorInputs } = useMealPlanStore();
+  const userId = useAuthStore((s) => s.user?.id ?? null);
   const [step, setStep] = useState<Step>('input');
   
   const [formData, setFormData] = useState({
@@ -103,9 +105,64 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     fat: 0,
   });
 
-  // Load saved inputs when dialog opens - with fallback values for missing fields
+  // Load saved inputs when dialog opens.
+  // IMPORTANT: In some login flows the in-memory store may briefly be empty even though
+  // local storage has the latest calculator snapshot. We recover from storage here so
+  // users always see their last values.
   useEffect(() => {
-    if (open && macroCalculatorInputs) {
+    if (!open) return;
+
+    // If store hasn't hydrated yet, try to restore macroCalculatorInputs from storage.
+    if (!macroCalculatorInputs) {
+      const keysToTry = [
+        userId ? `meal-plan-storage-${userId}` : null,
+        'meal-plan-storage-anonymous',
+      ].filter(Boolean) as string[];
+
+      for (const key of keysToTry) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) continue;
+          const parsed = JSON.parse(raw) as { state?: { macroCalculatorInputs?: Partial<MacroCalculatorInputs> } };
+          const restored = parsed?.state?.macroCalculatorInputs;
+          if (restored) {
+            setMacroCalculatorInputs({
+              // Biometrics
+              age: restored.age ?? '',
+              weight: restored.weight ?? '',
+              height: restored.height ?? '',
+              heightFt: restored.heightFt ?? '',
+              heightIn: restored.heightIn ?? '',
+              sex: (restored.sex as any) ?? 'male',
+              activityLevel: (restored.activityLevel as any) ?? 'moderate',
+              goal: (restored.goal as any) ?? 'maintain',
+              unit: (restored.unit as any) ?? 'imperial',
+              bodyFatMethod: (restored.bodyFatMethod as any) ?? 'direct',
+              bodyFatPercent: restored.bodyFatPercent ?? '',
+              waist: restored.waist ?? '',
+              neck: restored.neck ?? '',
+              hip: restored.hip ?? '',
+
+              // Distribution
+              dietType: (restored.dietType as any) ?? 'none',
+              deficitType: (restored.deficitType as any) ?? 'standard',
+              customDeficitPercent: restored.customDeficitPercent ?? 20,
+              customCalories: restored.customCalories ?? '',
+              customDeficitCalories: restored.customDeficitCalories ?? '',
+              proteinPerLb: restored.proteinPerLb ?? 1.0,
+              carbsPercent: restored.carbsPercent ?? 50,
+              fatPercent: restored.fatPercent ?? 30,
+              lastAdjusted: (restored.lastAdjusted as any) ?? 'fat',
+            });
+            break;
+          }
+        } catch {
+          // ignore and try next key
+        }
+      }
+    }
+
+    if (macroCalculatorInputs) {
       setIsHydrating(true);
       setFormData({
         age: macroCalculatorInputs.age ?? '',
@@ -136,7 +193,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
       // Clear hydrating flag after a tick so the diet effect doesn't override
       setTimeout(() => setIsHydrating(false), 0);
     }
-  }, [open, macroCalculatorInputs]);
+  }, [open, macroCalculatorInputs, userId, setMacroCalculatorInputs]);
 
   // Calculate body fat using US Navy method
   const calculateNavyBodyFat = (): number | null => {
