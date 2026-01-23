@@ -85,17 +85,20 @@ export function AddToPlanModal({
   const [showReplaceConfirm, setShowReplaceConfirm] = useState(false);
   const [conflictingDays, setConflictingDays] = useState<{ dayIndex: number; existingRecipeName: string }[]>([]);
 
-  // Sync selected slot when modal opens
+  // Sync selected slot when modal opens, but never override a user's manual selection.
   useEffect(() => {
     if (!open || availableSlots.length === 0) return;
 
+    const currentIsValid = !!selectedSlot && availableSlots.some((s) => s.id === selectedSlot);
+    if (currentIsValid) return;
+
     // Use defaultSlot if provided, otherwise keep lastSelectedSlot, otherwise use first slot
-    const slotToUse = defaultSlot || lastSelectedSlot || availableSlots[0].id;
+    const preferredSlot = defaultSlot || lastSelectedSlot || availableSlots[0].id;
 
     // Only update if the slot exists in availableSlots
-    const isValidSlot = availableSlots.some((s) => s.id === slotToUse);
-    const nextSlot = isValidSlot ? slotToUse : availableSlots[0].id;
-    if (selectedSlot !== nextSlot) setSelectedSlot(nextSlot);
+    const isValidPreferred = availableSlots.some((s) => s.id === preferredSlot);
+    const nextSlot = isValidPreferred ? preferredSlot : availableSlots[0].id;
+    setSelectedSlot(nextSlot);
   }, [open, defaultSlot, lastSelectedSlot, availableSlots, selectedSlot]);
 
   const isAlreadyInPool = selectedSlot 
