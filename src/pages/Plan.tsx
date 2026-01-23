@@ -8,6 +8,7 @@ import { StickyActions } from '@/components/ui/StickyActions';
 import { NutritionGoalsModal } from '@/components/plan/NutritionGoalsModal';
 import { NutritionSummaryCard } from '@/components/plan/NutritionSummaryCard';
 import { PlanSlotCard } from '@/components/plan/PlanSlotCard';
+import { RecipePoolsSummary } from '@/components/plan/RecipePoolsSummary';
 import { MacroGapIndicator } from '@/components/plan/MacroGapIndicator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMealPlanStore, type MacroGapContext } from '@/stores/mealPlanStore';
@@ -576,7 +577,10 @@ export default function Plan() {
               </div>
             )}
 
-            {/* Always show instruction to add recipes */}
+            {/* Show recipe pools even without goals set */}
+            <RecipePoolsSummary />
+
+            {/* Prompt to add or generate */}
             <div className="py-8 text-center">
               {!hasRecipesInPools ? (
                 <p className="text-muted-foreground">Use the button below to add recipes</p>
