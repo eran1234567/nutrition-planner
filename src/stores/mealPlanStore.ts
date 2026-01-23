@@ -47,6 +47,12 @@ export interface MacroCalculatorInputs {
   lastAdjusted: 'carbs' | 'fat'; // tracks which macro to auto-calc
 }
 
+// Swap context for direct recipe replacement
+export interface SwapContext {
+  dayIndex: number;
+  slotId: MealSlotId;
+}
+
 interface MealPlanState {
   // Current user ID for storage isolation
   currentUserId: string | null;
@@ -68,6 +74,9 @@ interface MealPlanState {
   isPlanMode: boolean;
   currentSlotFilter: MealSlotId | null;
   lastSelectedSlot: MealSlotId | null;
+  
+  // Swap context for direct replacement (set when clicking swap on an existing slot)
+  swapContext: SwapContext | null;
   
   // Macro gap context for smart swaps
   macroGapContext: MacroGapContext | null;
@@ -105,6 +114,7 @@ interface MealPlanState {
   setIsPlanMode: (isPlanMode: boolean) => void;
   setCurrentSlotFilter: (slotId: MealSlotId | null) => void;
   setLastSelectedSlot: (slotId: MealSlotId | null) => void;
+  setSwapContext: (context: SwapContext | null) => void;
   setMacroGapContext: (context: MacroGapContext | null) => void;
   setMacroCalculatorInputs: (inputs: MacroCalculatorInputs | null) => void;
   
@@ -124,6 +134,7 @@ const initialState = {
   isPlanMode: false,
   currentSlotFilter: null,
   lastSelectedSlot: null,
+  swapContext: null,
   macroGapContext: null,
   macroCalculatorInputs: null,
 };
@@ -387,6 +398,8 @@ export const useMealPlanStore = create<MealPlanState>()(
       setCurrentSlotFilter: (slotId) => set({ currentSlotFilter: slotId }),
       
       setLastSelectedSlot: (slotId) => set({ lastSelectedSlot: slotId }),
+      
+      setSwapContext: (context) => set({ swapContext: context }),
       
       setMacroGapContext: (context) => set({ macroGapContext: context }),
       
