@@ -12,7 +12,6 @@ import Discover from "./pages/Discover";
 import Recipes from "./pages/Recipes";
 import RecipeDetail from "./pages/RecipeDetail";
 import CreateRecipe from "./pages/CreateRecipe";
-import Settings from "./pages/Settings";
 import Plan from "./pages/Plan";
 import Grocery from "./pages/Grocery";
 import MyRecipes from "./pages/MyRecipes";
@@ -55,11 +54,6 @@ const App = () => {
             <Route path="/recipes" element={
               <ProtectedRoute>
                 <Recipes />
-              </ProtectedRoute>
-            } />
-            <Route path="/settings" element={
-              <ProtectedRoute>
-                <Settings />
               </ProtectedRoute>
             } />
             <Route path="/plan" element={

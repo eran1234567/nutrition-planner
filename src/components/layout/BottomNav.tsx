@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, Search, Calendar, BookOpen, ShoppingCart, User } from 'lucide-react';
+import { Search, Calendar, BookOpen, ShoppingCart } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
@@ -9,7 +9,6 @@ const navItems = [
   { path: '/plan', icon: Calendar, labelKey: 'nav.plan' },
   { path: '/recipes', icon: BookOpen, labelKey: 'nav.recipes' },
   { path: '/grocery', icon: ShoppingCart, labelKey: 'nav.grocery' },
-  { path: '/settings', icon: User, labelKey: 'nav.settings' },
 ];
 
 export function BottomNav() {
