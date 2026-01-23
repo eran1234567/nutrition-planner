@@ -186,31 +186,26 @@ export const useMealPlanStore = create<MealPlanState>()(
       
       setCurrentUserId: (userId) => {
         const currentUserId = get().currentUserId;
-        
-        // If user changed, clear old data and load new user's data
-        if (currentUserId !== userId) {
-          // If the user is transitioning from anonymous -> signed-in, migrate any
-          // saved meal plan state so it doesn't "disappear" after refresh.
-          // This commonly happens when a user applies calculator settings before
-          // auth finished initializing.
-          if (!currentUserId && userId) {
-            const anonKey = getUserStorageKey(null);
-            const userKey = getUserStorageKey(userId);
+        if (currentUserId === userId) return;
 
-            const anonRaw = localStorage.getItem(anonKey);
-            const userRaw = localStorage.getItem(userKey);
+        // If the user is transitioning from anonymous -> signed-in, migrate any
+        // saved meal plan state so it doesn't "disappear" after refresh.
+        // IMPORTANT: Never early-return here; even if there's nothing to migrate,
+        // we still must switch storage keys and hydrate from the user-scoped key.
+        if (!currentUserId && userId) {
+          const anonKey = getUserStorageKey(null);
+          const userKey = getUserStorageKey(userId);
 
-            const anonParsed = safeParsePersist<MealPlanState>(anonRaw);
-            const userParsed = safeParsePersist<MealPlanState>(userRaw);
+          const anonRaw = localStorage.getItem(anonKey);
+          const userRaw = localStorage.getItem(userKey);
 
-            const anonState = anonParsed?.state ?? null;
-            const userState = userParsed?.state ?? null;
+          const anonParsed = safeParsePersist<MealPlanState>(anonRaw);
+          const userParsed = safeParsePersist<MealPlanState>(userRaw);
 
-            if (!anonState || !hasMeaningfulMealPlanData(anonState)) {
-              // Nothing useful to migrate.
-              return;
-            }
+          const anonState = anonParsed?.state ?? null;
+          const userState = userParsed?.state ?? null;
 
+          if (anonState && hasMeaningfulMealPlanData(anonState)) {
             // IMPORTANT: userState might already contain slot defaults (from previous sessions)
             // while pools were added before auth finished initializing. In that case, we still
             // want to migrate pools/exact assignments WITHOUT overwriting the user's existing data.
@@ -262,29 +257,30 @@ export const useMealPlanStore = create<MealPlanState>()(
               }
             }
           }
-
-          // Clear current state first
-          set({ ...initialState, currentUserId: userId });
-          
-          // Try to load the new user's data from their storage
-          if (userId) {
-            const storageKey = getUserStorageKey(userId);
-            try {
-              const stored = localStorage.getItem(storageKey);
-              if (stored) {
-                const parsed = JSON.parse(stored);
-                if (parsed.state) {
-                  set({
-                    ...parsed.state,
-                    currentUserId: userId,
-                  });
-                }
-              }
-            } catch (e) {
-              if (import.meta.env.DEV) console.warn('Failed to load user meal plan data:', e);
-            }
-          }
         }
+
+        // Load the target user's persisted state first, then replace the store state.
+        // This avoids an intermediate "reset" write that could overwrite stored data.
+        const storageKey = getUserStorageKey(userId);
+        const parsed = safeParsePersist<MealPlanState>(localStorage.getItem(storageKey));
+        const loadedState = (parsed?.state ?? null) as Partial<MealPlanState> | null;
+
+        const nextState: MealPlanState = {
+          ...(initialState as MealPlanState),
+          ...(loadedState ?? {}),
+          currentUserId: userId,
+        };
+
+        if (import.meta.env.DEV) {
+          console.log('[MealPlanStore] setCurrentUserId → hydrate', {
+            from: currentUserId,
+            to: userId,
+            hasStored: hasMeaningfulMealPlanData(loadedState),
+            poolsCount: Object.values(loadedState?.recipePoolsBySlot ?? {}).reduce((a, b) => a + (b?.length ?? 0), 0),
+          });
+        }
+
+        set(nextState, true);
       },
       
       setDailyTargets: (targets) => set({ dailyTargets: targets }),
