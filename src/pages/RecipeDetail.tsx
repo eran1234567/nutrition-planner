@@ -305,7 +305,7 @@ export default function RecipeDetail() {
               <Users className="w-4 h-4" />
               <span>
                 {requestedServings !== null 
-                  ? `${parseFloat(requestedServings.toFixed(1))} of ${recipe.servings} servings`
+                  ? `${parseFloat(requestedServings.toFixed(1))} servings`
                   : `${recipe.servings} servings`
                 }
               </span>
