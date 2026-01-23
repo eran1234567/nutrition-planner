@@ -505,18 +505,6 @@ export default function Plan() {
                 <p className="text-sm text-amber-600 dark:text-amber-500 mt-1">
                   Add recipes for: {validation.missingSlots.join(', ')}
                 </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-2"
-                  onClick={() => {
-                    setIsPlanMode(true);
-                    navigate('/discover');
-                  }}
-                >
-                  <Plus className="w-4 h-4 mr-1" />
-                  Select Recipes
-                </Button>
               </div>
             </div>
           </div>
@@ -580,16 +568,7 @@ export default function Plan() {
                 </Button>
               </>
             ) : !hasRecipesInPools ? (
-              <>
-                <p className="text-muted-foreground mb-4">Select recipes for your meal plan</p>
-                <Button onClick={() => {
-                  setIsPlanMode(true);
-                  navigate('/discover');
-                }}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Select Recipes
-                </Button>
-              </>
+              <p className="text-muted-foreground">Use the button below to add recipes</p>
             ) : (
               <>
                 <p className="text-muted-foreground mb-4">Generate your meal plan</p>
