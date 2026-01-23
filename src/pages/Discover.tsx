@@ -440,7 +440,40 @@ export default function Discover() {
 
   // Apply slot-based filtering when in plan mode
   const filteredRecipes = useMemo(() => {
-    // When in plan mode with a slot filter selected, show only recipes in that slot's pool
+    // When in swap mode, show all recipes filtered by meal type (not restricted to pool)
+    if (swapContext && currentSlotFilter) {
+      const slotMealType = getMealTypeForSlot(currentSlotFilter);
+      return allRecipes.filter(recipe => {
+        if (!recipe.isUserRecipe && (!recipe.image_url || recipe.image_url.includes('undefined') || (!recipe.image_url.startsWith('http') && !recipe.image_url.startsWith('/')))) {
+          return false;
+        }
+        if (searchQuery) {
+          const searchTerms = searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
+          const titleLower = recipe.title.toLowerCase();
+          const descLower = (recipe.description || '').toLowerCase();
+          const matchesSearch = searchTerms.every(term => 
+            titleLower.includes(term) || descLower.includes(term)
+          );
+          if (!matchesSearch) return false;
+        }
+        if (selectedTime && recipe.total_time && recipe.total_time > parseInt(selectedTime)) {
+          return false;
+        }
+        // Lunch and dinner are interchangeable
+        const mealTypesToMatch = slotMealType === 'lunch' || slotMealType === 'dinner' 
+          ? ['lunch', 'dinner'] 
+          : [slotMealType];
+        if (slotMealType && !recipe.tags.some(t => t.tag_type === 'meal' && mealTypesToMatch.includes(t.tag_value))) {
+          return false;
+        }
+        if (selectedCuisine && recipe.cuisine?.toLowerCase() !== selectedCuisine.toLowerCase()) {
+          return false;
+        }
+        return true;
+      });
+    }
+    
+    // When in plan mode with a slot filter selected (not swapping), show only recipes in that slot's pool
     if (isPlanMode && currentSlotFilter) {
       const poolRecipeIds = recipePoolsBySlot[currentSlotFilter] || [];
       if (poolRecipeIds.length === 0) {
@@ -685,36 +718,6 @@ export default function Discover() {
           <PlanModeHeader onExit={handleExitPlanMode} />
         )}
 
-        {/* Swap Mode Banner */}
-        {swapContext && (
-          <div className="p-4 rounded-xl bg-primary/10 border border-primary/30 mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                <RefreshCw className="w-5 h-5 text-primary" />
-              </div>
-              <div className="flex-1">
-                <p className="font-semibold text-foreground">
-                  Choose a new {swapContext.slotLabel}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Replacing "{swapContext.originalRecipeName}"
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSwapContext(null);
-                  setIsPlanMode(false);
-                  navigate('/plan');
-                }}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        )}
-
         {/* Search */}
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
@@ -891,6 +894,36 @@ export default function Discover() {
             icon={<HeartPulse className="w-3 h-3" />}
           />
         </div>
+
+        {/* Swap Mode Banner - positioned below filters */}
+        {swapContext && (
+          <div className="p-4 rounded-xl bg-primary/10 border border-primary/30 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                <RefreshCw className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <p className="font-semibold text-foreground">
+                  Choose a new {swapContext.slotLabel}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Replacing "{swapContext.originalRecipeName}"
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSwapContext(null);
+                  setIsPlanMode(false);
+                  navigate('/plan');
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Recipe count */}
         <div className="flex items-center justify-between mb-4">
