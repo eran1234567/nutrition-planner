@@ -45,18 +45,26 @@ export default function RecipeDetail() {
   const { selectedMeals, addSelectedMeal, removeSelectedMeal } = useAppStore();
   const [isEditing, setIsEditing] = useState(false);
 
-  // Get serving multiplier from URL (for coming from Plan page)
-  const servingMultiplier = useMemo(() => {
+  // Get requested servings from URL (for coming from Plan page)
+  // This is the actual number of servings needed, not a multiplier
+  const requestedServings = useMemo(() => {
     const param = searchParams.get('servings');
     if (param) {
       const num = parseFloat(param);
       if (!isNaN(num) && num > 0) return num;
     }
-    return 1;
+    return null; // null means no override, show recipe as-is
   }, [searchParams]);
 
   // Fetch recipe from database (works for both global and user recipes)
   const { data: recipe, isLoading } = useRecipeById(id);
+
+  // Calculate actual multiplier: requested servings / recipe base servings
+  const servingMultiplier = useMemo(() => {
+    if (requestedServings === null || !recipe?.servings) return 1;
+    return requestedServings / recipe.servings;
+  }, [requestedServings, recipe?.servings]);
+
 
   // Determine if this is the user's own recipe (editable)
   const isUserRecipe = recipe?.owner_user_id === user?.id;
@@ -295,8 +303,8 @@ export default function RecipeDetail() {
             <div className="flex items-center gap-1">
               <Users className="w-4 h-4" />
               <span>
-                {servingMultiplier !== 1 
-                  ? `${parseFloat((recipe.servings * servingMultiplier).toFixed(1))} servings (${servingMultiplier}x)`
+                {requestedServings !== null 
+                  ? `${parseFloat(requestedServings.toFixed(1))} of ${recipe.servings} servings`
                   : `${recipe.servings} servings`
                 }
               </span>
@@ -309,15 +317,15 @@ export default function RecipeDetail() {
             )}
           </div>
 
-          {/* Nutrition - adjusted by serving multiplier */}
+          {/* Nutrition - adjusted for requested servings */}
           {adjustedNutrition && (
             <div className="bg-muted rounded-xl p-4 mb-6">
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                 <Flame className="w-4 h-4 text-primary" />
                 {t('recipes.nutrition')}
-                {servingMultiplier !== 1 && (
+                {requestedServings !== null && (
                   <span className="text-xs text-muted-foreground font-normal">
-                    ({servingMultiplier}x serving)
+                    (for {parseFloat(requestedServings.toFixed(1))} servings)
                   </span>
                 )}
               </h3>
@@ -359,13 +367,13 @@ export default function RecipeDetail() {
             />
           ) : (
             <>
-              {/* Ingredients - adjusted by serving multiplier */}
+              {/* Ingredients - adjusted for requested servings */}
               <div className="mb-6">
                 <h3 className="text-sm font-semibold mb-3">
                   {t('recipes.ingredients')}
-                  {servingMultiplier !== 1 && (
+                  {requestedServings !== null && (
                     <span className="text-xs text-muted-foreground font-normal ml-2">
-                      (adjusted for {servingMultiplier}x)
+                      (for {parseFloat(requestedServings.toFixed(1))} servings)
                     </span>
                   )}
                 </h3>
