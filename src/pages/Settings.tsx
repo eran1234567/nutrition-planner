@@ -6,8 +6,7 @@ import {
   User, 
   Target, 
   LogOut,
-  ChevronRight,
-  Upload
+  ChevronRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BottomNav } from '@/components/layout/BottomNav';
@@ -15,13 +14,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserData } from '@/hooks/useUserData';
 
 const settingsItems = [
-  {
-    id: 'myRecipes',
-    icon: Upload,
-    labelKey: 'settings.myRecipes',
-    descKey: 'settings.myRecipesDesc',
-    path: '/my-recipes',
-  },
   {
     id: 'goals',
     icon: Target,
