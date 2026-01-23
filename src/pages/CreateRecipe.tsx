@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Loader2, ImagePlus, X, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -14,6 +16,7 @@ export default function CreateRecipe() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
+  const [title, setTitle] = useState('');
   const [recipeText, setRecipeText] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -49,6 +52,11 @@ export default function CreateRecipe() {
       return;
     }
 
+    if (!title.trim()) {
+      toast.error(t('recipes.titleRequired', 'Please enter a recipe title'));
+      return;
+    }
+
     if (!recipeText.trim()) {
       toast.error(t('recipes.textRequired', 'Please describe your recipe'));
       return;
@@ -71,11 +79,14 @@ export default function CreateRecipe() {
 
       if (uploadError) throw uploadError;
 
+      // Combine title with recipe text for AI parsing
+      const fullContent = `${title}\n\n${recipeText}`;
+      
       // Prepare the content - include image if provided
-      let content = recipeText;
+      let content = fullContent;
       let isImage = false;
       
-      // If user provided an image, we'll send that for parsing
+      // If user provided an image, we'll send that for parsing along with text
       if (imagePreview) {
         isImage = true;
         content = imagePreview;
@@ -93,7 +104,7 @@ export default function CreateRecipe() {
           },
           body: JSON.stringify({
             uploadId: upload.id,
-            content: isImage ? imagePreview : recipeText,
+            content: isImage ? imagePreview : fullContent,
             isImage,
           }),
         }
@@ -112,14 +123,13 @@ export default function CreateRecipe() {
 
       const recipe = result.recipes[0];
 
-      // If user provided their own image, update the recipe with it
-      if (imagePreview && recipe.id) {
-        await supabase.from('recipes').update({
-          image_url: imagePreview
-        }).eq('id', recipe.id);
-      }
+      // Update with user's title (AI may have extracted a different one)
+      await supabase.from('recipes').update({
+        title: title.trim(),
+        ...(imagePreview ? { image_url: imagePreview } : {})
+      }).eq('id', recipe.id);
 
-      toast.success(t('recipes.createSuccess', 'Recipe created!'));
+      toast.success(t('recipes.createSuccess', 'Recipe created! You can edit it anytime.'));
       navigate(`/recipe/${recipe.id}`);
     } catch (error) {
       console.error('Failed to create recipe:', error);
@@ -128,6 +138,8 @@ export default function CreateRecipe() {
       setIsSaving(false);
     }
   };
+
+  const canSave = title.trim() && recipeText.trim();
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -143,7 +155,7 @@ export default function CreateRecipe() {
           <h1 className="text-lg font-semibold">{t('recipes.createRecipe', 'Create Recipe')}</h1>
           <Button 
             onClick={handleSave} 
-            disabled={isSaving || !recipeText.trim()} 
+            disabled={isSaving || !canSave} 
             size="sm"
             className="gradient-primary"
           >
@@ -164,6 +176,20 @@ export default function CreateRecipe() {
               {t('recipes.aiHelperDesc', 'Just describe your recipe - I\'ll format it and calculate nutrition!')}
             </p>
           </div>
+        </div>
+
+        {/* Recipe Title */}
+        <div className="space-y-2">
+          <Label htmlFor="title" className="text-sm font-medium">
+            {t('recipes.recipeTitle', 'Recipe Title')} *
+          </Label>
+          <Input
+            id="title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder={t('recipes.titlePlaceholder', 'e.g., Grandma\'s Chicken Soup')}
+            className="text-base"
+          />
         </div>
 
         {/* Image Upload */}
@@ -197,19 +223,21 @@ export default function CreateRecipe() {
             >
               <ImagePlus className="w-8 h-8" />
               <span className="text-sm">{t('recipes.addPhoto', 'Add a photo (optional)')}</span>
+              <span className="text-xs">{t('recipes.aiGeneratesImage', 'AI will generate one if you don\'t add a photo')}</span>
             </button>
           )}
         </div>
 
         {/* Recipe Text Input */}
         <div className="space-y-2">
+          <Label htmlFor="recipe-text" className="text-sm font-medium">
+            {t('recipes.recipeDetails', 'Recipe Details')} *
+          </Label>
           <Textarea
+            id="recipe-text"
             value={recipeText}
             onChange={(e) => setRecipeText(e.target.value)}
             placeholder={t('recipes.writeRecipePlaceholder', `Write your recipe here in your own words...
-
-Example:
-Grilled Chicken Salad
 
 Ingredients:
 - 2 chicken breasts
@@ -223,10 +251,10 @@ Instructions:
 3. Add tomatoes and drizzle with dressing
 
 Serves 2, takes about 20 minutes`)}
-            className="min-h-[300px] text-base resize-none"
+            className="min-h-[280px] text-base resize-none"
           />
           <p className="text-xs text-muted-foreground">
-            {t('recipes.aiWillParse', 'AI will extract title, ingredients, instructions, and calculate nutrition automatically.')}
+            {t('recipes.aiWillParse', 'AI will extract ingredients, instructions, and calculate nutrition automatically.')}
           </p>
         </div>
 
@@ -237,6 +265,7 @@ Serves 2, takes about 20 minutes`)}
             <li>• {t('recipes.tip1', 'Include ingredient quantities (e.g., "2 cups flour")')}</li>
             <li>• {t('recipes.tip2', 'Mention number of servings if known')}</li>
             <li>• {t('recipes.tip3', 'Add prep and cook times if you want')}</li>
+            <li>• {t('recipes.tip4', 'You can edit the recipe anytime after saving')}</li>
           </ul>
         </div>
       </div>
