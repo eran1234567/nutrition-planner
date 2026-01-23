@@ -1,12 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Plus, Upload, Link, Camera, PenLine, BookOpen, Loader2, Trash2, MoreVertical, Pencil } from 'lucide-react';
+import { Plus, Upload, Link, Camera, PenLine, BookOpen, Loader2, Trash2, MoreVertical, Pencil, Search, Clock, UtensilsCrossed, ChefHat, Sparkles, AlertTriangle, HeartPulse } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
+import { FilterDropdown } from '@/components/discover/FilterDropdown';
+import { MultiSelectDropdown } from '@/components/discover/MultiSelectDropdown';
 import { supabase } from '@/integrations/supabase/client';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -33,6 +35,94 @@ import {
   DrawerTitle,
 } from '@/components/ui/drawer';
 import { Input } from '@/components/ui/input';
+
+// Filter options (same as Discover page)
+const timeFilterOptions = [
+  { value: '15', label: '< 15 min' },
+  { value: '30', label: '< 30 min' },
+  { value: '45', label: '< 45 min' },
+  { value: '60', label: '< 60 min' },
+];
+
+const mealFilterOptions = [
+  { value: 'breakfast', label: 'Breakfast' },
+  { value: 'lunch', label: 'Lunch' },
+  { value: 'dinner', label: 'Dinner' },
+  { value: 'snack', label: 'Snack' },
+];
+
+const cuisineFilterOptions = [
+  { value: 'American', label: 'American' },
+  { value: 'Italian', label: 'Italian' },
+  { value: 'Mexican', label: 'Mexican' },
+  { value: 'Asian', label: 'Asian' },
+  { value: 'Mediterranean', label: 'Mediterranean' },
+  { value: 'Indian', label: 'Indian' },
+  { value: 'Japanese', label: 'Japanese' },
+  { value: 'Thai', label: 'Thai' },
+  { value: 'French', label: 'French' },
+  { value: 'Greek', label: 'Greek' },
+  { value: 'Brazilian', label: 'Brazilian' },
+];
+
+const dietTypeOptions = [
+  { value: 'vegetarian', label: 'Vegetarian' },
+  { value: 'vegan', label: 'Vegan' },
+  { value: 'pescatarian', label: 'Pescatarian' },
+  { value: 'keto', label: 'Keto' },
+  { value: 'paleo', label: 'Paleo' },
+  { value: 'mediterranean', label: 'Mediterranean' },
+];
+
+const allergyOptions = [
+  { value: 'dairy', label: 'Dairy' },
+  { value: 'gluten', label: 'Gluten' },
+  { value: 'nuts', label: 'Nuts' },
+  { value: 'peanuts', label: 'Peanuts' },
+  { value: 'shellfish', label: 'Shellfish' },
+  { value: 'soy', label: 'Soy' },
+  { value: 'eggs', label: 'Eggs' },
+  { value: 'fish', label: 'Fish' },
+];
+
+const commonDislikes = [
+  { value: 'mushrooms', label: 'Mushrooms' },
+  { value: 'onions', label: 'Onions' },
+  { value: 'peppers', label: 'Peppers' },
+  { value: 'tomatoes', label: 'Tomatoes' },
+  { value: 'cilantro', label: 'Cilantro' },
+  { value: 'olives', label: 'Olives' },
+  { value: 'spicy', label: 'Spicy' },
+];
+
+const healthConsiderationOptions = [
+  { value: 'diabetes-friendly', label: 'Diabetes Friendly' },
+  { value: 'heart-healthy', label: 'Heart Healthy' },
+  { value: 'low-sodium', label: 'Low Sodium' },
+  { value: 'kidney-friendly', label: 'Kidney Friendly' },
+];
+
+// Allergy/dislike term expansions
+const allergyExpansions: Record<string, string[]> = {
+  gluten: ['wheat', 'flour', 'bread', 'pasta', 'noodle', 'barley', 'rye', 'oat', 'oatmeal', 'couscous', 'bulgur', 'farro', 'spelt', 'semolina', 'seitan', 'breaded', 'battered', 'cracker', 'pretzel', 'bagel', 'croissant', 'muffin', 'cake', 'cookie', 'pastry', 'pie crust', 'pizza', 'tortilla', 'wrap', 'panko', 'breadcrumb', 'soy sauce', 'teriyaki'],
+  dairy: ['milk', 'cheese', 'butter', 'cream', 'yogurt', 'whey', 'casein', 'lactose', 'ghee', 'ice cream', 'sour cream', 'cottage cheese', 'cream cheese', 'ricotta', 'mozzarella', 'parmesan', 'cheddar', 'feta', 'brie', 'gouda', 'swiss', 'provolone', 'mascarpone', 'half and half', 'heavy cream', 'whipped cream', 'condensed milk', 'evaporated milk', 'buttermilk', 'kefir', 'paneer', 'queso'],
+  nuts: ['almond', 'walnut', 'cashew', 'pistachio', 'pecan', 'hazelnut', 'macadamia', 'brazil nut', 'pine nut', 'chestnut', 'nut butter', 'almond butter', 'almond milk', 'almond flour', 'marzipan', 'praline', 'nougat', 'pesto'],
+  peanuts: ['peanut', 'peanut butter', 'peanut oil', 'groundnut', 'goober'],
+  shellfish: ['shrimp', 'prawn', 'lobster', 'crab', 'crayfish', 'crawfish', 'scallop', 'clam', 'mussel', 'oyster', 'squid', 'calamari', 'octopus', 'langoustine', 'cockle', 'abalone', 'whelk', 'periwinkle'],
+  soy: ['soy', 'soya', 'tofu', 'tempeh', 'edamame', 'miso', 'soy sauce', 'soy milk', 'soybean', 'soy protein', 'tamari', 'teriyaki'],
+  eggs: ['egg', 'eggs', 'mayonnaise', 'mayo', 'aioli', 'meringue', 'custard', 'quiche', 'frittata', 'omelet', 'omelette', 'hollandaise', 'bearnaise', 'egg wash', 'egg noodle'],
+  fish: ['fish', 'salmon', 'tuna', 'cod', 'tilapia', 'halibut', 'mackerel', 'sardine', 'anchovy', 'trout', 'bass', 'snapper', 'mahi', 'swordfish', 'catfish', 'flounder', 'sole', 'haddock', 'perch', 'pike', 'herring', 'fish sauce', 'worcestershire'],
+};
+
+const dislikeExpansions: Record<string, string[]> = {
+  spicy: ['jalapeño', 'jalapeno', 'habanero', 'serrano', 'cayenne', 'chipotle', 'ghost pepper', 'scotch bonnet', 'thai chili', 'bird eye', 'hot sauce', 'sriracha', 'tabasco', 'gochujang', 'harissa', 'wasabi', 'horseradish', 'chili flake', 'red pepper flake', 'crushed red pepper', 'chili powder', 'hot pepper', 'buffalo', 'kung pao', 'szechuan', 'sichuan', 'vindaloo', 'arrabbiata', 'diablo', 'fra diavolo', 'peri peri', 'piri piri', 'jerk', 'cajun', 'blackened', 'fiery', 'extra hot', 'very hot'],
+  mushrooms: ['mushroom', 'shiitake', 'portobello', 'cremini', 'oyster mushroom', 'chanterelle', 'porcini', 'enoki', 'maitake', 'morel', 'truffle', 'funghi', 'fungi'],
+  onions: ['onion', 'shallot', 'scallion', 'green onion', 'spring onion', 'leek', 'chive', 'red onion', 'white onion', 'yellow onion', 'vidalia', 'pearl onion', 'cipollini'],
+  peppers: ['pepper', 'bell pepper', 'capsicum', 'pimento', 'pimiento', 'roasted pepper', 'stuffed pepper'],
+  tomatoes: ['tomato', 'tomatoes', 'marinara', 'pomodoro', 'sun-dried tomato', 'cherry tomato', 'grape tomato', 'roma tomato', 'tomato sauce', 'tomato paste', 'salsa', 'bruschetta', 'pico de gallo', 'gazpacho'],
+  cilantro: ['cilantro', 'coriander', 'culantro', 'fresh coriander'],
+  olives: ['olive', 'kalamata', 'black olive', 'green olive', 'tapenade', 'olivada'],
+};
 
 interface RecipeNutrition {
   calories: number | null;
@@ -150,6 +240,7 @@ const getDietBadges = (recipe: UserRecipe): string[] => {
 export default function Recipes() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [showAddDrawer, setShowAddDrawer] = useState(false);
@@ -167,6 +258,138 @@ export default function Recipes() {
   const [recipeToRename, setRecipeToRename] = useState<UserRecipe | null>(null);
   const [newRecipeName, setNewRecipeName] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
+
+  // URL-based filter state
+  const searchQuery = searchParams.get('q') || '';
+  const selectedTime = searchParams.get('time');
+  const selectedMealType = searchParams.get('meal');
+  const selectedCuisine = searchParams.get('cuisine');
+  const selectedDietType = searchParams.get('diet');
+  const selectedAllergies = useMemo(() => {
+    const allergies = searchParams.get('allergies');
+    return allergies ? allergies.split(',').filter(Boolean) : [];
+  }, [searchParams]);
+  const selectedDislikes = useMemo(() => {
+    const dislikes = searchParams.get('dislikes');
+    return dislikes ? dislikes.split(',').filter(Boolean) : [];
+  }, [searchParams]);
+  const selectedHealthConsiderations = useMemo(() => {
+    const health = searchParams.get('health');
+    return health ? health.split(',').filter(Boolean) : [];
+  }, [searchParams]);
+
+  // Helper to update URL params
+  const updateSearchParams = useCallback((key: string, value: string | string[] | null) => {
+    const newParams = new URLSearchParams(searchParams);
+    if (value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
+      newParams.delete(key);
+    } else if (Array.isArray(value)) {
+      newParams.set(key, value.join(','));
+    } else {
+      newParams.set(key, value);
+    }
+    setSearchParams(newParams, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  // Filter setters
+  const setSearchQuery = useCallback((value: string) => updateSearchParams('q', value || null), [updateSearchParams]);
+  const setSelectedTime = useCallback((value: string | null) => updateSearchParams('time', value), [updateSearchParams]);
+  const setSelectedMealType = useCallback((value: string | null) => updateSearchParams('meal', value), [updateSearchParams]);
+  const setSelectedCuisine = useCallback((value: string | null) => updateSearchParams('cuisine', value), [updateSearchParams]);
+  const setSelectedDietType = useCallback((value: string | null) => updateSearchParams('diet', value), [updateSearchParams]);
+  const setSelectedAllergies = useCallback((value: string[]) => updateSearchParams('allergies', value), [updateSearchParams]);
+  const setSelectedDislikes = useCallback((value: string[]) => updateSearchParams('dislikes', value), [updateSearchParams]);
+  const setSelectedHealthConsiderations = useCallback((value: string[]) => updateSearchParams('health', value), [updateSearchParams]);
+
+  // Build blocked terms from allergies/dislikes
+  const blockedTerms = useMemo(() => {
+    const normalize = (v: string) => v.trim().toLowerCase();
+    
+    // Expand allergy terms
+    const expandedAllergies = selectedAllergies.flatMap(allergy => {
+      const allergyLower = allergy.toLowerCase();
+      const expansions = allergyExpansions[allergyLower] || [];
+      return [allergyLower, ...expansions];
+    });
+    
+    // Expand dislike terms
+    const expandedDislikes = selectedDislikes.flatMap(dislike => {
+      const dislikeLower = dislike.toLowerCase();
+      const expansions = dislikeExpansions[dislikeLower] || [];
+      return [dislikeLower, ...expansions];
+    });
+    
+    const base = [...expandedAllergies, ...expandedDislikes].filter(Boolean).map(normalize).filter(Boolean);
+    const expanded = base.flatMap((term) => {
+      const variants = new Set<string>();
+      variants.add(term);
+      if (term.endsWith('s') && term.length > 1) variants.add(term.slice(0, -1));
+      else variants.add(`${term}s`);
+      return Array.from(variants);
+    });
+    return Array.from(new Set(expanded)).filter(Boolean);
+  }, [selectedAllergies, selectedDislikes]);
+
+  // Filter recipes
+  const filteredRecipes = useMemo(() => {
+    return userRecipes.filter(recipe => {
+      // Search filter
+      if (searchQuery) {
+        const searchTerms = searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
+        const titleLower = recipe.title.toLowerCase();
+        const descLower = (recipe.description || '').toLowerCase();
+        const matchesSearch = searchTerms.every(term => 
+          titleLower.includes(term) || descLower.includes(term)
+        );
+        if (!matchesSearch) return false;
+      }
+      
+      // Time filter
+      if (selectedTime && recipe.total_time && recipe.total_time > parseInt(selectedTime)) {
+        return false;
+      }
+      
+      // Meal type filter
+      if (selectedMealType) {
+        const mealTypesToMatch = selectedMealType === 'lunch' || selectedMealType === 'dinner' 
+          ? ['lunch', 'dinner'] 
+          : [selectedMealType];
+        if (!recipe.tags?.some(t => t.tag_type === 'meal' && mealTypesToMatch.includes(t.tag_value))) {
+          return false;
+        }
+      }
+      
+      // Cuisine filter
+      // Note: User recipes may not have cuisine field, so we skip if no cuisine data
+      
+      // Diet type filter
+      if (selectedDietType) {
+        const dietBadges = getDietBadges(recipe);
+        if (!dietBadges.includes(selectedDietType.toLowerCase())) {
+          return false;
+        }
+      }
+      
+      // Allergies/dislikes filter
+      if (blockedTerms.length > 0) {
+        const titleLower = recipe.title.toLowerCase();
+        const ingredientNames = (recipe.ingredients || []).map((ing) => (ing.normalized_name || ing.name || '').toLowerCase());
+        const matchesBlocked = (text: string) => blockedTerms.some((term) => text.includes(term));
+        const matchesBlockedIngredients = () => blockedTerms.some((term) => ingredientNames.some((name) => name.includes(term)));
+        if (matchesBlocked(titleLower)) return false;
+        if (matchesBlockedIngredients()) return false;
+      }
+      
+      // Health considerations filter
+      if (selectedHealthConsiderations.length > 0) {
+        const recipeMedicalTags = (recipe.tags || []).filter(t => t.tag_type === 'medical').map(t => t.tag_value);
+        const hasAllHealthTags = selectedHealthConsiderations.every(pref => recipeMedicalTags.includes(pref));
+        if (!hasAllHealthTags) return false;
+      }
+      
+      return true;
+    });
+  }, [userRecipes, searchQuery, selectedTime, selectedMealType, selectedDietType, blockedTerms, selectedHealthConsiderations]);
 
   const addOptions = [
     { icon: Upload, label: 'Upload file', desc: 'PDF, image, or doc', action: 'upload' },
@@ -538,6 +761,81 @@ export default function Recipes() {
           }
         />
 
+        {/* Search */}
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+          <Input
+            placeholder={t('discover.searchPlaceholder', 'Search recipes...')}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 h-12 text-base"
+          />
+        </div>
+
+        {/* Filter Dropdowns */}
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-4 mb-4">
+          <FilterDropdown
+            label="Meal"
+            value={selectedMealType}
+            options={mealFilterOptions}
+            onChange={setSelectedMealType}
+            icon={<UtensilsCrossed className="w-3 h-3" />}
+          />
+          
+          <FilterDropdown
+            label="Time"
+            value={selectedTime}
+            options={timeFilterOptions}
+            onChange={setSelectedTime}
+            icon={<Clock className="w-3 h-3" />}
+          />
+          
+          <FilterDropdown
+            label="Diet Type"
+            value={selectedDietType}
+            options={dietTypeOptions}
+            onChange={setSelectedDietType}
+            icon={<Sparkles className="w-3 h-3" />}
+          />
+          
+          <MultiSelectDropdown
+            label="Allergies"
+            values={selectedAllergies}
+            options={allergyOptions}
+            onChange={setSelectedAllergies}
+            icon={<AlertTriangle className="w-3 h-3" />}
+            allowCustom
+            customPlaceholder="Add allergy..."
+          />
+          
+          <MultiSelectDropdown
+            label="Dislikes"
+            values={selectedDislikes}
+            options={commonDislikes}
+            onChange={setSelectedDislikes}
+            allowCustom
+            customPlaceholder="Add dislike..."
+          />
+          
+          <MultiSelectDropdown
+            label="Health"
+            values={selectedHealthConsiderations}
+            options={healthConsiderationOptions}
+            onChange={setSelectedHealthConsiderations}
+            icon={<HeartPulse className="w-3 h-3" />}
+          />
+        </div>
+
+        {/* Recipe count */}
+        {!loading && userRecipes.length > 0 && (
+          <p className="text-sm text-muted-foreground mb-4">
+            {filteredRecipes.length === userRecipes.length 
+              ? t('recipes.showingAll', '{{count}} recipes', { count: userRecipes.length })
+              : t('recipes.showingFiltered', '{{filtered}} of {{total}} recipes', { filtered: filteredRecipes.length, total: userRecipes.length })
+            }
+          </p>
+        )}
+
         {/* Empty State */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16">
@@ -555,10 +853,21 @@ export default function Recipes() {
               {t('recipes.addRecipe')}
             </Button>
           </div>
+        ) : filteredRecipes.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+              <Search className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <h3 className="font-semibold text-lg mb-1">{t('recipes.noMatchingRecipes', 'No matching recipes')}</h3>
+            <p className="text-muted-foreground text-sm mb-6">{t('recipes.tryDifferentFilters', 'Try adjusting your filters')}</p>
+            <Button variant="outline" onClick={() => setSearchParams(new URLSearchParams())}>
+              {t('recipes.clearFilters', 'Clear Filters')}
+            </Button>
+          </div>
         ) : (
           <>
             <div className="grid grid-cols-2 gap-3 auto-rows-fr">
-              {userRecipes.map((recipe) => (
+              {filteredRecipes.map((recipe) => (
                 <div key={recipe.id} className="relative group h-full">
                   <RecipeCard 
                     recipe={{
