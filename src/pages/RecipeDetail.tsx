@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useMemo } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Check, Loader2, Pencil } from 'lucide-react';
@@ -15,6 +15,7 @@ import type { Recipe } from '@/types';
 
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -22,11 +23,64 @@ export default function RecipeDetail() {
   const { selectedMeals, addSelectedMeal, removeSelectedMeal } = useAppStore();
   const [isEditing, setIsEditing] = useState(false);
 
+  // Get serving multiplier from URL (for coming from Plan page)
+  const servingMultiplier = useMemo(() => {
+    const param = searchParams.get('servings');
+    if (param) {
+      const num = parseFloat(param);
+      if (!isNaN(num) && num > 0) return num;
+    }
+    return 1;
+  }, [searchParams]);
+
   // Fetch recipe from database (works for both global and user recipes)
   const { data: recipe, isLoading } = useRecipeById(id);
 
   // Determine if this is the user's own recipe (editable)
   const isUserRecipe = recipe?.owner_user_id === user?.id;
+  const isSelected = recipe ? selectedMeals.some(r => r.id === recipe.id) : false;
+
+  // Calculate adjusted nutrition based on serving multiplier
+  const adjustedNutrition = useMemo(() => {
+    if (!recipe?.nutrition) return null;
+    const n = recipe.nutrition;
+    return {
+      calories: Math.round((n.calories || 0) * servingMultiplier),
+      protein_g: Math.round((n.protein_g || 0) * servingMultiplier),
+      carbs_g: Math.round((n.carbs_g || 0) * servingMultiplier),
+      fat_g: Math.round((n.fat_g || 0) * servingMultiplier),
+    };
+  }, [recipe?.nutrition, servingMultiplier]);
+
+  // Calculate adjusted ingredients based on serving multiplier
+  const adjustedIngredients = useMemo(() => {
+    if (!recipe?.ingredients) return [];
+    return recipe.ingredients.map(ing => ({
+      ...ing,
+      quantity: ing.quantity ? parseFloat((ing.quantity * servingMultiplier).toFixed(2)) : null,
+    }));
+  }, [recipe?.ingredients, servingMultiplier]);
+
+  // Format quantity for display (remove trailing zeros)
+  const formatQuantity = (qty: number | null) => {
+    if (qty === null) return '';
+    const formatted = parseFloat(qty.toFixed(2));
+    return formatted.toString();
+  };
+
+  const handleToggleSelect = () => {
+    if (!recipe) return;
+    if (isSelected) {
+      removeSelectedMeal(recipe.id);
+    } else {
+      addSelectedMeal(recipe as any);
+    }
+  };
+
+  const handleSaveEdit = (updatedRecipe: Recipe) => {
+    queryClient.setQueryData(['recipe', id], updatedRecipe);
+    setIsEditing(false);
+  };
 
   if (isLoading) {
     return (
@@ -46,23 +100,6 @@ export default function RecipeDetail() {
       </div>
     );
   }
-
-  const isSelected = selectedMeals.some(r => r.id === recipe.id);
-
-  const handleToggleSelect = () => {
-    if (isSelected) {
-      removeSelectedMeal(recipe.id);
-    } else {
-      addSelectedMeal(recipe as any);
-    }
-  };
-
-  const handleSaveEdit = (updatedRecipe: Recipe) => {
-    queryClient.setQueryData(['recipe', id], updatedRecipe);
-    setIsEditing(false);
-  };
-
-  const nutrition = recipe.nutrition;
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -144,7 +181,12 @@ export default function RecipeDetail() {
             )}
             <div className="flex items-center gap-1">
               <Users className="w-4 h-4" />
-              <span>{recipe.servings} servings</span>
+              <span>
+                {servingMultiplier !== 1 
+                  ? `${parseFloat((recipe.servings * servingMultiplier).toFixed(1))} servings (${servingMultiplier}x)`
+                  : `${recipe.servings} servings`
+                }
+              </span>
             </div>
             {recipe.difficulty && (
               <div className="flex items-center gap-1">
@@ -154,28 +196,33 @@ export default function RecipeDetail() {
             )}
           </div>
 
-          {/* Nutrition */}
-          {nutrition && (
+          {/* Nutrition - adjusted by serving multiplier */}
+          {adjustedNutrition && (
             <div className="bg-muted rounded-xl p-4 mb-6">
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                 <Flame className="w-4 h-4 text-primary" />
                 {t('recipes.nutrition')}
+                {servingMultiplier !== 1 && (
+                  <span className="text-xs text-muted-foreground font-normal">
+                    ({servingMultiplier}x serving)
+                  </span>
+                )}
               </h3>
               <div className="grid grid-cols-4 gap-3">
                 <div className="text-center">
-                  <p className="text-xl font-bold text-primary">{nutrition.calories}</p>
+                  <p className="text-xl font-bold text-primary">{adjustedNutrition.calories}</p>
                   <p className="text-xs text-muted-foreground">kcal</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-xl font-bold text-success">{nutrition.protein_g}g</p>
+                  <p className="text-xl font-bold text-success">{adjustedNutrition.protein_g}g</p>
                   <p className="text-xs text-muted-foreground">protein</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-xl font-bold text-warning">{nutrition.carbs_g}g</p>
+                  <p className="text-xl font-bold text-warning">{adjustedNutrition.carbs_g}g</p>
                   <p className="text-xs text-muted-foreground">carbs</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-xl font-bold text-destructive">{nutrition.fat_g}g</p>
+                  <p className="text-xl font-bold text-destructive">{adjustedNutrition.fat_g}g</p>
                   <p className="text-xs text-muted-foreground">fat</p>
                 </div>
               </div>
@@ -199,15 +246,22 @@ export default function RecipeDetail() {
             />
           ) : (
             <>
-              {/* Ingredients */}
+              {/* Ingredients - adjusted by serving multiplier */}
               <div className="mb-6">
-                <h3 className="text-sm font-semibold mb-3">{t('recipes.ingredients')}</h3>
+                <h3 className="text-sm font-semibold mb-3">
+                  {t('recipes.ingredients')}
+                  {servingMultiplier !== 1 && (
+                    <span className="text-xs text-muted-foreground font-normal ml-2">
+                      (adjusted for {servingMultiplier}x)
+                    </span>
+                  )}
+                </h3>
                 <ul className="space-y-2">
-                  {recipe.ingredients?.map((ing, index) => (
+                  {adjustedIngredients.map((ing, index) => (
                     <li key={index} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
                       <div className="w-2 h-2 rounded-full bg-primary" />
                       <span className="flex-1 text-foreground">
-                        {ing.quantity && `${ing.quantity} `}
+                        {ing.quantity && `${formatQuantity(ing.quantity)} `}
                         {ing.unit && `${ing.unit} `}
                         {ing.name}
                       </span>

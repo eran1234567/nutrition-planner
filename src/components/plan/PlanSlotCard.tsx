@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { Lock, Unlock, Minus, Plus, ArrowLeftRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,9 +32,17 @@ export function PlanSlotCard({
   onSwap,
 }: PlanSlotCardProps) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState(slot.servingMultiplier.toString());
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleRecipeClick = () => {
+    if (recipe) {
+      // Pass the serving multiplier so the detail page can adjust quantities
+      navigate(`/recipe/${recipe.id}?servings=${slot.servingMultiplier}`);
+    }
+  };
 
   // Format multiplier to clean display (remove floating point precision issues)
   const formatMultiplier = (value: number) => {
@@ -143,9 +152,12 @@ export function PlanSlotCard({
         </div>
       </div>
 
-      {/* Content */}
+      {/* Content - Clickable to view recipe details */}
       <div className="p-3">
-        <div className="flex gap-3">
+        <button
+          onClick={handleRecipeClick}
+          className="flex gap-3 w-full text-left hover:opacity-80 transition-opacity cursor-pointer"
+        >
           {/* Image */}
           <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted flex-shrink-0">
             {recipe.image_url ? (
@@ -179,7 +191,7 @@ export function PlanSlotCard({
               </span>
             </div>
           </div>
-        </div>
+        </button>
 
         {/* Serving multiplier */}
         <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
