@@ -268,12 +268,16 @@ export default function Plan() {
         // Import solveDay to re-optimize multipliers
         import('@/lib/mealPlanGenerator/solver').then(({ solveDay }) => {
           // Build slots from current plan with existing recipe assignments
-          const slotsToSolve = currentDayPlan.slots.map(slot => ({
-            slotId: slot.slotId,
-            recipeId: slot.recipeId,
-            multiplier: 1, // Reset to 1 so solver can re-optimize
-            isLocked: currentDayLocks.includes(slot.slotId),
-          }));
+          const slotsToSolve = currentDayPlan.slots.map(slot => {
+            const isLocked = currentDayLocks.includes(slot.slotId);
+            return {
+              slotId: slot.slotId,
+              recipeId: slot.recipeId,
+              // Locked slots keep their current multiplier; unlocked reset to 1 for re-optimization
+              multiplier: isLocked ? slot.servingMultiplier : 1,
+              isLocked,
+            };
+          });
           
           // Run solver on these exact recipes
           const dayResult = solveDay({
