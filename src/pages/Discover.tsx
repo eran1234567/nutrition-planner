@@ -929,9 +929,9 @@ export default function Discover() {
           </div>
         ) : (
           <div className="flex items-center justify-between gap-3">
-            <div className="text-sm">
+          <div className="text-sm">
               <span className="font-semibold text-primary">{selectedMeals.length}</span>
-              <span className="text-muted-foreground"> {t('discover.selected', 'selected')}</span>
+              <span className="text-muted-foreground"> {t('common.selected', 'selected')}</span>
             </div>
             <Button
               onClick={() => navigate('/plan')}
