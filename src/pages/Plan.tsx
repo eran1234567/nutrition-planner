@@ -555,15 +555,6 @@ export default function Plan() {
       <StickyActions>
         <div className="flex gap-2">
           <Button 
-            variant="outline" 
-            className="flex-1" 
-            onClick={() => navigate('/grocery')}
-            disabled={!hasPlan}
-          >
-            <ShoppingCart className="w-4 h-4 mr-2" />
-            {t('grocery.title')}
-          </Button>
-          <Button 
             className="flex-1"
             onClick={() => {
               setIsPlanMode(true);
@@ -572,6 +563,15 @@ export default function Plan() {
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Recipes
+          </Button>
+          <Button 
+            variant="outline" 
+            className="flex-1" 
+            onClick={() => navigate('/grocery')}
+            disabled={!hasPlan}
+          >
+            <ShoppingCart className="w-4 h-4 mr-2" />
+            {t('grocery.title')}
           </Button>
         </div>
       </StickyActions>
