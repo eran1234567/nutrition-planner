@@ -24,27 +24,9 @@ export function NutritionSummaryCard({
 
   const hasTargets = dailyTargets && dailyTargets.calories > 0;
 
+  // When no targets are set, don't render anything - Plan.tsx shows a lightweight banner instead
   if (!hasTargets) {
-    return (
-      <div className="bg-card rounded-2xl border border-border p-4 mb-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Flame className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium text-foreground">
-              {t('plan.dailyTargets', 'Your Daily Targets')}
-            </span>
-          </div>
-          {onSetGoals && (
-            <Button variant="ghost" size="sm" onClick={onSetGoals} className="h-7 px-2">
-              <Settings className="w-4 h-4" />
-            </Button>
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          {t('plan.noTargetsSet', 'Tap the gear to set your nutrition goals')}
-        </p>
-      </div>
-    );
+    return null;
   }
 
   const caloriePercent = Math.min(Math.round((dayTotals.calories / dailyTargets.calories) * 100), 100);
