@@ -194,52 +194,50 @@ export function PlanSlotCard({
         </button>
 
         {/* Serving multiplier */}
-        <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
+        <div className="flex items-center justify-end mt-3 pt-3 border-t border-border gap-2">
           <span className="text-xs text-muted-foreground">Servings</span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={handleDecrease}
-              disabled={!canDecrease}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={handleDecrease}
+            disabled={!canDecrease}
+          >
+            <Minus className="w-3 h-3" />
+          </Button>
+          
+          {isEditing ? (
+            <Input
+              ref={inputRef}
+              type="number"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onBlur={handleBlur}
+              min={MIN_MULTIPLIER}
+              max={MAX_MULTIPLIER}
+              step={0.05}
+              className="h-7 w-14 text-center text-sm font-medium p-1"
+            />
+          ) : (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="text-sm font-medium w-14 text-center py-1 rounded hover:bg-muted transition-colors"
+              title="Click to edit"
             >
-              <Minus className="w-3 h-3" />
-            </Button>
-            
-            {isEditing ? (
-              <Input
-                ref={inputRef}
-                type="number"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={handleKeyDown}
-                onBlur={handleBlur}
-                min={MIN_MULTIPLIER}
-                max={MAX_MULTIPLIER}
-                step={0.05}
-                className="h-7 w-14 text-center text-sm font-medium p-1"
-              />
-            ) : (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="text-sm font-medium w-14 text-center py-1 rounded hover:bg-muted transition-colors"
-                title="Click to edit"
-              >
-                {formatMultiplier(slot.servingMultiplier)}x
-              </button>
-            )}
-            
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={handleIncrease}
-              disabled={!canIncrease}
-            >
-              <Plus className="w-3 h-3" />
-            </Button>
-          </div>
+              {formatMultiplier(slot.servingMultiplier)}x
+            </button>
+          )}
+          
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={handleIncrease}
+            disabled={!canIncrease}
+          >
+            <Plus className="w-3 h-3" />
+          </Button>
         </div>
       </div>
     </div>
