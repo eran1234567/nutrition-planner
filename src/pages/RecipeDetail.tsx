@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Check, Loader2, Pencil } from 'lucide-react';
+import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Check, Loader2, Pencil, Leaf, Fish, Drumstick, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BottomNav } from '@/components/layout/BottomNav';
@@ -12,6 +12,28 @@ import { useAppStore } from '@/stores/appStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import type { Recipe } from '@/types';
+
+// Diet badge config with colors and icons
+const DIET_BADGES: Record<string, { label: string; icon: React.ReactNode; bgClass: string; textClass: string }> = {
+  keto: { label: 'Keto', icon: <Flame className="w-3 h-3" />, bgClass: 'bg-emerald-500/90', textClass: 'text-white' },
+  vegan: { label: 'Vegan', icon: <Leaf className="w-3 h-3" />, bgClass: 'bg-green-600/90', textClass: 'text-white' },
+  vegetarian: { label: 'Vegetarian', icon: <Leaf className="w-3 h-3" />, bgClass: 'bg-lime-500/90', textClass: 'text-white' },
+  pescatarian: { label: 'Pescatarian', icon: <Fish className="w-3 h-3" />, bgClass: 'bg-sky-500/90', textClass: 'text-white' },
+  paleo: { label: 'Paleo', icon: <Drumstick className="w-3 h-3" />, bgClass: 'bg-amber-600/90', textClass: 'text-white' },
+  mediterranean: { label: 'Mediterranean', icon: <Sun className="w-3 h-3" />, bgClass: 'bg-orange-500/90', textClass: 'text-white' },
+};
+
+// Diet exclusions for auto-detection
+const dietExclusions: Record<string, string[]> = {
+  paleo: ['bread', 'pasta', 'rice', 'noodle', 'grain', 'wheat', 'oat', 'corn', 'quinoa', 'barley', 'cereal', 'granola', 'tortilla', 'bean', 'lentil', 'chickpea', 'hummus', 'peanut', 'soy', 'tofu', 'tempeh', 'edamame', 'dairy', 'milk', 'cheese', 'yogurt', 'butter', 'cream', 'sugar', 'candy', 'cake', 'cookie', 'donut', 'pastry'],
+  mediterranean: ['beef', 'steak', 'pork', 'bacon', 'ham', 'sausage', 'hot dog', 'salami', 'processed meat', 'butter', 'margarine', 'sugar', 'candy', 'cake', 'cookie', 'donut', 'soda', 'fried', 'deep fried'],
+};
+
+// Strict keto thresholds
+const KETO_MAX_CARBS = 8;
+const KETO_MAX_CARB_PERCENT = 10;
+const KETO_MAX_PROTEIN_PERCENT = 35;
+const KETO_MIN_FAT_PERCENT = 60;
 
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -60,6 +82,83 @@ export default function RecipeDetail() {
       quantity: ing.quantity ? parseFloat((ing.quantity * servingMultiplier).toFixed(2)) : null,
     }));
   }, [recipe?.ingredients, servingMultiplier]);
+
+  // Helper to check if recipe meets strict keto macro criteria
+  const isKetoFriendly = useMemo(() => {
+    const nutrition = recipe?.nutrition;
+    if (!nutrition) return false;
+    
+    const carbs = nutrition.carbs_g ?? 0;
+    const protein = nutrition.protein_g ?? 0;
+    const fat = nutrition.fat_g ?? 0;
+    
+    if (carbs > KETO_MAX_CARBS) return false;
+    
+    const proteinCals = protein * 4;
+    const fatCals = fat * 9;
+    const carbCals = carbs * 4;
+    const totalMacroCals = proteinCals + fatCals + carbCals;
+    
+    if (totalMacroCals <= 0) return false;
+    
+    const carbPercent = (carbCals / totalMacroCals) * 100;
+    const proteinPercent = (proteinCals / totalMacroCals) * 100;
+    const fatPercent = (fatCals / totalMacroCals) * 100;
+    
+    return carbPercent <= KETO_MAX_CARB_PERCENT && 
+           proteinPercent <= KETO_MAX_PROTEIN_PERCENT && 
+           fatPercent >= KETO_MIN_FAT_PERCENT;
+  }, [recipe?.nutrition]);
+
+  // Helper to check if recipe is paleo-friendly based on ingredients
+  const isPaleoFriendly = useMemo(() => {
+    const ingredients = recipe?.ingredients;
+    if (!ingredients || ingredients.length === 0) return false;
+    
+    return !ingredients.some(ing => {
+      const ingName = (ing.normalized_name || ing.name || '').toLowerCase();
+      return dietExclusions.paleo.some(excluded => ingName.includes(excluded));
+    });
+  }, [recipe?.ingredients]);
+
+  // Helper to check if recipe is mediterranean-friendly
+  const isMediterraneanFriendly = useMemo(() => {
+    const ingredients = recipe?.ingredients;
+    if (!ingredients || ingredients.length === 0) return false;
+    
+    return !ingredients.some(ing => {
+      const ingName = (ing.normalized_name || ing.name || '').toLowerCase();
+      return dietExclusions.mediterranean.some(excluded => ingName.includes(excluded));
+    });
+  }, [recipe?.ingredients]);
+
+  // Build diet badges array
+  const dietBadges = useMemo(() => {
+    if (!recipe) return [];
+    
+    const badges: string[] = [];
+    const recipeDietTags = (recipe.tags || [])
+      .filter((t: { tag_type: string; tag_value: string }) => t.tag_type === 'diet')
+      .map((t: { tag_type: string; tag_value: string }) => t.tag_value.toLowerCase());
+    
+    // Keto: auto-detect from macros
+    if (isKetoFriendly) badges.push('keto');
+    
+    // Paleo: auto-detect from ingredients or use tag
+    if (recipeDietTags.includes('paleo') || isPaleoFriendly) badges.push('paleo');
+    
+    // Mediterranean: auto-detect from ingredients or use tag
+    if (recipeDietTags.includes('mediterranean') || isMediterraneanFriendly) badges.push('mediterranean');
+    
+    // Vegan, vegetarian, pescatarian: rely on tags
+    ['vegan', 'vegetarian', 'pescatarian'].forEach(diet => {
+      if (recipeDietTags.includes(diet) && !badges.includes(diet)) {
+        badges.push(diet);
+      }
+    });
+    
+    return badges;
+  }, [recipe, isKetoFriendly, isPaleoFriendly, isMediterraneanFriendly]);
 
   // Format quantity for display (remove trailing zeros)
   const formatQuantity = (qty: number | null) => {
@@ -153,6 +252,20 @@ export default function RecipeDetail() {
           <div className="mb-4">
             <h1 className="text-2xl font-bold text-foreground mb-2">{recipe.title}</h1>
             <div className="flex flex-wrap gap-2">
+              {/* Diet badges */}
+              {dietBadges.map((diet) => {
+                const badge = DIET_BADGES[diet];
+                if (!badge) return null;
+                return (
+                  <span
+                    key={diet}
+                    className={`px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${badge.bgClass} ${badge.textClass}`}
+                  >
+                    {badge.icon}
+                    {badge.label}
+                  </span>
+                );
+              })}
               {recipe.is_kid_friendly && (
                 <Badge variant="secondary" className="bg-warning/20 text-warning-foreground">
                   👶 Kid Friendly
