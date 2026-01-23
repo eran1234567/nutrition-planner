@@ -1017,9 +1017,25 @@ export default function Discover() {
           <div className="grid grid-cols-2 gap-3">
             {filteredRecipes.map((recipe) => {
               const inCurrentPool = isPlanMode && currentSlotFilter && (recipePoolsBySlot[currentSlotFilter] || []).includes(recipe.id);
-              // Always show Keto badge on recipes that meet strict keto macros, regardless of diet filter
-              const showKeto = isKetoFriendly(recipe.nutrition);
               const isChildUser = userAgeGroup === 'toddler' || userAgeGroup === 'child';
+              
+              // Build diet badges array from recipe tags + keto macro check
+              const recipeDietTags = (recipe.tags || [])
+                .filter((t: { tag_type: string; tag_value: string }) => t.tag_type === 'diet')
+                .map((t: { tag_type: string; tag_value: string }) => t.tag_value.toLowerCase());
+              
+              // Add keto badge if passes strict macro check (even if not tagged)
+              const dietBadges: string[] = [];
+              if (isKetoFriendly(recipe.nutrition)) {
+                dietBadges.push('keto');
+              }
+              // Add other diet badges from tags (avoid duplicating keto)
+              ['vegan', 'vegetarian', 'pescatarian', 'paleo', 'mediterranean'].forEach(diet => {
+                if (recipeDietTags.includes(diet) && !dietBadges.includes(diet)) {
+                  dietBadges.push(diet);
+                }
+              });
+              
               return (
                 <RecipeCard
                   key={recipe.id}
@@ -1029,7 +1045,7 @@ export default function Discover() {
                   onSelect={() => handleSelect(recipe)}
                   onClick={() => navigate(`/recipe/${recipe.id}`)}
                   compact
-                  showKetoBadge={showKeto}
+                  dietBadges={dietBadges}
                   showKidBadge={isChildUser}
                 />
               );

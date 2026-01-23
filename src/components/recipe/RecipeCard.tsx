@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, Users, Check, Plus, Trash2, Minus, Flame } from 'lucide-react';
+import { Clock, Users, Check, Plus, Trash2, Minus, Flame, Leaf, Fish, Drumstick, Apple, Sun } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
@@ -23,6 +23,16 @@ interface RecipeCardRecipe {
   [key: string]: unknown;
 }
 
+// Diet badge config with colors and icons
+const DIET_BADGES: Record<string, { label: string; icon: React.ReactNode; bgClass: string; textClass: string }> = {
+  keto: { label: 'Keto', icon: <Flame className="w-3 h-3" />, bgClass: 'bg-emerald-500/90', textClass: 'text-white' },
+  vegan: { label: 'Vegan', icon: <Leaf className="w-3 h-3" />, bgClass: 'bg-green-600/90', textClass: 'text-white' },
+  vegetarian: { label: 'Vegetarian', icon: <Leaf className="w-3 h-3" />, bgClass: 'bg-lime-500/90', textClass: 'text-white' },
+  pescatarian: { label: 'Pescatarian', icon: <Fish className="w-3 h-3" />, bgClass: 'bg-sky-500/90', textClass: 'text-white' },
+  paleo: { label: 'Paleo', icon: <Drumstick className="w-3 h-3" />, bgClass: 'bg-amber-600/90', textClass: 'text-white' },
+  mediterranean: { label: 'Med', icon: <Sun className="w-3 h-3" />, bgClass: 'bg-orange-500/90', textClass: 'text-white' },
+};
+
 interface RecipeCardProps {
   recipe: RecipeCardRecipe;
   isSelected?: boolean;
@@ -31,7 +41,7 @@ interface RecipeCardProps {
   onClick?: () => void;
   onDelete?: () => void;
   compact?: boolean;
-  showKetoBadge?: boolean;
+  dietBadges?: string[]; // Array of diet types to show as badges
   showKidBadge?: boolean;
 }
 
@@ -43,7 +53,7 @@ export function RecipeCard({
   onClick,
   onDelete,
   compact = false,
-  showKetoBadge = false,
+  dietBadges = [],
   showKidBadge = false
 }: RecipeCardProps) {
   const nutrition = recipe.nutrition;
@@ -56,6 +66,9 @@ export function RecipeCard({
     nutrition.carbs_g != null || 
     nutrition.fat_g != null
   );
+
+  // Limit to max 2 diet badges to avoid clutter
+  const visibleDietBadges = dietBadges.slice(0, 2);
 
   return (
     <motion.article
@@ -124,16 +137,27 @@ export function RecipeCard({
           </div>
         )}
 
-        {/* Tags */}
-        <div className="absolute bottom-2 right-2 flex gap-1">
-          {showKetoBadge && (
-            <span className="px-2 py-0.5 rounded-full bg-emerald-500/90 text-white text-2xs font-semibold flex items-center gap-0.5">
-              <Flame className="w-3 h-3" />
-              Keto
-            </span>
-          )}
+        {/* Diet badges */}
+        <div className="absolute bottom-2 right-2 flex flex-wrap gap-1 justify-end max-w-[60%]">
+          {visibleDietBadges.map((diet) => {
+            const badge = DIET_BADGES[diet];
+            if (!badge) return null;
+            return (
+              <span
+                key={diet}
+                className={cn(
+                  'px-1.5 py-0.5 rounded-full text-2xs font-semibold flex items-center gap-0.5',
+                  badge.bgClass,
+                  badge.textClass
+                )}
+              >
+                {badge.icon}
+                {badge.label}
+              </span>
+            );
+          })}
           {showKidBadge && recipe.is_kid_friendly && (
-            <span className="px-2 py-0.5 rounded-full bg-warning/90 text-warning-foreground text-2xs font-medium">
+            <span className="px-1.5 py-0.5 rounded-full bg-warning/90 text-warning-foreground text-2xs font-medium">
               👶 Kid
             </span>
           )}
