@@ -312,11 +312,14 @@ export default function Recipes() {
       return [allergyLower, ...expansions];
     });
     
-    // Expand dislike terms
+    // Expand dislike terms to include specific ingredients
+    // When expansions exist, use ONLY the specific terms to avoid generic matches
+    // (e.g., "peppers" → "pepper" would incorrectly match "black pepper")
     const expandedDislikes = selectedDislikes.flatMap(dislike => {
       const dislikeLower = dislike.toLowerCase();
       const expansions = dislikeExpansions[dislikeLower] || [];
-      return [dislikeLower, ...expansions];
+      // If specific expansions exist, use only those; otherwise use the original term
+      return expansions.length > 0 ? expansions : [dislikeLower];
     });
     
     const base = [...expandedAllergies, ...expandedDislikes].filter(Boolean).map(normalize).filter(Boolean);
