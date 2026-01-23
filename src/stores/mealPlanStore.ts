@@ -51,6 +51,8 @@ export interface MacroCalculatorInputs {
 export interface SwapContext {
   dayIndex: number;
   slotId: MealSlotId;
+  originalRecipeName: string;
+  slotLabel: string;
 }
 
 interface MealPlanState {
