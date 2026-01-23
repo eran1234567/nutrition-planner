@@ -283,53 +283,57 @@ export default function Discover() {
     none: [],
   };
 
-  // Keto meal criteria:
-  // 1. Net carbs under 10g per serving (strict keto aims for ~20-30g/day total)
-  // 2. Protein should not be excessive (avoid gluconeogenesis) - max 35% of calories from protein
-  // 3. Most energy from fat, not carbs - at least 50% of calories from fat
-  const KETO_MAX_CARBS = 10;
+  // Strict Keto meal criteria (carb-defined first, not fat-defined):
+  // 1. Net carbs under 8g per serving (strict keto aims for ~20-30g/day total across 3 meals)
+  // 2. Carbs must be under 10% of total calories (filters out carb-dense low-cal foods)
+  // 3. Protein should not be excessive (avoid gluconeogenesis) - max 35% of calories from protein
+  // 4. Fat must provide majority of energy - at least 60% of calories from fat
+  const KETO_MAX_CARBS = 8; // Stricter: 8g instead of 10g
+  const KETO_MAX_CARB_PERCENT = 10; // Max % of calories from carbs
   const KETO_MAX_PROTEIN_PERCENT = 35; // Max % of calories from protein
-  const KETO_MIN_FAT_PERCENT = 50; // Min % of calories from fat
+  const KETO_MIN_FAT_PERCENT = 60; // Min % of calories from fat (raised from 50%)
   
-  // Helper to check if a recipe meets keto macro criteria
+  // Helper to check if a recipe meets strict keto macro criteria
   const isKetoFriendly = (nutrition: { calories?: number | null; carbs_g?: number | null; protein_g?: number | null; fat_g?: number | null } | undefined): boolean => {
-    if (!nutrition) return true; // Allow if no nutrition data (can't evaluate)
+    if (!nutrition) return false; // Reject if no nutrition data (can't verify keto compliance)
     
     const carbs = nutrition.carbs_g ?? 0;
     const protein = nutrition.protein_g ?? 0;
     const fat = nutrition.fat_g ?? 0;
-    const calories = nutrition.calories ?? 0;
     
-    // Rule 1: Carbs must be under threshold (most important for keto)
+    // Rule 1: Absolute carbs must be under threshold (most important for keto)
     if (carbs > KETO_MAX_CARBS) {
       return false;
     }
     
-    // If we have calorie data, check macro ratios
-    if (calories > 0) {
-      // Calculate calorie percentages (protein/carbs = 4 cal/g, fat = 9 cal/g)
-      const proteinCals = protein * 4;
-      const fatCals = fat * 9;
-      const carbCals = carbs * 4;
-      const totalMacroCals = proteinCals + fatCals + carbCals;
-      
-      // Use calculated total if more accurate than stored calories
-      const effectiveCals = totalMacroCals > 0 ? totalMacroCals : calories;
-      
-      if (effectiveCals > 0) {
-        const proteinPercent = (proteinCals / effectiveCals) * 100;
-        const fatPercent = (fatCals / effectiveCals) * 100;
-        
-        // Rule 2: Protein shouldn't be too high (avoid gluconeogenesis)
-        if (proteinPercent > KETO_MAX_PROTEIN_PERCENT) {
-          return false;
-        }
-        
-        // Rule 3: Fat should provide most of the energy
-        if (fatPercent < KETO_MIN_FAT_PERCENT) {
-          return false;
-        }
-      }
+    // Calculate calorie percentages (protein/carbs = 4 cal/g, fat = 9 cal/g)
+    const proteinCals = protein * 4;
+    const fatCals = fat * 9;
+    const carbCals = carbs * 4;
+    const totalMacroCals = proteinCals + fatCals + carbCals;
+    
+    // Need some calorie data to evaluate ratios
+    if (totalMacroCals <= 0) {
+      return false;
+    }
+    
+    const carbPercent = (carbCals / totalMacroCals) * 100;
+    const proteinPercent = (proteinCals / totalMacroCals) * 100;
+    const fatPercent = (fatCals / totalMacroCals) * 100;
+    
+    // Rule 2: Carb percentage must be very low (catches carb-dense low-cal foods like Baba Ganoush, Cucumber Dill Salad)
+    if (carbPercent > KETO_MAX_CARB_PERCENT) {
+      return false;
+    }
+    
+    // Rule 3: Protein shouldn't be too high (avoid gluconeogenesis)
+    if (proteinPercent > KETO_MAX_PROTEIN_PERCENT) {
+      return false;
+    }
+    
+    // Rule 4: Fat must dominate energy (true ketogenic ratio)
+    if (fatPercent < KETO_MIN_FAT_PERCENT) {
+      return false;
     }
     
     return true;
