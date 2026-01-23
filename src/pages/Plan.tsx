@@ -19,7 +19,8 @@ import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { format, addDays, startOfWeek } from 'date-fns';
 import { generateMealPlan, validatePlanInputs } from '@/lib/mealPlanGenerator/index';
-import type { GeneratedSlot, GeneratedDay } from '@/types/mealPlan';
+import type { GeneratedSlot, GeneratedDay, MealSlotId, MealSlot } from '@/types/mealPlan';
+import { MEAL_SLOT_DEFINITIONS, getDefaultPercentsForSlots } from '@/types/mealPlan';
 import { toast } from 'sonner';
 import type { GlobalRecipe } from '@/hooks/useGlobalRecipes';
 
@@ -41,6 +42,9 @@ export default function Plan() {
     lockedSlots,
     isPlanMode,
     macroCalculatorInputs,
+    setDailyTargets,
+    setSelectedMealSlots,
+    setNumberOfDays,
     setGeneratedPlan,
     updateSlotMultiplier,
     toggleSlotLock,
@@ -55,6 +59,7 @@ export default function Plan() {
   const [hasShownInitialModal, setHasShownInitialModal] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const hasSavedPlanRef = useRef(false);
+  const hasHydratedFromPrefsRef = useRef(false);
 
   // Diet type is stored in the macro calculator inputs. The generator needs it to
   // enforce keto carb caps and prefer fat add-ons instead of scaling servings.
@@ -62,16 +67,66 @@ export default function Plan() {
     return macroCalculatorInputs?.dietType === 'keto' ? 'keto' : 'default';
   }, [macroCalculatorInputs?.dietType]);
 
+  // Hydrate store from database preferences if store is empty but DB has data
+  // This handles the case when user returns to the Plan tab after setting goals
+  useEffect(() => {
+    if (preferencesLoading || hasHydratedFromPrefsRef.current) return;
+    
+    // If store has no targets but preferences has them, hydrate the store
+    if (!dailyTargets && preferences?.calorie_target) {
+      hasHydratedFromPrefsRef.current = true;
+      
+      setDailyTargets({
+        calories: preferences.calorie_target,
+        protein: preferences.protein_target ?? 0,
+        carbs: preferences.carbs_target ?? 0,
+        fat: preferences.fat_target ?? 0,
+      });
+      
+      // Also hydrate meal slots if we have meals_per_day info
+      if (preferences.meals_per_day && selectedMealSlots.length === 0) {
+        const mealsPerDay = preferences.meals_per_day;
+        
+        let slotIds: MealSlotId[];
+        if (mealsPerDay <= 3) {
+          slotIds = (['breakfast', 'lunch', 'dinner'] as MealSlotId[]).slice(0, mealsPerDay);
+        } else {
+          const base: MealSlotId[] = ['breakfast', 'lunch', 'dinner'];
+          const snacks: MealSlotId[] = (['snack-1', 'snack-2', 'snack-3'] as MealSlotId[]).slice(0, mealsPerDay - 3);
+          slotIds = [...base, ...snacks];
+        }
+        
+        const percents = getDefaultPercentsForSlots(slotIds);
+        const slots: MealSlot[] = slotIds.map(id => ({
+          id,
+          label: MEAL_SLOT_DEFINITIONS[id].label,
+          percentOfDay: percents[id] || 0,
+          type: MEAL_SLOT_DEFINITIONS[id].type,
+        }));
+        
+        setSelectedMealSlots(slots);
+      }
+      
+      // Hydrate plan duration
+      if (preferences.plan_duration) {
+        setNumberOfDays(preferences.plan_duration);
+      }
+    } else if (dailyTargets) {
+      // Store already has data, mark as hydrated
+      hasHydratedFromPrefsRef.current = true;
+    }
+  }, [preferencesLoading, preferences, dailyTargets, selectedMealSlots.length, setDailyTargets, setSelectedMealSlots, setNumberOfDays]);
+
   // Show nutrition goals modal on first visit if no goals are set
   useEffect(() => {
     if (preferencesLoading || hasShownInitialModal) return;
     
-    const hasNutritionGoals = preferences?.calorie_target || selectedMealSlots.length > 0;
+    const hasNutritionGoals = preferences?.calorie_target || dailyTargets?.calories || selectedMealSlots.length > 0;
     if (!hasNutritionGoals) {
       setShowGoalsModal(true);
       setHasShownInitialModal(true);
     }
-  }, [preferences, preferencesLoading, hasShownInitialModal, selectedMealSlots.length]);
+  }, [preferences, preferencesLoading, hasShownInitialModal, selectedMealSlots.length, dailyTargets]);
 
   // Build recipe map for quick lookup
   const recipeMap = useMemo(() => {
