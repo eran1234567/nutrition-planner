@@ -1017,7 +1017,8 @@ export default function Discover() {
           <div className="grid grid-cols-2 gap-3">
             {filteredRecipes.map((recipe) => {
               const inCurrentPool = isPlanMode && currentSlotFilter && (recipePoolsBySlot[currentSlotFilter] || []).includes(recipe.id);
-              const showKeto = userDietType === 'keto' && isKetoFriendly(recipe.nutrition);
+              // Always show Keto badge on recipes that meet strict keto macros, regardless of diet filter
+              const showKeto = isKetoFriendly(recipe.nutrition);
               const isChildUser = userAgeGroup === 'toddler' || userAgeGroup === 'child';
               return (
                 <RecipeCard
