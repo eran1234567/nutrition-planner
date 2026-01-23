@@ -47,6 +47,28 @@ export function useMealPlanSync() {
   const loadActivePlan = useCallback(async () => {
     if (!isAuthenticated || !profile?.id) return;
 
+    // If we already have a generated plan in the store, don't overwrite it.
+    // This prevents losing in-memory state when navigating between tabs.
+    // The plan is already persisted to localStorage and synced to the database.
+    if (generatedPlan) {
+      // Just verify/set the activePlanId from the database for sync purposes
+      try {
+        const { data: mealPlan } = await supabase
+          .from('meal_plans')
+          .select('id')
+          .eq('profile_id', profile.id)
+          .eq('is_active', true)
+          .maybeSingle();
+        
+        if (mealPlan) {
+          setActivePlanId(mealPlan.id);
+        }
+      } catch (e) {
+        console.error('Error checking active plan:', e);
+      }
+      return;
+    }
+
     setIsLoading(true);
     try {
       // Get active meal plan
@@ -178,7 +200,7 @@ export function useMealPlanSync() {
     } finally {
       setIsLoading(false);
     }
-  }, [isAuthenticated, profile?.id, setGeneratedPlan, setSelectedMealSlots, setNumberOfDays]);
+  }, [isAuthenticated, profile?.id, generatedPlan, setGeneratedPlan, setSelectedMealSlots, setNumberOfDays]);
 
   // Save meal plan to database
   const savePlan = useCallback(async (plan: GeneratedPlan) => {
