@@ -21,7 +21,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserData } from '@/hooks/useUserData';
 import { supabase } from '@/integrations/supabase/client';
-import type { MealSlotId } from '@/types/mealPlan';
+import type { MealSlotId, MealSlot } from '@/types/mealPlan';
+import { MEAL_SLOT_DEFINITIONS, getDefaultPercentsForSlots } from '@/types/mealPlan';
 
 // Age-based meal suitability
 type AgeGroup = 'toddler' | 'child' | 'teen' | 'adult';
@@ -167,10 +168,49 @@ export default function Discover() {
     swapContext,
     setSwapContext,
     swapRecipe,
+    setSelectedMealSlots,
+    setDailyTargets,
   } = useMealPlanStore();
 
   // Modal state for adding to plan
   const [addToPlanModal, setAddToPlanModal] = useState<{ open: boolean; recipeId: string; recipeName: string } | null>(null);
+
+  // Hydrate selectedMealSlots from preferences if store is empty
+  // This ensures the AddToPlanModal can function properly when navigating from Plan
+  useEffect(() => {
+    if (isPlanMode && selectedMealSlots.length === 0 && preferences?.meals_per_day) {
+      const mealsPerDay = preferences.meals_per_day;
+      
+      let slotIds: MealSlotId[];
+      if (mealsPerDay <= 3) {
+        slotIds = (['breakfast', 'lunch', 'dinner'] as MealSlotId[]).slice(0, mealsPerDay);
+      } else {
+        const base: MealSlotId[] = ['breakfast', 'lunch', 'dinner'];
+        const snacks: MealSlotId[] = (['snack-1', 'snack-2', 'snack-3'] as MealSlotId[]).slice(0, mealsPerDay - 3);
+        slotIds = [...base, ...snacks];
+      }
+      
+      const percents = getDefaultPercentsForSlots(slotIds);
+      const slots: MealSlot[] = slotIds.map(id => ({
+        id,
+        label: MEAL_SLOT_DEFINITIONS[id].label,
+        percentOfDay: percents[id] || 0,
+        type: MEAL_SLOT_DEFINITIONS[id].type,
+      }));
+      
+      setSelectedMealSlots(slots);
+      
+      // Also hydrate daily targets if missing
+      if (!dailyTargets && preferences?.calorie_target) {
+        setDailyTargets({
+          calories: preferences.calorie_target,
+          protein: preferences.protein_target ?? 0,
+          carbs: preferences.carbs_target ?? 0,
+          fat: preferences.fat_target ?? 0,
+        });
+      }
+    }
+  }, [isPlanMode, selectedMealSlots.length, preferences, dailyTargets, setSelectedMealSlots, setDailyTargets]);
 
   // Pending onboarding data
   const pendingOnboarding = useMemo(() => {
