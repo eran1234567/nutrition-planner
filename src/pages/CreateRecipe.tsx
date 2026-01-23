@@ -1,77 +1,46 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Plus, Trash2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, ImagePlus, X, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
-
-interface IngredientInput {
-  name: string;
-  quantity: string;
-  unit: string;
-}
-
-interface StepInput {
-  instruction: string;
-}
 
 export default function CreateRecipe() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { user } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
+  const [recipeText, setRecipeText] = useState('');
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Form state
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [prepTime, setPrepTime] = useState('');
-  const [cookTime, setCookTime] = useState('');
-  const [servings, setServings] = useState('4');
-  const [calories, setCalories] = useState('');
-  const [protein, setProtein] = useState('');
-  const [carbs, setCarbs] = useState('');
-  const [fat, setFat] = useState('');
-  const [ingredients, setIngredients] = useState<IngredientInput[]>([
-    { name: '', quantity: '', unit: '' }
-  ]);
-  const [steps, setSteps] = useState<StepInput[]>([{ instruction: '' }]);
-
-  const addIngredient = () => {
-    setIngredients([...ingredients, { name: '', quantity: '', unit: '' }]);
-  };
-
-  const removeIngredient = (index: number) => {
-    if (ingredients.length > 1) {
-      setIngredients(ingredients.filter((_, i) => i !== index));
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error(t('recipes.imageTooLarge', 'Image must be under 10MB'));
+        return;
+      }
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setImagePreview(event.target?.result as string);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
-  const updateIngredient = (index: number, field: keyof IngredientInput, value: string) => {
-    const updated = [...ingredients];
-    updated[index][field] = value;
-    setIngredients(updated);
-  };
-
-  const addStep = () => {
-    setSteps([...steps, { instruction: '' }]);
-  };
-
-  const removeStep = (index: number) => {
-    if (steps.length > 1) {
-      setSteps(steps.filter((_, i) => i !== index));
+  const removeImage = () => {
+    setImagePreview(null);
+    setImageFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
-  };
-
-  const updateStep = (index: number, value: string) => {
-    const updated = [...steps];
-    updated[index].instruction = value;
-    setSteps(updated);
   };
 
   const handleSave = async () => {
@@ -80,75 +49,81 @@ export default function CreateRecipe() {
       return;
     }
 
-    if (!title.trim()) {
-      toast.error(t('recipes.titleRequired', 'Recipe title is required'));
-      return;
-    }
-
-    const validIngredients = ingredients.filter(i => i.name.trim());
-    const validSteps = steps.filter(s => s.instruction.trim());
-
-    if (validIngredients.length === 0) {
-      toast.error(t('recipes.ingredientsRequired', 'At least one ingredient is required'));
+    if (!recipeText.trim()) {
+      toast.error(t('recipes.textRequired', 'Please describe your recipe'));
       return;
     }
 
     setIsSaving(true);
 
     try {
-      // Create recipe
-      const totalTime = (parseInt(prepTime) || 0) + (parseInt(cookTime) || 0);
-      const { data: recipe, error: recipeError } = await supabase
-        .from('recipes')
+      // Create an upload record first
+      const { data: upload, error: uploadError } = await supabase
+        .from('uploads')
         .insert({
-          title: title.trim(),
-          description: description.trim() || null,
-          prep_time: parseInt(prepTime) || null,
-          cook_time: parseInt(cookTime) || null,
-          total_time: totalTime || null,
-          servings: parseInt(servings) || 4,
           owner_user_id: user.id,
+          status: 'pending',
+          file_type: 'text',
           scope: 'private',
         })
         .select()
         .single();
 
-      if (recipeError) throw recipeError;
+      if (uploadError) throw uploadError;
 
-      // Add nutrition if provided
-      if (calories || protein || carbs || fat) {
-        await supabase.from('recipe_nutrition').insert({
-          recipe_id: recipe.id,
-          calories: parseFloat(calories) || null,
-          protein_g: parseFloat(protein) || null,
-          carbs_g: parseFloat(carbs) || null,
-          fat_g: parseFloat(fat) || null,
-        });
+      // Prepare the content - include image if provided
+      let content = recipeText;
+      let isImage = false;
+      
+      // If user provided an image, we'll send that for parsing
+      if (imagePreview) {
+        isImage = true;
+        content = imagePreview;
       }
 
-      // Add ingredients
-      const ingredientRows = validIngredients.map((ing, index) => ({
-        recipe_id: recipe.id,
-        name: ing.name.trim(),
-        quantity: parseFloat(ing.quantity) || null,
-        unit: ing.unit.trim() || null,
-        order_index: index,
-      }));
-      await supabase.from('recipe_ingredients').insert(ingredientRows);
+      // Call the parse-recipe edge function
+      const { data: session } = await supabase.auth.getSession();
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-recipe`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.session?.access_token}`,
+          },
+          body: JSON.stringify({
+            uploadId: upload.id,
+            content: isImage ? imagePreview : recipeText,
+            isImage,
+          }),
+        }
+      );
 
-      // Add steps
-      const stepRows = validSteps.map((step, index) => ({
-        recipe_id: recipe.id,
-        step_number: index + 1,
-        instruction: step.instruction.trim(),
-      }));
-      await supabase.from('recipe_steps').insert(stepRows);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to parse recipe');
+      }
+
+      const result = await response.json();
+
+      if (!result.success || !result.recipes?.length) {
+        throw new Error(result.error || 'Could not extract recipe from text');
+      }
+
+      const recipe = result.recipes[0];
+
+      // If user provided their own image, update the recipe with it
+      if (imagePreview && recipe.id) {
+        await supabase.from('recipes').update({
+          image_url: imagePreview
+        }).eq('id', recipe.id);
+      }
 
       toast.success(t('recipes.createSuccess', 'Recipe created!'));
       navigate(`/recipe/${recipe.id}`);
     } catch (error) {
       console.error('Failed to create recipe:', error);
-      toast.error(t('recipes.createError', 'Failed to create recipe'));
+      toast.error(error instanceof Error ? error.message : t('recipes.createError', 'Failed to create recipe'));
     } finally {
       setIsSaving(false);
     }
@@ -158,7 +133,7 @@ export default function CreateRecipe() {
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border">
-        <div className="page-container py-4 flex items-center justify-between">
+        <div className="px-4 py-4 flex items-center justify-between max-w-3xl mx-auto">
           <button
             onClick={() => navigate(-1)}
             className="w-10 h-10 rounded-full bg-muted flex items-center justify-center"
@@ -166,206 +141,103 @@ export default function CreateRecipe() {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <h1 className="text-lg font-semibold">{t('recipes.createRecipe', 'Create Recipe')}</h1>
-          <Button onClick={handleSave} disabled={isSaving} size="sm">
+          <Button 
+            onClick={handleSave} 
+            disabled={isSaving || !recipeText.trim()} 
+            size="sm"
+            className="gradient-primary"
+          >
             {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : t('common.save', 'Save')}
           </Button>
         </div>
       </div>
 
-      <div className="page-container py-6 space-y-6">
-        {/* Basic Info */}
-        <div className="space-y-4">
+      <div className="px-4 py-6 max-w-3xl mx-auto space-y-6">
+        {/* AI Helper Banner */}
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-primary/10 border border-primary/20">
+          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+            <Sparkles className="w-5 h-5 text-primary" />
+          </div>
           <div>
-            <Label htmlFor="title">{t('recipes.title', 'Title')} *</Label>
-            <Input
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={t('recipes.titlePlaceholder', 'e.g., Grilled Chicken Salad')}
-              className="mt-1"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="description">{t('recipes.description', 'Description')}</Label>
-            <Textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder={t('recipes.descriptionPlaceholder', 'Brief description of your recipe...')}
-              className="mt-1"
-              rows={2}
-            />
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <Label htmlFor="prepTime">{t('recipes.prepTime', 'Prep (min)')}</Label>
-              <Input
-                id="prepTime"
-                type="number"
-                value={prepTime}
-                onChange={(e) => setPrepTime(e.target.value)}
-                placeholder="15"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="cookTime">{t('recipes.cookTime', 'Cook (min)')}</Label>
-              <Input
-                id="cookTime"
-                type="number"
-                value={cookTime}
-                onChange={(e) => setCookTime(e.target.value)}
-                placeholder="30"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="servings">{t('recipes.servings', 'Servings')}</Label>
-              <Input
-                id="servings"
-                type="number"
-                value={servings}
-                onChange={(e) => setServings(e.target.value)}
-                placeholder="4"
-                className="mt-1"
-              />
-            </div>
+            <p className="font-medium text-sm">{t('recipes.aiHelper', 'AI-Powered')}</p>
+            <p className="text-xs text-muted-foreground">
+              {t('recipes.aiHelperDesc', 'Just describe your recipe - I\'ll format it and calculate nutrition!')}
+            </p>
           </div>
         </div>
 
-        {/* Nutrition */}
-        <div className="space-y-3">
-          <h3 className="font-semibold text-sm">{t('recipes.nutritionPerServing', 'Nutrition per serving')}</h3>
-          <div className="grid grid-cols-4 gap-2">
-            <div>
-              <Label htmlFor="calories" className="text-xs">{t('recipes.calories', 'Calories')}</Label>
-              <Input
-                id="calories"
-                type="number"
-                value={calories}
-                onChange={(e) => setCalories(e.target.value)}
-                placeholder="350"
-                className="mt-1"
+        {/* Image Upload */}
+        <div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleImageSelect}
+            className="hidden"
+          />
+          
+          {imagePreview ? (
+            <div className="relative rounded-xl overflow-hidden">
+              <img 
+                src={imagePreview} 
+                alt="Recipe preview" 
+                className="w-full h-48 object-cover"
               />
+              <button
+                onClick={removeImage}
+                className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 text-white flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            <div>
-              <Label htmlFor="protein" className="text-xs">{t('recipes.protein', 'Protein (g)')}</Label>
-              <Input
-                id="protein"
-                type="number"
-                value={protein}
-                onChange={(e) => setProtein(e.target.value)}
-                placeholder="25"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="carbs" className="text-xs">{t('recipes.carbs', 'Carbs (g)')}</Label>
-              <Input
-                id="carbs"
-                type="number"
-                value={carbs}
-                onChange={(e) => setCarbs(e.target.value)}
-                placeholder="30"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor="fat" className="text-xs">{t('recipes.fat', 'Fat (g)')}</Label>
-              <Input
-                id="fat"
-                type="number"
-                value={fat}
-                onChange={(e) => setFat(e.target.value)}
-                placeholder="15"
-                className="mt-1"
-              />
-            </div>
-          </div>
+          ) : (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full h-32 rounded-xl border-2 border-dashed border-border hover:border-primary/50 transition-colors flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-primary"
+            >
+              <ImagePlus className="w-8 h-8" />
+              <span className="text-sm">{t('recipes.addPhoto', 'Add a photo (optional)')}</span>
+            </button>
+          )}
         </div>
 
-        {/* Ingredients */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-sm">{t('recipes.ingredients', 'Ingredients')} *</h3>
-            <Button variant="ghost" size="sm" onClick={addIngredient}>
-              <Plus className="w-4 h-4 mr-1" />
-              {t('common.add', 'Add')}
-            </Button>
-          </div>
-          <div className="space-y-2">
-            {ingredients.map((ing, index) => (
-              <div key={index} className="flex gap-2 items-start">
-                <Input
-                  value={ing.quantity}
-                  onChange={(e) => updateIngredient(index, 'quantity', e.target.value)}
-                  placeholder="1"
-                  className="w-16"
-                />
-                <Input
-                  value={ing.unit}
-                  onChange={(e) => updateIngredient(index, 'unit', e.target.value)}
-                  placeholder="cup"
-                  className="w-20"
-                />
-                <Input
-                  value={ing.name}
-                  onChange={(e) => updateIngredient(index, 'name', e.target.value)}
-                  placeholder={t('recipes.ingredientName', 'Ingredient name')}
-                  className="flex-1"
-                />
-                {ingredients.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeIngredient(index)}
-                    className="shrink-0"
-                  >
-                    <Trash2 className="w-4 h-4 text-muted-foreground" />
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
+        {/* Recipe Text Input */}
+        <div className="space-y-2">
+          <Textarea
+            value={recipeText}
+            onChange={(e) => setRecipeText(e.target.value)}
+            placeholder={t('recipes.writeRecipePlaceholder', `Write your recipe here in your own words...
+
+Example:
+Grilled Chicken Salad
+
+Ingredients:
+- 2 chicken breasts
+- Mixed greens
+- Cherry tomatoes
+- Olive oil and lemon dressing
+
+Instructions:
+1. Season and grill chicken
+2. Slice and arrange over greens
+3. Add tomatoes and drizzle with dressing
+
+Serves 2, takes about 20 minutes`)}
+            className="min-h-[300px] text-base resize-none"
+          />
+          <p className="text-xs text-muted-foreground">
+            {t('recipes.aiWillParse', 'AI will extract title, ingredients, instructions, and calculate nutrition automatically.')}
+          </p>
         </div>
 
-        {/* Steps */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-sm">{t('recipes.instructions', 'Instructions')}</h3>
-            <Button variant="ghost" size="sm" onClick={addStep}>
-              <Plus className="w-4 h-4 mr-1" />
-              {t('common.add', 'Add')}
-            </Button>
-          </div>
-          <div className="space-y-3">
-            {steps.map((step, index) => (
-              <div key={index} className="flex gap-3 items-start">
-                <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold shrink-0">
-                  {index + 1}
-                </div>
-                <Textarea
-                  value={step.instruction}
-                  onChange={(e) => updateStep(index, e.target.value)}
-                  placeholder={t('recipes.stepPlaceholder', 'Describe this step...')}
-                  className="flex-1"
-                  rows={2}
-                />
-                {steps.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeStep(index)}
-                    className="shrink-0"
-                  >
-                    <Trash2 className="w-4 h-4 text-muted-foreground" />
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
+        {/* Tips */}
+        <div className="p-4 rounded-xl bg-muted/50 space-y-2">
+          <p className="font-medium text-sm">{t('recipes.tips', 'Tips for best results:')}</p>
+          <ul className="text-xs text-muted-foreground space-y-1">
+            <li>• {t('recipes.tip1', 'Include ingredient quantities (e.g., "2 cups flour")')}</li>
+            <li>• {t('recipes.tip2', 'Mention number of servings if known')}</li>
+            <li>• {t('recipes.tip3', 'Add prep and cook times if you want')}</li>
+          </ul>
         </div>
       </div>
 
