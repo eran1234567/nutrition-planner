@@ -108,6 +108,7 @@ const allergyOptions = [
 const commonDislikes = [
   { value: 'mushrooms', label: 'Mushrooms' },
   { value: 'onions', label: 'Onions' },
+  { value: 'garlic', label: 'Garlic' },
   { value: 'peppers', label: 'Bell Peppers' },
   { value: 'tomatoes', label: 'Tomatoes' },
   { value: 'cilantro', label: 'Cilantro' },
@@ -391,6 +392,7 @@ export default function Discover() {
     mushrooms: ['mushroom', 'shiitake', 'portobello', 'cremini', 'oyster mushroom', 'chanterelle', 'porcini', 'enoki', 'maitake', 'morel', 'truffle', 'funghi', 'fungi'],
     onions: ['onion', 'shallot', 'scallion', 'green onion', 'spring onion', 'leek', 'chive', 'red onion', 'white onion', 'yellow onion', 'vidalia', 'pearl onion', 'cipollini'],
     peppers: ['bell pepper', 'red bell pepper', 'green bell pepper', 'yellow bell pepper', 'orange bell pepper', 'sweet pepper', 'capsicum', 'pimento', 'pimiento', 'roasted pepper', 'roasted red pepper', 'stuffed pepper', 'poblano', 'anaheim pepper', 'banana pepper', 'cubanelle'],
+    garlic: ['garlic', 'garlic clove', 'garlic powder', 'garlic salt', 'minced garlic', 'roasted garlic', 'garlic paste', 'garlic butter', 'garlic oil', 'black garlic', 'elephant garlic'],
     tomatoes: ['tomato', 'tomatoes', 'marinara', 'pomodoro', 'sun-dried tomato', 'cherry tomato', 'grape tomato', 'roma tomato', 'tomato sauce', 'tomato paste', 'salsa', 'bruschetta', 'pico de gallo', 'gazpacho'],
     cilantro: ['cilantro', 'coriander', 'culantro', 'fresh coriander'],
     olives: ['olive', 'kalamata', 'black olive', 'green olive', 'tapenade', 'olivada'],
