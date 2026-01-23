@@ -69,7 +69,7 @@ const MyRecipes = () => {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error loading uploads:', error);
+      if (import.meta.env.DEV) console.error('Error loading uploads:', error);
       return;
     }
 
@@ -168,7 +168,7 @@ const MyRecipes = () => {
       });
 
       if (error) {
-        console.error('Parsing error:', error);
+        if (import.meta.env.DEV) console.error('Parsing error:', error);
         setUploads(prev => prev.map(u => 
           u.id === uploadId ? { ...u, status: 'failed' as const } : u
         ));
@@ -188,7 +188,7 @@ const MyRecipes = () => {
         toast.error(data?.error || t('myRecipes.parseError', 'Failed to parse recipe'));
       }
     } catch (error) {
-      console.error('Parse error:', error);
+      if (import.meta.env.DEV) console.error('Parse error:', error);
       setUploads(prev => prev.map(u => 
         u.id === uploadId ? { ...u, status: 'failed' as const } : u
       ));
@@ -258,7 +258,7 @@ const MyRecipes = () => {
           }).select().single();
 
           if (error) {
-            console.error('Upload insert error:', error);
+            if (import.meta.env.DEV) console.error('Upload insert error:', error);
             throw error;
           }
 
@@ -284,7 +284,7 @@ const MyRecipes = () => {
             setUploads(prev => prev.map(u => u.id === uploadData.id ? { ...u, status: 'failed' as const } : u));
           }
         } catch (error) {
-          console.error('File upload error:', error);
+          if (import.meta.env.DEV) console.error('File upload error:', error);
           toast.error(t('myRecipes.uploadError', 'Failed to save file'));
         }
       }

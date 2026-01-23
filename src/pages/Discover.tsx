@@ -483,7 +483,7 @@ export default function Discover() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error loading user recipes:', error);
+        if (import.meta.env.DEV) console.error('Error loading user recipes:', error);
         return;
       }
 

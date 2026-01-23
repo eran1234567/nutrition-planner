@@ -126,7 +126,7 @@ export function useGlobalRecipes() {
           .order('title');
 
         if (error) {
-          console.warn('[useGlobalRecipes] backend error, using seed fallback:', error);
+          if (import.meta.env.DEV) console.warn('[useGlobalRecipes] backend error, using seed fallback:', error);
           return getSeedFallback();
         }
 
@@ -157,7 +157,7 @@ export function useGlobalRecipes() {
           } as GlobalRecipe;
         });
       } catch (err) {
-        console.warn('[useGlobalRecipes] request failed, using seed fallback:', err);
+        if (import.meta.env.DEV) console.warn('[useGlobalRecipes] request failed, using seed fallback:', err);
         return getSeedFallback();
       }
     },

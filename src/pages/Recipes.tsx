@@ -232,7 +232,7 @@ export default function Recipes() {
           setProcessingUpload(null);
         }
       } catch (error) {
-        console.error('File upload error:', error);
+        if (import.meta.env.DEV) console.error('File upload error:', error);
         toast.error(t('myRecipes.uploadError', 'Failed to save file'));
         setProcessingUpload(null);
       }
@@ -326,7 +326,7 @@ export default function Recipes() {
       .limit(200);
 
     if (error) {
-      console.error('Failed to fetch recipes:', error);
+      if (import.meta.env.DEV) console.error('Failed to fetch recipes:', error);
       toast.error(t('recipes.loadError', 'Failed to load recipes'));
     } else if (recipes) {
       setUserRecipes(recipes);
