@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 const navItems = [
   { path: '/discover', icon: Search, labelKey: 'nav.discover' },
   { path: '/plan', icon: Calendar, labelKey: 'nav.plan' },
-  { path: '/recipes', icon: BookOpen, labelKey: 'nav.recipes' },
+  { path: '/recipes', icon: BookOpen, labelKey: 'nav.myRecipes' },
   { path: '/grocery', icon: ShoppingCart, labelKey: 'nav.grocery' },
 ];
 
