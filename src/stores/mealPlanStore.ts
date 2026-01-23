@@ -159,6 +159,26 @@ const safeParsePersist = <TState,>(raw: string | null): PersistEnvelope<TState> 
   }
 };
 
+const hasMeaningfulMealPlanData = (state?: Partial<MealPlanState> | null) => {
+  if (!state) return false;
+  const hasPools = !!state.recipePoolsBySlot && Object.values(state.recipePoolsBySlot).some((p) => (p ?? []).length > 0);
+  const hasExact = !!state.exactAssignments && Object.keys(state.exactAssignments).length > 0;
+  const hasGenerated = !!state.generatedPlan;
+  const hasSlots = !!state.selectedMealSlots && state.selectedMealSlots.length > 0;
+  const hasTargets = !!state.dailyTargets && (state.dailyTargets.calories ?? 0) > 0;
+  return hasPools || hasExact || hasGenerated || hasSlots || hasTargets;
+};
+
+const hasAnyPoolRecipes = (state?: Partial<MealPlanState> | null) => {
+  if (!state?.recipePoolsBySlot) return false;
+  return Object.values(state.recipePoolsBySlot).some((p) => (p ?? []).length > 0);
+};
+
+const hasAnyExactAssignments = (state?: Partial<MealPlanState> | null) => {
+  if (!state?.exactAssignments) return false;
+  return Object.keys(state.exactAssignments).length > 0;
+};
+
 export const useMealPlanStore = create<MealPlanState>()(
   persist(
     (set, get) => ({
@@ -170,7 +190,7 @@ export const useMealPlanStore = create<MealPlanState>()(
         // If user changed, clear old data and load new user's data
         if (currentUserId !== userId) {
           // If the user is transitioning from anonymous -> signed-in, migrate any
-          // saved macro calculator inputs so they don't "disappear" after refresh.
+          // saved meal plan state so it doesn't "disappear" after refresh.
           // This commonly happens when a user applies calculator settings before
           // auth finished initializing.
           if (!currentUserId && userId) {
@@ -183,32 +203,62 @@ export const useMealPlanStore = create<MealPlanState>()(
             const anonParsed = safeParsePersist<MealPlanState>(anonRaw);
             const userParsed = safeParsePersist<MealPlanState>(userRaw);
 
-            const anonMacro = anonParsed?.state?.macroCalculatorInputs ?? null;
-            const userMacro = userParsed?.state?.macroCalculatorInputs ?? null;
+            const anonState = anonParsed?.state ?? null;
+            const userState = userParsed?.state ?? null;
 
-            // If user has no saved calculator inputs, but anonymous does, merge them.
-            if (anonMacro && !userMacro) {
-              const merged: PersistEnvelope<MealPlanState> = userParsed
-                ? {
-                    ...userParsed,
-                    state: {
-                      ...(userParsed.state ?? {}),
-                      macroCalculatorInputs: anonMacro,
-                    },
-                  }
-                : {
-                    ...(anonParsed ?? {}),
-                    state: {
-                      ...(anonParsed?.state ?? {}),
-                      macroCalculatorInputs: anonMacro,
-                    },
-                  };
+            if (!anonState || !hasMeaningfulMealPlanData(anonState)) {
+              // Nothing useful to migrate.
+              return;
+            }
+
+            // IMPORTANT: userState might already contain slot defaults (from previous sessions)
+            // while pools were added before auth finished initializing. In that case, we still
+            // want to migrate pools/exact assignments WITHOUT overwriting the user's existing data.
+            const anonHasPools = hasAnyPoolRecipes(anonState);
+            const anonHasExact = hasAnyExactAssignments(anonState);
+            const userHasPools = hasAnyPoolRecipes(userState);
+            const userHasExact = hasAnyExactAssignments(userState);
+
+            const shouldMigratePools = anonHasPools && !userHasPools;
+            const shouldMigrateExact = anonHasExact && !userHasExact;
+
+            // If user has no meaningful data at all, migrate everything.
+            const migrateAll = !hasMeaningfulMealPlanData(userState);
+
+            if (migrateAll || shouldMigratePools || shouldMigrateExact) {
+              const base = (userParsed ?? anonParsed ?? {}) as PersistEnvelope<MealPlanState>;
+              const baseState = (userState ?? {}) as Partial<MealPlanState>;
+
+              const mergedState: Partial<MealPlanState> = {
+                ...baseState,
+                ...(migrateAll ? (anonState as Partial<MealPlanState>) : {}),
+                // Selective merges
+                ...(shouldMigratePools ? { recipePoolsBySlot: anonState.recipePoolsBySlot } : {}),
+                ...(shouldMigrateExact ? { exactAssignments: anonState.exactAssignments } : {}),
+                // If the user has no slots yet, carry them over so pools render correctly.
+                ...(baseState.selectedMealSlots?.length ? {} : { selectedMealSlots: anonState.selectedMealSlots ?? [] }),
+                ...(baseState.numberOfDays ? {} : { numberOfDays: anonState.numberOfDays ?? 7 }),
+                // Ensure the next storage reads/writes use the user-scoped key.
+                currentUserId: userId,
+              };
+
+              const merged: PersistEnvelope<MealPlanState> = {
+                ...base,
+                state: mergedState,
+              };
 
               try {
+                if (import.meta.env.DEV) {
+                  console.log('[MealPlanStore] Migrating anonymous plan state to user', {
+                    migrateAll,
+                    shouldMigratePools,
+                    shouldMigrateExact,
+                  });
+                }
                 localStorage.setItem(userKey, JSON.stringify(merged));
                 localStorage.removeItem(anonKey);
               } catch (e) {
-                if (import.meta.env.DEV) console.warn('Failed to migrate anonymous macro calculator inputs:', e);
+                if (import.meta.env.DEV) console.warn('Failed to migrate anonymous meal plan state:', e);
               }
             }
           }
