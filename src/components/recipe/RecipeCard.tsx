@@ -67,8 +67,8 @@ export function RecipeCard({
     nutrition.fat_g != null
   );
 
-  // Limit to max 2 diet badges to avoid clutter
-  const visibleDietBadges = dietBadges.slice(0, 2);
+  // Show up to 3 diet badges to balance visibility with space
+  const visibleDietBadges = dietBadges.slice(0, 3);
 
   return (
     <motion.article
