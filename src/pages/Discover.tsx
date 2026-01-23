@@ -283,8 +283,57 @@ export default function Discover() {
     none: [],
   };
 
-  // Max carbs per serving for keto diet (in grams) - strict keto aims for ~20-30g/day total
+  // Keto meal criteria:
+  // 1. Net carbs under 10g per serving (strict keto aims for ~20-30g/day total)
+  // 2. Protein should not be excessive (avoid gluconeogenesis) - max 35% of calories from protein
+  // 3. Most energy from fat, not carbs - at least 50% of calories from fat
   const KETO_MAX_CARBS = 10;
+  const KETO_MAX_PROTEIN_PERCENT = 35; // Max % of calories from protein
+  const KETO_MIN_FAT_PERCENT = 50; // Min % of calories from fat
+  
+  // Helper to check if a recipe meets keto macro criteria
+  const isKetoFriendly = (nutrition: { calories?: number | null; carbs_g?: number | null; protein_g?: number | null; fat_g?: number | null } | undefined): boolean => {
+    if (!nutrition) return true; // Allow if no nutrition data (can't evaluate)
+    
+    const carbs = nutrition.carbs_g ?? 0;
+    const protein = nutrition.protein_g ?? 0;
+    const fat = nutrition.fat_g ?? 0;
+    const calories = nutrition.calories ?? 0;
+    
+    // Rule 1: Carbs must be under threshold (most important for keto)
+    if (carbs > KETO_MAX_CARBS) {
+      return false;
+    }
+    
+    // If we have calorie data, check macro ratios
+    if (calories > 0) {
+      // Calculate calorie percentages (protein/carbs = 4 cal/g, fat = 9 cal/g)
+      const proteinCals = protein * 4;
+      const fatCals = fat * 9;
+      const carbCals = carbs * 4;
+      const totalMacroCals = proteinCals + fatCals + carbCals;
+      
+      // Use calculated total if more accurate than stored calories
+      const effectiveCals = totalMacroCals > 0 ? totalMacroCals : calories;
+      
+      if (effectiveCals > 0) {
+        const proteinPercent = (proteinCals / effectiveCals) * 100;
+        const fatPercent = (fatCals / effectiveCals) * 100;
+        
+        // Rule 2: Protein shouldn't be too high (avoid gluconeogenesis)
+        if (proteinPercent > KETO_MAX_PROTEIN_PERCENT) {
+          return false;
+        }
+        
+        // Rule 3: Fat should provide most of the energy
+        if (fatPercent < KETO_MIN_FAT_PERCENT) {
+          return false;
+        }
+      }
+    }
+    
+    return true;
+  };
 
   // Combine profile allergies/dislikes with dropdown selections
   const allAllergies = useMemo(() => 
@@ -469,6 +518,10 @@ export default function Discover() {
         if (selectedCuisine && recipe.cuisine?.toLowerCase() !== selectedCuisine.toLowerCase()) {
           return false;
         }
+        // Apply keto filtering in swap mode
+        if (userDietType === 'keto' && !isKetoFriendly(recipe.nutrition)) {
+          return false;
+        }
         return true;
       });
     }
@@ -503,6 +556,10 @@ export default function Discover() {
             return false;
           }
           if (selectedCuisine && recipe.cuisine?.toLowerCase() !== selectedCuisine.toLowerCase()) {
+            return false;
+          }
+          // Apply keto filtering in plan mode
+          if (userDietType === 'keto' && !isKetoFriendly(recipe.nutrition)) {
             return false;
           }
           return true;
@@ -561,9 +618,9 @@ export default function Discover() {
         if (matchesAgeRestricted(descLower)) return false;
         if (matchesAgeRestrictedIngredients()) return false;
       }
-      // Keto diet: also filter by carb content (max 15g per serving)
-      if (userDietType === 'keto' && recipe.nutrition?.carbs_g != null) {
-        if (recipe.nutrition.carbs_g > KETO_MAX_CARBS) {
+      // Keto diet: filter by comprehensive keto criteria (low carbs, moderate protein, high fat)
+      if (userDietType === 'keto') {
+        if (!isKetoFriendly(recipe.nutrition)) {
           return false;
         }
       }
