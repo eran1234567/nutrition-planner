@@ -35,10 +35,16 @@ export function PlanSlotCard({
   const [inputValue, setInputValue] = useState(slot.servingMultiplier.toString());
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Format multiplier to clean display (remove floating point precision issues)
+  const formatMultiplier = (value: number) => {
+    // Round to 2 decimal places and remove trailing zeros
+    return parseFloat(value.toFixed(2)).toString();
+  };
+
   // Update input when slot changes externally
   useEffect(() => {
     if (!isEditing) {
-      setInputValue(slot.servingMultiplier.toString());
+      setInputValue(formatMultiplier(slot.servingMultiplier));
     }
   }, [slot.servingMultiplier, isEditing]);
 
@@ -56,10 +62,10 @@ export function PlanSlotCard({
       // Round to 2 decimal places
       const rounded = Math.round(num * 100) / 100;
       onSetMultiplier(rounded);
-      setInputValue(rounded.toString());
+      setInputValue(formatMultiplier(rounded));
     } else {
       // Reset to current value
-      setInputValue(slot.servingMultiplier.toString());
+      setInputValue(formatMultiplier(slot.servingMultiplier));
     }
     setIsEditing(false);
   };
@@ -68,7 +74,7 @@ export function PlanSlotCard({
     if (e.key === 'Enter') {
       validateAndApply(inputValue);
     } else if (e.key === 'Escape') {
-      setInputValue(slot.servingMultiplier.toString());
+      setInputValue(formatMultiplier(slot.servingMultiplier));
       setIsEditing(false);
     }
   };
@@ -208,7 +214,7 @@ export function PlanSlotCard({
                 className="text-sm font-medium w-14 text-center py-1 rounded hover:bg-muted transition-colors"
                 title="Click to edit"
               >
-                {slot.servingMultiplier}x
+                {formatMultiplier(slot.servingMultiplier)}x
               </button>
             )}
             
