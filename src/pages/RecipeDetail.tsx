@@ -70,17 +70,18 @@ export default function RecipeDetail() {
   const isUserRecipe = recipe?.owner_user_id === user?.id;
   const isSelected = recipe ? selectedMeals.some(r => r.id === recipe.id) : false;
 
-  // Calculate adjusted nutrition based on serving multiplier
-  const adjustedNutrition = useMemo(() => {
+  // Nutrition is ALWAYS per serving - never scaled
+  // The nutrition values in the database represent what you get from one serving
+  const perServingNutrition = useMemo(() => {
     if (!recipe?.nutrition) return null;
     const n = recipe.nutrition;
     return {
-      calories: Math.round((n.calories || 0) * servingMultiplier),
-      protein_g: Math.round((n.protein_g || 0) * servingMultiplier),
-      carbs_g: Math.round((n.carbs_g || 0) * servingMultiplier),
-      fat_g: Math.round((n.fat_g || 0) * servingMultiplier),
+      calories: Math.round(n.calories || 0),
+      protein_g: Math.round(n.protein_g || 0),
+      carbs_g: Math.round(n.carbs_g || 0),
+      fat_g: Math.round(n.fat_g || 0),
     };
-  }, [recipe?.nutrition, servingMultiplier]);
+  }, [recipe?.nutrition]);
 
   // Calculate adjusted ingredients based on serving multiplier
   const adjustedIngredients = useMemo(() => {
@@ -317,33 +318,28 @@ export default function RecipeDetail() {
             )}
           </div>
 
-          {/* Nutrition - adjusted for requested servings */}
-          {adjustedNutrition && (
+          {/* Nutrition - always per serving (never scaled) */}
+          {perServingNutrition && (
             <div className="bg-muted rounded-xl p-4 mb-6">
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
                 <Flame className="w-4 h-4 text-primary" />
-                {t('recipes.nutrition')}
-                {requestedServings !== null && (
-                  <span className="text-xs text-muted-foreground font-normal">
-                    (for {parseFloat(requestedServings.toFixed(1))} servings)
-                  </span>
-                )}
+                Nutrition per serving
               </h3>
               <div className="grid grid-cols-4 gap-3">
                 <div className="text-center">
-                  <p className="text-xl font-bold text-primary">{adjustedNutrition.calories}</p>
+                  <p className="text-xl font-bold text-primary">{perServingNutrition.calories}</p>
                   <p className="text-xs text-muted-foreground">kcal</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-xl font-bold text-success">{adjustedNutrition.protein_g}g</p>
+                  <p className="text-xl font-bold text-success">{perServingNutrition.protein_g}g</p>
                   <p className="text-xs text-muted-foreground">protein</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-xl font-bold text-warning">{adjustedNutrition.carbs_g}g</p>
+                  <p className="text-xl font-bold text-warning">{perServingNutrition.carbs_g}g</p>
                   <p className="text-xs text-muted-foreground">carbs</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-xl font-bold text-destructive">{adjustedNutrition.fat_g}g</p>
+                  <p className="text-xl font-bold text-destructive">{perServingNutrition.fat_g}g</p>
                   <p className="text-xs text-muted-foreground">fat</p>
                 </div>
               </div>
