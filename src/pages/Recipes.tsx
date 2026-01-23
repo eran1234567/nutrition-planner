@@ -10,7 +10,7 @@ import { RecipeCard } from '@/components/recipe/RecipeCard';
 import { FilterDropdown } from '@/components/discover/FilterDropdown';
 import { MultiSelectDropdown } from '@/components/discover/MultiSelectDropdown';
 import { supabase } from '@/integrations/supabase/client';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -260,6 +260,7 @@ export default function Recipes() {
   const [recipeToRename, setRecipeToRename] = useState<UserRecipe | null>(null);
   const [newRecipeName, setNewRecipeName] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
 
   // URL-based filter state
   const searchQuery = searchParams.get('q') || '';
@@ -886,35 +887,90 @@ export default function Recipes() {
         )}
       </div>
 
-      {/* Floating Action Menu - only show when user has recipes */}
+      {/* Floating Speed Dial Menu - only show when user has recipes */}
       {userRecipes.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <motion.button
-              className="fixed bottom-24 right-4 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors z-20"
-              whileTap={{ scale: 0.95 }}
+        <div className="fixed bottom-24 right-4 z-20 flex flex-col-reverse items-center gap-3">
+          {/* Main FAB button */}
+          <motion.button
+            className="w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors"
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setFabOpen(!fabOpen)}
+          >
+            <motion.div
+              animate={{ rotate: fabOpen ? 45 : 0 }}
+              transition={{ duration: 0.2 }}
             >
               <Plus className="w-6 h-6" />
-            </motion.button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48 mb-2">
-            <DropdownMenuItem onClick={() => setShowAddDrawer(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              {t('recipes.addRecipe', 'Add Recipe')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/my-recipes')}>
-              <Upload className="w-4 h-4 mr-2" />
-              {t('recipes.manageSources', 'Manage Sources')}
-            </DropdownMenuItem>
-            <DropdownMenuItem 
-              onClick={() => setDeleteAllDialogOpen(true)}
-              className="text-destructive focus:text-destructive"
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              {t('recipes.deleteAll', 'Delete All Recipes')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            </motion.div>
+          </motion.button>
+
+          {/* Speed dial actions */}
+          <AnimatePresence>
+            {fabOpen && (
+              <>
+                {/* Backdrop to close menu */}
+                <motion.div
+                  className="fixed inset-0 z-[-1]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setFabOpen(false)}
+                />
+
+                {/* Delete All */}
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.3, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.3, y: 20 }}
+                  transition={{ duration: 0.15, delay: 0 }}
+                  onClick={() => { setDeleteAllDialogOpen(true); setFabOpen(false); }}
+                  className="group flex items-center gap-3"
+                >
+                  <span className="px-3 py-1.5 rounded-full bg-card text-destructive text-sm font-medium shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                    {t('recipes.deleteAll', 'Delete All')}
+                  </span>
+                  <div className="w-11 h-11 rounded-full bg-card shadow-md flex items-center justify-center text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors">
+                    <Trash2 className="w-5 h-5" />
+                  </div>
+                </motion.button>
+
+                {/* Manage Sources */}
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.3, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.3, y: 20 }}
+                  transition={{ duration: 0.15, delay: 0.05 }}
+                  onClick={() => { navigate('/my-recipes'); setFabOpen(false); }}
+                  className="group flex items-center gap-3"
+                >
+                  <span className="px-3 py-1.5 rounded-full bg-card text-foreground text-sm font-medium shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                    {t('recipes.manageSources', 'Manage Sources')}
+                  </span>
+                  <div className="w-11 h-11 rounded-full bg-card shadow-md flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors">
+                    <Upload className="w-5 h-5" />
+                  </div>
+                </motion.button>
+
+                {/* Add Recipe */}
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.3, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.3, y: 20 }}
+                  transition={{ duration: 0.15, delay: 0.1 }}
+                  onClick={() => { setShowAddDrawer(true); setFabOpen(false); }}
+                  className="group flex items-center gap-3"
+                >
+                  <span className="px-3 py-1.5 rounded-full bg-card text-foreground text-sm font-medium shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                    {t('recipes.addRecipe', 'Add Recipe')}
+                  </span>
+                  <div className="w-11 h-11 rounded-full bg-card shadow-md flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors">
+                    <Plus className="w-5 h-5" />
+                  </div>
+                </motion.button>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
       )}
 
       {/* Add Recipe Drawer */}
