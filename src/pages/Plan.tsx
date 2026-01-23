@@ -558,29 +558,41 @@ export default function Plan() {
           </div>
         ) : (
           /* Empty state - no plan yet */
-          <div className="py-12 text-center">
-            {selectedMealSlots.length === 0 ? (
-              <>
-                <p className="text-muted-foreground mb-4">Set up your nutrition goals to get started</p>
-                <Button onClick={() => setShowGoalsModal(true)}>
-                  <Settings className="w-4 h-4 mr-2" />
+          <div className="space-y-4">
+            {/* Lightweight "Set goals later" banner when goals are missing */}
+            {!dailyTargets && (
+              <div className="p-4 rounded-xl bg-muted/50 border border-border flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Settings className="w-4 h-4 text-primary" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Set your nutrition goals for personalized macro tracking
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setShowGoalsModal(true)}>
                   Set Goals
                 </Button>
-              </>
-            ) : !hasRecipesInPools ? (
-              <p className="text-muted-foreground">Use the button below to add recipes</p>
-            ) : (
-              <>
-                <p className="text-muted-foreground mb-4">Generate your meal plan</p>
-                <Button 
-                  onClick={handleGeneratePlan}
-                  disabled={!validation.isValid || isGenerating}
-                >
-                  <Sparkles className={cn('w-4 h-4 mr-2', isGenerating && 'animate-pulse')} />
-                  {isGenerating ? 'Generating...' : 'Generate Plan'}
-                </Button>
-              </>
+              </div>
             )}
+
+            {/* Always show instruction to add recipes */}
+            <div className="py-8 text-center">
+              {!hasRecipesInPools ? (
+                <p className="text-muted-foreground">Use the button below to add recipes</p>
+              ) : (
+                <>
+                  <p className="text-muted-foreground mb-4">Generate your meal plan</p>
+                  <Button 
+                    onClick={handleGeneratePlan}
+                    disabled={!validation.isValid || isGenerating}
+                  >
+                    <Sparkles className={cn('w-4 h-4 mr-2', isGenerating && 'animate-pulse')} />
+                    {isGenerating ? 'Generating...' : 'Generate Plan'}
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>
