@@ -442,6 +442,10 @@ export const useMealPlanStore = create<MealPlanState>()(
         generatedPlan: state.generatedPlan,
         lockedSlots: state.lockedSlots,
         macroCalculatorInputs: state.macroCalculatorInputs,
+        // Persist plan mode state so it survives navigation between pages
+        isPlanMode: state.isPlanMode,
+        currentSlotFilter: state.currentSlotFilter,
+        lastSelectedSlot: state.lastSelectedSlot,
       }),
     }
   )
