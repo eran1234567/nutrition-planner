@@ -137,8 +137,8 @@ export function RecipeCard({
           </div>
         )}
 
-        {/* Diet badges */}
-        <div className="absolute bottom-2 right-2 flex flex-wrap gap-1 justify-end max-w-[60%]">
+        {/* Diet badges - single row */}
+        <div className="absolute bottom-2 right-2 flex items-center gap-1">
           {visibleDietBadges.map((diet) => {
             const badge = DIET_BADGES[diet];
             if (!badge) return null;
@@ -146,19 +146,19 @@ export function RecipeCard({
               <span
                 key={diet}
                 className={cn(
-                  'px-1.5 py-0.5 rounded-full text-2xs font-semibold flex items-center gap-0.5',
+                  'px-1.5 py-0.5 rounded-full text-2xs font-semibold flex items-center gap-0.5 whitespace-nowrap',
                   badge.bgClass,
                   badge.textClass
                 )}
               >
                 {badge.icon}
-                {badge.label}
+                <span className="hidden sm:inline">{badge.label}</span>
               </span>
             );
           })}
           {showKidBadge && recipe.is_kid_friendly && (
-            <span className="px-1.5 py-0.5 rounded-full bg-warning/90 text-warning-foreground text-2xs font-medium">
-              👶 Kid
+            <span className="px-1.5 py-0.5 rounded-full bg-warning/90 text-warning-foreground text-2xs font-medium whitespace-nowrap">
+              👶<span className="hidden sm:inline"> Kid</span>
             </span>
           )}
         </div>
