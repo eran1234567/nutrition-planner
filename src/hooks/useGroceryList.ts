@@ -77,7 +77,11 @@ export function useGroceryList() {
         const recipe = recipeMap.get(slot.recipeId);
         if (!recipe) continue;
 
-        const multiplier = slot.servingMultiplier || 1;
+        // servingMultiplier is the absolute number of servings needed for this slot
+        // We need to calculate the ratio vs the recipe's base servings
+        const baseServings = recipe.servings || 1;
+        const neededServings = slot.servingMultiplier || 1;
+        const ingredientRatio = neededServings / baseServings;
 
         for (const ingredient of recipe.ingredients) {
           const normalizedName = normalizeIngredientName(ingredient.name);
@@ -87,7 +91,7 @@ export function useGroceryList() {
           const key = `${normalizedName}|${unit || ''}`;
 
           const existing = ingredientMap.get(key);
-          const scaledQuantity = (ingredient.quantity || 0) * multiplier;
+          const scaledQuantity = (ingredient.quantity || 0) * ingredientRatio;
 
           if (existing) {
             existing.quantity += scaledQuantity;
