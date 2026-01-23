@@ -40,6 +40,7 @@ export default function Plan() {
     generatedPlan,
     lockedSlots,
     isPlanMode,
+    macroCalculatorInputs,
     setGeneratedPlan,
     updateSlotMultiplier,
     toggleSlotLock,
@@ -53,6 +54,12 @@ export default function Plan() {
   const [hasShownInitialModal, setHasShownInitialModal] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const hasSavedPlanRef = useRef(false);
+
+  // Diet type is stored in the macro calculator inputs. The generator needs it to
+  // enforce keto carb caps and prefer fat add-ons instead of scaling servings.
+  const effectivePlanDietType = useMemo(() => {
+    return macroCalculatorInputs?.dietType === 'keto' ? 'keto' : 'default';
+  }, [macroCalculatorInputs?.dietType]);
 
   // Show nutrition goals modal on first visit if no goals are set
   useEffect(() => {
@@ -107,6 +114,7 @@ export default function Plan() {
           numberOfDays,
           lockedSlots,
           existingPlan: generatedPlan,
+          dietType: effectivePlanDietType,
         });
         
         setGeneratedPlan(plan);
@@ -126,7 +134,7 @@ export default function Plan() {
         setIsGenerating(false);
       }
     }, 300);
-  }, [dailyTargets, validation.isValid, selectedMealSlots, recipePoolsBySlot, exactAssignments, allRecipes, numberOfDays, lockedSlots, generatedPlan, setGeneratedPlan, setIsPlanMode, isAuthenticated, savePlan]);
+  }, [dailyTargets, validation.isValid, selectedMealSlots, recipePoolsBySlot, exactAssignments, allRecipes, numberOfDays, lockedSlots, generatedPlan, effectivePlanDietType, setGeneratedPlan, setIsPlanMode, isAuthenticated, savePlan]);
 
   // Auto-generate when coming from Discover with valid recipes
   useEffect(() => {
@@ -200,8 +208,8 @@ export default function Plan() {
       return { calories: 0, protein: 0, carbs: 0, fat: 0 };
     }
 
-    // Sum from recipe slots only (no extras - use optimizer for balancing)
-    return currentDayPlan.slots.reduce((acc, slot) => {
+    // Sum from recipe slots + solver extras (add-ons)
+    const slotTotals = currentDayPlan.slots.reduce((acc, slot) => {
       const recipe = recipeMap.get(slot.recipeId);
       if (!recipe?.nutrition) return acc;
 
@@ -213,6 +221,22 @@ export default function Plan() {
         fat: acc.fat + Math.round((recipe.nutrition.fat_g ?? 0) * multiplier),
       };
     }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+    const extrasTotals = (currentDayPlan.extras ?? []).reduce((acc, extra) => {
+      return {
+        calories: acc.calories + Math.round(extra.macros.calories ?? 0),
+        protein: acc.protein + Math.round(extra.macros.protein ?? 0),
+        carbs: acc.carbs + Math.round(extra.macros.carbs ?? 0),
+        fat: acc.fat + Math.round(extra.macros.fat ?? 0),
+      };
+    }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+    return {
+      calories: slotTotals.calories + extrasTotals.calories,
+      protein: slotTotals.protein + extrasTotals.protein,
+      carbs: slotTotals.carbs + extrasTotals.carbs,
+      fat: slotTotals.fat + extrasTotals.fat,
+    };
   }, [currentDayPlan, recipeMap, allRecipes.length]);
 
   // Calculate slot totals for display (recalculated from recipe data)
