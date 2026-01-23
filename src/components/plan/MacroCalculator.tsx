@@ -93,6 +93,9 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
   const [leanBodyMass, setLeanBodyMass] = useState(0); // in lbs
   const [fatMass, setFatMass] = useState(0); // in lbs
   
+  // Track whether we're restoring from saved state (skip diet preset effect)
+  const [isHydrating, setIsHydrating] = useState(false);
+  
   const [calculatedMacros, setCalculatedMacros] = useState({
     calories: 0,
     protein: 0,
@@ -103,6 +106,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
   // Load saved inputs when dialog opens - with fallback values for missing fields
   useEffect(() => {
     if (open && macroCalculatorInputs) {
+      setIsHydrating(true);
       setFormData({
         age: macroCalculatorInputs.age ?? '',
         weight: macroCalculatorInputs.weight ?? '',
@@ -127,6 +131,10 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
       setProteinPerLb(macroCalculatorInputs.proteinPerLb ?? 1.0);
       setCarbsPercent(macroCalculatorInputs.carbsPercent ?? 50);
       setFatPercent(macroCalculatorInputs.fatPercent ?? 30);
+      setLastAdjusted(macroCalculatorInputs.lastAdjusted ?? 'fat');
+      
+      // Clear hydrating flag after a tick so the diet effect doesn't override
+      setTimeout(() => setIsHydrating(false), 0);
     }
   }, [open, macroCalculatorInputs]);
 
@@ -225,8 +233,10 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
     setStep('body-composition');
   };
 
-  // When diet type changes, apply preset macro percentages
+  // When diet type changes (user interaction only, not hydration), apply preset macro percentages
   useEffect(() => {
+    if (isHydrating) return; // Skip during hydration to preserve saved values
+    
     const preset = dietMacroPresets[dietType];
     setCarbsPercent(preset.carbs);
     setFatPercent(preset.fat);
@@ -238,7 +248,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
       setProteinPerLb(1.0);
       setLastAdjusted('fat');
     }
-  }, [dietType]);
+  }, [dietType, isHydrating]);
 
   // Get protein slider range based on diet type
   const getProteinRange = () => {
@@ -427,6 +437,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
       proteinPerLb,
       carbsPercent,
       fatPercent,
+      lastAdjusted,
     });
     
     onApply(macros);

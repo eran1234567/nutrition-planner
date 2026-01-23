@@ -44,6 +44,7 @@ export interface MacroCalculatorInputs {
   proteinPerLb: number;
   carbsPercent: number;
   fatPercent: number;
+  lastAdjusted: 'carbs' | 'fat'; // tracks which macro to auto-calc
 }
 
 interface MealPlanState {
