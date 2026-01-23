@@ -51,7 +51,7 @@ export function AddToPlanModal({
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('pool');
   const [selectedDays, setSelectedDays] = useState<number[]>([0]);
   const [showReplaceConfirm, setShowReplaceConfirm] = useState(false);
-  const [conflictingDays, setConflictingDays] = useState<{ dayIndex: number; existingRecipeName: string }[]>();
+  const [conflictingDays, setConflictingDays] = useState<{ dayIndex: number; existingRecipeName: string }[]>([]);
 
   // Sync selected slot when modal opens
   useMemo(() => {
