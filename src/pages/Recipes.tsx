@@ -886,35 +886,36 @@ export default function Recipes() {
         )}
       </div>
 
-      {/* Floating Action Menu */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <motion.button
-            className="fixed bottom-24 right-4 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors z-20"
-            whileTap={{ scale: 0.95 }}
-          >
-            <Plus className="w-6 h-6" />
-          </motion.button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48 mb-2">
-          <DropdownMenuItem onClick={() => setShowAddDrawer(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            {t('recipes.addRecipe', 'Add Recipe')}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => navigate('/my-recipes')}>
-            <Upload className="w-4 h-4 mr-2" />
-            {t('recipes.manageSources', 'Manage Sources')}
-          </DropdownMenuItem>
-          <DropdownMenuItem 
-            onClick={() => setDeleteAllDialogOpen(true)}
-            className="text-destructive focus:text-destructive"
-            disabled={userRecipes.length === 0}
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            {t('recipes.deleteAll', 'Delete All Recipes')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {/* Floating Action Menu - only show when user has recipes */}
+      {userRecipes.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <motion.button
+              className="fixed bottom-24 right-4 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors z-20"
+              whileTap={{ scale: 0.95 }}
+            >
+              <Plus className="w-6 h-6" />
+            </motion.button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48 mb-2">
+            <DropdownMenuItem onClick={() => setShowAddDrawer(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              {t('recipes.addRecipe', 'Add Recipe')}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/my-recipes')}>
+              <Upload className="w-4 h-4 mr-2" />
+              {t('recipes.manageSources', 'Manage Sources')}
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={() => setDeleteAllDialogOpen(true)}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              {t('recipes.deleteAll', 'Delete All Recipes')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
 
       {/* Add Recipe Drawer */}
       <Drawer open={showAddDrawer} onOpenChange={(open) => {
