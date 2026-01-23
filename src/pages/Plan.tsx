@@ -592,7 +592,7 @@ export default function Plan() {
             className="flex-1"
             onClick={() => {
               setIsPlanMode(true);
-              navigate('/discover');
+              navigate('/discover?planMode=1');
             }}
           >
             <Plus className="w-4 h-4 mr-2" />
