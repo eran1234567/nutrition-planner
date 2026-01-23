@@ -1,61 +1,117 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Check, Trash2, WifiOff } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Check, Trash2, WifiOff, ShoppingCart, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { useAppStore } from '@/stores/appStore';
+import { useGroceryList, GroceryItem } from '@/hooks/useGroceryList';
 import { cn } from '@/lib/utils';
-
-// Mock grocery data organized by aisle
-const mockGroceries = [
-  { aisle: 'Produce', items: [
-    { id: '1', name: 'Avocados', quantity: 3, unit: 'whole', checked: false },
-    { id: '2', name: 'Lemons', quantity: 4, unit: 'whole', checked: false },
-    { id: '3', name: 'Spinach', quantity: 1, unit: 'bag', checked: true },
-  ]},
-  { aisle: 'Dairy', items: [
-    { id: '4', name: 'Greek yogurt', quantity: 2, unit: 'cups', checked: false },
-    { id: '5', name: 'Eggs', quantity: 12, unit: 'large', checked: false },
-  ]},
-  { aisle: 'Meat & Seafood', items: [
-    { id: '6', name: 'Chicken breast', quantity: 1.5, unit: 'lbs', checked: false },
-    { id: '7', name: 'Salmon fillet', quantity: 12, unit: 'oz', checked: false },
-  ]},
-];
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Grocery() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { isOnline } = useAppStore();
-  const [groceries, setGroceries] = useState(mockGroceries);
-  const [newItem, setNewItem] = useState('');
+  const { groceryList, totalItems, hasPlan, isLoading, numberOfDays } = useGroceryList();
+  
+  // Local checked state (not persisted for now)
+  const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
 
-  const toggleItem = (aisleIdx: number, itemId: string) => {
-    setGroceries(prev => prev.map((aisle, idx) => 
-      idx === aisleIdx 
-        ? {
-            ...aisle,
-            items: aisle.items.map(item => 
-              item.id === itemId ? { ...item, checked: !item.checked } : item
-            )
-          }
-        : aisle
-    ));
+  const toggleItem = (itemId: string) => {
+    setCheckedItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
+      } else {
+        newSet.add(itemId);
+      }
+      return newSet;
+    });
   };
 
-  const totalItems = groceries.reduce((acc, aisle) => acc + aisle.items.length, 0);
-  const checkedItems = groceries.reduce(
-    (acc, aisle) => acc + aisle.items.filter(i => i.checked).length, 
-    0
+  const clearChecked = () => {
+    setCheckedItems(new Set());
+  };
+
+  const checkedCount = checkedItems.size;
+  const progressPercent = totalItems > 0 ? Math.round((checkedCount / totalItems) * 100) : 0;
+
+  // Memoize the grocery list with checked state applied
+  const groceriesWithChecked = useMemo(() => 
+    groceryList.map(aisle => ({
+      ...aisle,
+      items: aisle.items.map(item => ({
+        ...item,
+        checked: checkedItems.has(item.id),
+      })),
+    })),
+    [groceryList, checkedItems]
   );
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background pb-24">
+        <div className="page-container">
+          <PageHeader
+            title={t('grocery.title')}
+            subtitle={t('grocery.loading', 'Loading grocery list...')}
+          />
+          <div className="space-y-4">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-14 w-full" />
+                <Skeleton className="h-14 w-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <BottomNav />
+      </div>
+    );
+  }
+
+  if (!hasPlan) {
+    return (
+      <div className="min-h-screen bg-background pb-24">
+        <div className="page-container">
+          <PageHeader
+            title={t('grocery.title')}
+            subtitle={t('grocery.noplan', 'No meal plan found')}
+          />
+          
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+              <ShoppingCart className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">
+              {t('grocery.noPlanTitle', 'No Grocery List Yet')}
+            </h3>
+            <p className="text-muted-foreground mb-6 max-w-sm">
+              {t('grocery.noPlanDescription', 'Generate a meal plan first to see your grocery list with all the ingredients you need.')}
+            </p>
+            <Button onClick={() => navigate('/plan')}>
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              {t('grocery.goToPlan', 'Go to Meal Plan')}
+            </Button>
+          </div>
+        </div>
+        <BottomNav />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-24">
       <div className="page-container">
         <PageHeader
           title={t('grocery.title')}
-          subtitle={t('grocery.items', { count: totalItems })}
+          subtitle={t('grocery.itemsForDays', '{{count}} items for {{days}} days', { 
+            count: totalItems, 
+            days: numberOfDays 
+          })}
         />
 
         {/* Offline indicator */}
@@ -66,36 +122,27 @@ export default function Grocery() {
           </div>
         )}
 
-        {/* Add item */}
-        <div className="flex gap-2 mb-6">
-          <Input
-            placeholder={t('grocery.addItem')}
-            value={newItem}
-            onChange={(e) => setNewItem(e.target.value)}
-            className="flex-1"
-          />
-          <Button size="icon" disabled={!newItem.trim()}>
-            <Plus className="w-4 h-4" />
-          </Button>
-        </div>
-
         {/* Progress */}
-        <div className="mb-6">
-          <div className="flex justify-between text-sm mb-2">
-            <span className="text-muted-foreground">{t('grocery.checkedOff', { count: checkedItems })}</span>
-            <span className="font-medium">{Math.round((checkedItems / totalItems) * 100)}%</span>
+        {totalItems > 0 && (
+          <div className="mb-6">
+            <div className="flex justify-between text-sm mb-2">
+              <span className="text-muted-foreground">
+                {t('grocery.checkedOff', { count: checkedCount })}
+              </span>
+              <span className="font-medium">{progressPercent}%</span>
+            </div>
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-primary transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
           </div>
-          <div className="h-2 bg-muted rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-primary transition-all duration-300"
-              style={{ width: `${(checkedItems / totalItems) * 100}%` }}
-            />
-          </div>
-        </div>
+        )}
 
         {/* Grocery list by aisle */}
         <div className="space-y-6">
-          {groceries.map((aisle, aisleIdx) => (
+          {groceriesWithChecked.map((aisle) => (
             <div key={aisle.aisle}>
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                 {aisle.aisle}
@@ -104,7 +151,7 @@ export default function Grocery() {
                 {aisle.items.map((item) => (
                   <button
                     key={item.id}
-                    onClick={() => toggleItem(aisleIdx, item.id)}
+                    onClick={() => toggleItem(item.id)}
                     className={cn(
                       'w-full flex items-center gap-3 p-3 rounded-lg transition-all tap-target',
                       item.checked 
@@ -129,7 +176,12 @@ export default function Grocery() {
                       </span>
                     </div>
                     <span className="text-sm text-muted-foreground">
-                      {item.quantity} {item.unit}
+                      {item.quantity > 0 && (
+                        <>
+                          {item.quantity}
+                          {item.unit && ` ${item.unit}`}
+                        </>
+                      )}
                     </span>
                   </button>
                 ))}
@@ -139,11 +191,30 @@ export default function Grocery() {
         </div>
 
         {/* Clear checked */}
-        {checkedItems > 0 && (
-          <Button variant="ghost" className="w-full mt-6 text-destructive hover:text-destructive">
+        {checkedCount > 0 && (
+          <Button 
+            variant="ghost" 
+            className="w-full mt-6 text-destructive hover:text-destructive"
+            onClick={clearChecked}
+          >
             <Trash2 className="w-4 h-4 mr-2" />
             {t('grocery.clearChecked')}
           </Button>
+        )}
+
+        {/* Empty state when plan exists but no ingredients */}
+        {totalItems === 0 && hasPlan && (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+              <ShoppingCart className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold mb-2">
+              {t('grocery.noIngredients', 'No Ingredients Found')}
+            </h3>
+            <p className="text-muted-foreground max-w-sm">
+              {t('grocery.noIngredientsDesc', 'The recipes in your meal plan don\'t have ingredient data yet.')}
+            </p>
+          </div>
         )}
       </div>
 
