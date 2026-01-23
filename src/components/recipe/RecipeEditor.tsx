@@ -112,7 +112,7 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
       setImageUrl(publicUrlData.publicUrl);
       toast.success(t('recipes.imageUploaded', 'Image uploaded'));
     } catch (error) {
-      console.error('Error uploading image:', error);
+      if (import.meta.env.DEV) console.error('Error uploading image:', error);
       toast.error(t('recipes.imageUploadError', 'Failed to upload image'));
     } finally {
       setIsUploadingImage(false);
@@ -136,7 +136,7 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
       setImageUrl(undefined);
       toast.success(t('recipes.imageDeleted', 'Image removed'));
     } catch (error) {
-      console.error('Error deleting image:', error);
+      if (import.meta.env.DEV) console.error('Error deleting image:', error);
       toast.error(t('recipes.imageDeleteError', 'Failed to remove image'));
     } finally {
       setIsUploadingImage(false);
@@ -398,7 +398,7 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
       toast.success(t('recipes.saved', 'Recipe saved successfully'));
       onSave(updatedRecipe);
     } catch (error) {
-      console.error('Error saving recipe:', error);
+      if (import.meta.env.DEV) console.error('Error saving recipe:', error);
       toast.error(t('recipes.saveError', 'Failed to save recipe'));
     } finally {
       setIsSaving(false);

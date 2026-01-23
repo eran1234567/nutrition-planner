@@ -60,7 +60,7 @@ export function useUserData() {
         .maybeSingle();
 
       if (profileError) {
-        console.error('Error fetching profile:', profileError);
+        if (import.meta.env.DEV) console.error('Error fetching profile:', profileError);
       }
 
       if (!profileData) {
@@ -79,12 +79,12 @@ export function useUserData() {
         .maybeSingle();
 
       if (prefsError) {
-        console.error('Error fetching preferences:', prefsError);
+        if (import.meta.env.DEV) console.error('Error fetching preferences:', prefsError);
       }
 
       setPreferences((prefsData as UserPreferences) ?? null);
     } catch (error) {
-      console.error('Error fetching user data:', error);
+      if (import.meta.env.DEV) console.error('Error fetching user data:', error);
     } finally {
       setLoading(false);
     }
@@ -135,7 +135,7 @@ export function useUserData() {
       }
       return result;
     } catch (error) {
-      console.error('Error saving profile:', error);
+      if (import.meta.env.DEV) console.error('Error saving profile:', error);
       toast.error('Failed to save profile');
       return null;
     }
@@ -165,7 +165,7 @@ export function useUserData() {
       // Use explicit profile ID if provided, otherwise resolve it
       const profileId = explicitProfileId || await resolveProfileId();
       if (!profileId) {
-        console.error('No profile ID available for saving preferences');
+        if (import.meta.env.DEV) console.error('No profile ID available for saving preferences');
         return null;
       }
 
@@ -201,7 +201,7 @@ export function useUserData() {
       setPreferences(created as UserPreferences);
       return created;
     } catch (error) {
-      console.error('Error saving preferences:', error);
+      if (import.meta.env.DEV) console.error('Error saving preferences:', error);
       toast.error('Failed to save preferences');
       return null;
     }

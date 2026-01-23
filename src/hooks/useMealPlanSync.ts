@@ -64,7 +64,7 @@ export function useMealPlanSync() {
           setActivePlanId(mealPlan.id);
         }
       } catch (e) {
-        console.error('Error checking active plan:', e);
+        if (import.meta.env.DEV) console.error('Error checking active plan:', e);
       }
       return;
     }
@@ -80,7 +80,7 @@ export function useMealPlanSync() {
         .maybeSingle();
 
       if (planError) {
-        console.error('Error loading meal plan:', planError);
+        if (import.meta.env.DEV) console.error('Error loading meal plan:', planError);
         return;
       }
 
@@ -100,7 +100,7 @@ export function useMealPlanSync() {
         .order('day_index', { ascending: true });
 
       if (daysError) {
-        console.error('Error loading meal plan days:', daysError);
+        if (import.meta.env.DEV) console.error('Error loading meal plan days:', daysError);
         return;
       }
 
@@ -114,7 +114,7 @@ export function useMealPlanSync() {
         .in('meal_plan_day_id', dayIds);
 
       if (mealsError) {
-        console.error('Error loading meals:', mealsError);
+        if (import.meta.env.DEV) console.error('Error loading meals:', mealsError);
         return;
       }
 
@@ -196,7 +196,7 @@ export function useMealPlanSync() {
       setGeneratedPlan(loadedPlan);
 
     } catch (error) {
-      console.error('Error in loadActivePlan:', error);
+      if (import.meta.env.DEV) console.error('Error in loadActivePlan:', error);
     } finally {
       setIsLoading(false);
     }
@@ -233,7 +233,7 @@ export function useMealPlanSync() {
         .single();
 
       if (planError || !newPlan) {
-        console.error('Error creating meal plan:', planError);
+        if (import.meta.env.DEV) console.error('Error creating meal plan:', planError);
         toast.error('Failed to save meal plan');
         return null;
       }
@@ -268,7 +268,7 @@ export function useMealPlanSync() {
         .select();
 
       if (daysError || !insertedDays) {
-        console.error('Error creating meal plan days:', daysError);
+        if (import.meta.env.DEV) console.error('Error creating meal plan days:', daysError);
         toast.error('Failed to save meal plan days');
         return null;
       }
@@ -301,7 +301,7 @@ export function useMealPlanSync() {
           .insert(mealsToInsert);
 
         if (mealsError) {
-          console.error('Error creating meals:', mealsError);
+          if (import.meta.env.DEV) console.error('Error creating meals:', mealsError);
           toast.error('Failed to save meals');
           return null;
         }
@@ -310,7 +310,7 @@ export function useMealPlanSync() {
       toast.success('Meal plan saved!');
       return newPlan.id;
     } catch (error) {
-      console.error('Error saving meal plan:', error);
+      if (import.meta.env.DEV) console.error('Error saving meal plan:', error);
       toast.error('Failed to save meal plan');
       return null;
     } finally {
@@ -366,14 +366,14 @@ export function useMealPlanSync() {
           .insert(mealsToInsert);
 
         if (error) {
-          console.error('Error updating meals:', error);
+          if (import.meta.env.DEV) console.error('Error updating meals:', error);
           return false;
         }
       }
 
       return true;
     } catch (error) {
-      console.error('Error updating plan:', error);
+      if (import.meta.env.DEV) console.error('Error updating plan:', error);
       return false;
     }
   }, [activePlanId, isAuthenticated]);

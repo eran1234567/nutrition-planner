@@ -117,7 +117,7 @@ export const useAuth = () => {
       const { error } = await supabase.auth.signOut();
       return { error };
     } catch (error) {
-      console.error('Sign out error:', error);
+      if (import.meta.env.DEV) console.error('Sign out error:', error);
       return { error: error as Error };
     }
   };

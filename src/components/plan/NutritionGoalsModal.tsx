@@ -236,7 +236,7 @@ export function NutritionGoalsModal({ open, onOpenChange, onSave }: NutritionGoa
       // Navigate to Discover to select recipes
       navigate('/discover');
     } catch (error) {
-      console.error('Error saving nutrition goals:', error);
+      if (import.meta.env.DEV) console.error('Error saving nutrition goals:', error);
       toast.error(t('common.error', 'Failed to save'));
     } finally {
       setIsSaving(false);

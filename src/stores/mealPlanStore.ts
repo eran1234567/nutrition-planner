@@ -208,7 +208,7 @@ export const useMealPlanStore = create<MealPlanState>()(
                 localStorage.setItem(userKey, JSON.stringify(merged));
                 localStorage.removeItem(anonKey);
               } catch (e) {
-                console.warn('Failed to migrate anonymous macro calculator inputs:', e);
+                if (import.meta.env.DEV) console.warn('Failed to migrate anonymous macro calculator inputs:', e);
               }
             }
           }
@@ -235,7 +235,7 @@ export const useMealPlanStore = create<MealPlanState>()(
                 }
               }
             } catch (e) {
-              console.warn('Failed to load user meal plan data:', e);
+              if (import.meta.env.DEV) console.warn('Failed to load user meal plan data:', e);
             }
           }
         }
@@ -249,13 +249,13 @@ export const useMealPlanStore = create<MealPlanState>()(
       
       addToPool: (slotId, recipeId) => set((state) => {
         const currentPool = state.recipePoolsBySlot[slotId] || [];
-        console.log('[MealPlanStore] addToPool called:', { slotId, recipeId, currentPool });
+        if (import.meta.env.DEV) console.log('[MealPlanStore] addToPool called:', { slotId, recipeId, currentPool });
         if (currentPool.includes(recipeId)) {
-          console.log('[MealPlanStore] Recipe already in pool, skipping:', recipeId);
+          if (import.meta.env.DEV) console.log('[MealPlanStore] Recipe already in pool, skipping:', recipeId);
           return state;
         }
         const newPool = [...currentPool, recipeId];
-        console.log('[MealPlanStore] New pool after add:', newPool);
+        if (import.meta.env.DEV) console.log('[MealPlanStore] New pool after add:', newPool);
         return {
           recipePoolsBySlot: {
             ...state.recipePoolsBySlot,

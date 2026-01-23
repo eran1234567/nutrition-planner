@@ -129,7 +129,7 @@ export default function Plan() {
           toast.success('Meal plan generated!');
         }
       } catch (error) {
-        console.error('Error generating plan:', error);
+        if (import.meta.env.DEV) console.error('Error generating plan:', error);
         toast.error('Failed to generate plan');
       } finally {
         setIsGenerating(false);
@@ -262,12 +262,12 @@ export default function Plan() {
           toast.success('Serving sizes rebalanced!');
           setIsGenerating(false);
         }).catch(error => {
-          console.error('Error rebalancing:', error);
+          if (import.meta.env.DEV) console.error('Error rebalancing:', error);
           toast.error('Failed to rebalance');
           setIsGenerating(false);
         });
       } catch (error) {
-        console.error('Error rebalancing:', error);
+        if (import.meta.env.DEV) console.error('Error rebalancing:', error);
         toast.error('Failed to rebalance');
         setIsGenerating(false);
       }
