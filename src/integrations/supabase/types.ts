@@ -653,7 +653,7 @@ export type Database = {
           id: string
           image_url: string | null
           is_budget_friendly: boolean | null
-          is_deleted: boolean | null
+          is_deleted: boolean
           is_kid_friendly: boolean | null
           is_meal_prep_friendly: boolean | null
           notes: string | null
@@ -677,7 +677,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_budget_friendly?: boolean | null
-          is_deleted?: boolean | null
+          is_deleted?: boolean
           is_kid_friendly?: boolean | null
           is_meal_prep_friendly?: boolean | null
           notes?: string | null
@@ -701,7 +701,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_budget_friendly?: boolean | null
-          is_deleted?: boolean | null
+          is_deleted?: boolean
           is_kid_friendly?: boolean | null
           is_meal_prep_friendly?: boolean | null
           notes?: string | null
