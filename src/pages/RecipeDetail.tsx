@@ -421,10 +421,17 @@ export default function RecipeDetail() {
           {/* Nutrition - always per serving (never scaled) */}
           {perServingNutrition && (
             <div className="bg-muted rounded-xl p-4 mb-6">
-              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                <Flame className="w-4 h-4 text-primary" />
-                Nutrition per serving
-              </h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Flame className="w-4 h-4 text-primary" />
+                  Nutrition per serving
+                </h3>
+                {recipe.serving_size && (
+                  <span className="text-xs text-muted-foreground bg-background px-2 py-1 rounded-md">
+                    1 serving = {recipe.serving_size}
+                  </span>
+                )}
+              </div>
               <div className="grid grid-cols-6 gap-2">
                 <div className="text-center">
                   <p className="text-lg font-bold text-primary">{perServingNutrition.calories}</p>

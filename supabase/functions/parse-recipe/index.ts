@@ -834,6 +834,7 @@ CRITICAL RULES:
           cook_time: sanitizedCookTime,
           total_time: sanitizedTotalTime,
           servings: sanitizedServings,
+          serving_size: sanitizedServingSize,
           difficulty: sanitizedDifficulty,
           cuisine: sanitizedCuisine,
           scope: seedGlobal ? 'global' : 'private',
