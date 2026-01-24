@@ -13,6 +13,53 @@ const corsHeaders = {
 
 const LOVABLE_API_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 
+// Magic bytes for file type validation
+const MAGIC_BYTES = {
+  jpeg: [[0xFF, 0xD8, 0xFF]],
+  png: [[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]],
+  gif: [[0x47, 0x49, 0x46, 0x38, 0x37, 0x61], [0x47, 0x49, 0x46, 0x38, 0x39, 0x61]],
+  webp: [[0x52, 0x49, 0x46, 0x46]], // RIFF header, followed by WEBP at bytes 8-11
+  pdf: [[0x25, 0x50, 0x44, 0x46]], // %PDF
+  docx: [[0x50, 0x4B, 0x03, 0x04]], // PK.. (ZIP archive)
+};
+
+// Validate file magic bytes match claimed type
+function validateMagicBytes(base64Content: string, expectedType: 'image' | 'pdf' | 'docx'): { valid: boolean; detectedType: string | null } {
+  try {
+    // Remove data URL prefix and get raw base64
+    const base64Data = base64Content.includes(',') 
+      ? base64Content.split(',')[1] 
+      : base64Content;
+    
+    // Decode first 16 bytes for checking
+    const binaryString = atob(base64Data.substring(0, 24)); // 24 base64 chars = 18 bytes
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    // Check for each known type
+    const matchesMagic = (patterns: number[][]) => {
+      return patterns.some(pattern => 
+        pattern.every((byte, idx) => bytes[idx] === byte)
+      );
+    };
+
+    // Detect actual file type
+    if (matchesMagic(MAGIC_BYTES.jpeg)) return { valid: expectedType === 'image', detectedType: 'jpeg' };
+    if (matchesMagic(MAGIC_BYTES.png)) return { valid: expectedType === 'image', detectedType: 'png' };
+    if (matchesMagic(MAGIC_BYTES.gif)) return { valid: expectedType === 'image', detectedType: 'gif' };
+    if (matchesMagic(MAGIC_BYTES.webp)) return { valid: expectedType === 'image', detectedType: 'webp' };
+    if (matchesMagic(MAGIC_BYTES.pdf)) return { valid: expectedType === 'pdf', detectedType: 'pdf' };
+    if (matchesMagic(MAGIC_BYTES.docx)) return { valid: expectedType === 'docx', detectedType: 'docx' };
+
+    return { valid: false, detectedType: null };
+  } catch (err) {
+    console.error('Magic byte validation error:', err);
+    return { valid: false, detectedType: null };
+  }
+}
+
 // Extract text content from DOCX file (which is a ZIP containing XML)
 async function extractTextFromDocx(base64Content: string): Promise<string> {
   try {
@@ -186,7 +233,7 @@ serve(async (req) => {
       );
     }
 
-    // 3. Validate image format if isImage flag is set
+    // 3. Validate image format if isImage flag is set (MIME type + magic bytes)
     if (isImage && content) {
       const validImagePattern = /^data:image\/(jpeg|jpg|png|gif|webp|heic);base64,/i;
       if (typeof content !== 'string' || !validImagePattern.test(content)) {
@@ -195,6 +242,19 @@ serve(async (req) => {
           JSON.stringify({ success: false, error: 'Invalid image format. Supported: JPEG, PNG, GIF, WebP' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
+      }
+      
+      // Validate magic bytes match claimed MIME type (excluding HEIC which has complex structure)
+      const mimeMatch = content.match(/^data:image\/(jpeg|jpg|png|gif|webp)/i);
+      if (mimeMatch) {
+        const magicResult = validateMagicBytes(content, 'image');
+        if (!magicResult.valid) {
+          console.error(`Magic byte mismatch: claimed ${mimeMatch[1]}, detected ${magicResult.detectedType || 'unknown'}`);
+          return new Response(
+            JSON.stringify({ success: false, error: 'File content does not match declared image type' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
       }
     }
 
@@ -214,7 +274,7 @@ serve(async (req) => {
       }
     }
 
-    // Check if content is a base64-encoded document (PDF, DOCX)
+    // Check if content is a base64-encoded document (PDF, DOCX) and validate magic bytes
     const isDocx = content && typeof content === 'string' && 
       (content.startsWith('data:application/vnd.openxmlformats') ||
        content.startsWith('data:application/msword') ||
@@ -224,6 +284,29 @@ serve(async (req) => {
       content.startsWith('data:application/pdf');
 
     const isBase64Document = isDocx || isPdf;
+
+    // Validate document magic bytes
+    if (isPdf && content) {
+      const magicResult = validateMagicBytes(content, 'pdf');
+      if (!magicResult.valid) {
+        console.error(`PDF magic byte mismatch: detected ${magicResult.detectedType || 'unknown'}`);
+        return new Response(
+          JSON.stringify({ success: false, error: 'File content does not match PDF format' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    if (isDocx && content) {
+      const magicResult = validateMagicBytes(content, 'docx');
+      if (!magicResult.valid) {
+        console.error(`DOCX magic byte mismatch: detected ${magicResult.detectedType || 'unknown'}`);
+        return new Response(
+          JSON.stringify({ success: false, error: 'File content does not match DOCX format' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
     // For documents, we'll send the base64 directly to AI for processing
     // For text, validate size
