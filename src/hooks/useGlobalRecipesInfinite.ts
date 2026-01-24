@@ -47,7 +47,7 @@ export interface GlobalRecipe {
 
 interface PageData {
   recipes: GlobalRecipe[];
-  nextCursor: string | null;
+  nextOffset: number | null;
   hasNextPage: boolean;
 }
 
@@ -101,59 +101,128 @@ function getSeedFallback(): GlobalRecipe[] {
     .sort((a, b) => a.title.localeCompare(b.title));
 }
 
-async function fetchPage(cursor: string | null): Promise<PageData> {
+async function fetchPage(offset: number): Promise<PageData> {
   try {
-    const { data, error } = await supabase.functions.invoke('list-global-recipes', {
-      body: { limit: PAGE_SIZE, cursor },
+    // Fetch list essentials first (fast), then fetch tags + nutrition in separate queries.
+    // We page in chunks to avoid statement timeouts.
+    const { data: recipes, error: recipesError } = await supabase
+      .from('recipes')
+      .select(
+        [
+          'id',
+          'title',
+          'description',
+          'image_url',
+          'prep_time',
+          'cook_time',
+          'total_time',
+          'servings',
+          'serving_size',
+          'difficulty',
+          'cuisine',
+          'is_kid_friendly',
+          'is_meal_prep_friendly',
+          'is_budget_friendly',
+          'scope',
+        ].join(',')
+      )
+      .eq('scope', 'global')
+      .eq('is_deleted', false)
+      .order('title', { ascending: true })
+      .range(offset, offset + PAGE_SIZE - 1);
+
+    if (recipesError) {
+      if (import.meta.env.DEV) {
+        console.warn('[useGlobalRecipesInfinite] global recipes query failed; using seed fallback', recipesError);
+      }
+      // Fallback to seed data (no pagination needed)
+      if (offset === 0) {
+        return { recipes: getSeedFallback(), nextOffset: null, hasNextPage: false };
+      }
+      return { recipes: [], nextOffset: null, hasNextPage: false };
+    }
+
+    const safeRecipes = (recipes ?? []) as any[];
+    const ids = safeRecipes.map((r) => r.id).filter(Boolean);
+
+    const [nutritionRes, tagsRes] = ids.length
+      ? await Promise.all([
+          supabase
+            .from('recipe_nutrition')
+            .select('recipe_id, calories, protein_g, carbs_g, fat_g, fiber_g, sodium_mg')
+            .in('recipe_id', ids),
+          supabase
+            .from('recipe_tags')
+            .select('recipe_id, tag_type, tag_value')
+            .in('recipe_id', ids),
+        ])
+      : [{ data: [], error: null }, { data: [], error: null }];
+
+    const nutritionById = new Map<string, GlobalRecipe['nutrition']>();
+    (nutritionRes.data || []).forEach((n: any) => {
+      if (!n?.recipe_id) return;
+      nutritionById.set(n.recipe_id, {
+        calories: n.calories ?? null,
+        protein_g: n.protein_g ?? null,
+        carbs_g: n.carbs_g ?? null,
+        fat_g: n.fat_g ?? null,
+        fiber_g: n.fiber_g ?? null,
+        sodium_mg: n.sodium_mg ?? null,
+      });
     });
 
-    if (!error && data?.recipes?.length > 0) {
-      const recipes: GlobalRecipe[] = (data.recipes || []).map((r: any) => ({
-        id: r.id,
-        title: r.title,
-        description: r.description ?? null,
-        image_url: r.image_url ?? null,
-        prep_time: r.prep_time ?? null,
-        cook_time: r.cook_time ?? null,
-        total_time: r.total_time ?? null,
-        servings: r.servings ?? null,
-        serving_size: r.serving_size ?? null,
-        difficulty: r.difficulty ?? null,
-        cuisine: r.cuisine ?? null,
-        is_kid_friendly: r.is_kid_friendly ?? null,
-        is_meal_prep_friendly: r.is_meal_prep_friendly ?? null,
-        is_budget_friendly: r.is_budget_friendly ?? null,
-        scope: r.scope ?? 'global',
-        nutrition: r.nutrition ?? undefined,
-        ingredients: [],
-        steps: [],
-        tags: r.tags ?? [],
-        isUserRecipe: false,
-      }));
+    const tagsById = new Map<string, GlobalRecipe['tags']>();
+    (tagsRes.data || []).forEach((t: any) => {
+      if (!t?.recipe_id) return;
+      const list = tagsById.get(t.recipe_id) || [];
+      list.push({ tag_type: t.tag_type, tag_value: t.tag_value });
+      tagsById.set(t.recipe_id, list);
+    });
 
-      return {
-        recipes,
-        nextCursor: data.nextCursor ?? null,
-        hasNextPage: data.hasNextPage ?? false,
-      };
-    }
+    const mapped: GlobalRecipe[] = safeRecipes.map((r: any) => ({
+      id: r.id,
+      title: r.title,
+      description: r.description ?? null,
+      image_url: r.image_url ?? null,
+      prep_time: r.prep_time ?? null,
+      cook_time: r.cook_time ?? null,
+      total_time: r.total_time ?? null,
+      servings: r.servings ?? null,
+      serving_size: r.serving_size ?? null,
+      difficulty: r.difficulty ?? null,
+      cuisine: r.cuisine ?? null,
+      is_kid_friendly: r.is_kid_friendly ?? null,
+      is_meal_prep_friendly: r.is_meal_prep_friendly ?? null,
+      is_budget_friendly: r.is_budget_friendly ?? null,
+      scope: r.scope ?? 'global',
+      nutrition: nutritionById.get(r.id) || undefined,
+      ingredients: [],
+      steps: [],
+      tags: tagsById.get(r.id) || [],
+      isUserRecipe: false,
+    }));
+
+    const hasNextPage = mapped.length === PAGE_SIZE;
+    return {
+      recipes: mapped,
+      hasNextPage,
+      nextOffset: hasNextPage ? offset + PAGE_SIZE : null,
+    };
   } catch (err) {
-    if (import.meta.env.DEV) console.warn('[useGlobalRecipesInfinite] Edge function failed, using seed fallback');
+    if (import.meta.env.DEV) console.warn('[useGlobalRecipesInfinite] request failed; using seed fallback', err);
+    if (offset === 0) {
+      return { recipes: getSeedFallback(), nextOffset: null, hasNextPage: false };
+    }
+    return { recipes: [], nextOffset: null, hasNextPage: false };
   }
-
-  // Fallback to seed data (no pagination needed - all in one page)
-  if (!cursor) {
-    return { recipes: getSeedFallback(), nextCursor: null, hasNextPage: false };
-  }
-  return { recipes: [], nextCursor: null, hasNextPage: false };
 }
 
 export function useGlobalRecipesInfinite() {
   return useInfiniteQuery<PageData, Error>({
     queryKey: ['global-recipes-infinite'],
-    queryFn: ({ pageParam }) => fetchPage(pageParam as string | null),
-    initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => (lastPage.hasNextPage ? lastPage.nextCursor : undefined),
+    queryFn: ({ pageParam }) => fetchPage(pageParam as number),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) => (lastPage.hasNextPage ? (lastPage.nextOffset ?? undefined) : undefined),
     staleTime: 1000 * 60 * 10,
     retry: 1,
     retryDelay: 1000,

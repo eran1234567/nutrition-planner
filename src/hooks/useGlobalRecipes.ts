@@ -99,75 +99,57 @@ export function useGlobalRecipes() {
     queryKey: ['global-recipes'],
     queryFn: async (): Promise<GlobalRecipe[]> => {
       try {
-        // Primary path: use backend function to avoid REST/RLS statement timeouts.
-        const fnRes = await supabase.functions.invoke('list-global-recipes', {
-          body: { limit: 1000 },
-        });
+        // NOTE: We no longer call the `list-global-recipes` backend function here.
+        // It has been unstable (500s due to DB statement timeouts) and was causing the UI
+        // to spam failing requests. Instead, load in pages using range() to keep each query small.
 
-        if (!fnRes.error && (fnRes.data as any)?.recipes) {
-          const fromFn = ((fnRes.data as any).recipes || []) as any[];
-          return fromFn.map((r: any) => ({
-            id: r.id,
-            title: r.title,
-            description: r.description ?? null,
-            image_url: r.image_url ?? null,
-            prep_time: r.prep_time ?? null,
-            cook_time: r.cook_time ?? null,
-            total_time: r.total_time ?? null,
-            servings: r.servings ?? null,
-            serving_size: r.serving_size ?? null,
-            difficulty: r.difficulty ?? null,
-            cuisine: r.cuisine ?? null,
-            is_kid_friendly: r.is_kid_friendly ?? null,
-            is_meal_prep_friendly: r.is_meal_prep_friendly ?? null,
-            is_budget_friendly: r.is_budget_friendly ?? null,
-            scope: r.scope ?? 'global',
-            nutrition: r.nutrition ?? undefined,
-            ingredients: [],
-            steps: [],
-            tags: r.tags ?? [],
-            isUserRecipe: false,
-          })) as GlobalRecipe[];
-        }
+        const PAGE_SIZE = 200;
+        let offset = 0;
+        const all: any[] = [];
 
-        if (fnRes.error && import.meta.env.DEV) {
-          console.warn('[useGlobalRecipes] list-global-recipes failed, falling back to REST:', fnRes.error);
-        }
-
-        // Fetch list essentials first (fast), then fetch tags + nutrition in separate queries.
-        // This avoids heavy nested joins that can hit statement timeouts as the catalog grows.
-        const { data: recipes, error: recipesError } = await supabase
-          .from('recipes')
-          .select(
+        while (true) {
+          const { data: page, error: pageError } = await supabase
+            .from('recipes')
+            .select(
+              `
+              id,
+              title,
+              description,
+              image_url,
+              prep_time,
+              cook_time,
+              total_time,
+              servings,
+              serving_size,
+              difficulty,
+              cuisine,
+              is_kid_friendly,
+              is_meal_prep_friendly,
+              is_budget_friendly,
+              scope
             `
-            id,
-            title,
-            description,
-            image_url,
-            prep_time,
-            cook_time,
-            total_time,
-            servings,
-            serving_size,
-            difficulty,
-            cuisine,
-            is_kid_friendly,
-            is_meal_prep_friendly,
-            is_budget_friendly,
-            scope
-          `
-          )
-          .eq('scope', 'global')
-          .eq('is_deleted', false)
-          .order('title')
-          .limit(1000);
+            )
+            .eq('scope', 'global')
+            .eq('is_deleted', false)
+            .order('title', { ascending: true })
+            .range(offset, offset + PAGE_SIZE - 1);
 
-        if (recipesError) {
-          if (import.meta.env.DEV) console.warn('[useGlobalRecipes] backend error, using seed fallback:', recipesError);
-          return getSeedFallback();
+          if (pageError) {
+            if (import.meta.env.DEV) console.warn('[useGlobalRecipes] backend error, using seed fallback:', pageError);
+            return getSeedFallback();
+          }
+
+          const safePage = (page || []) as any[];
+          all.push(...safePage);
+
+          if (safePage.length < PAGE_SIZE) break;
+          offset += PAGE_SIZE;
+
+          // Safety: Supabase hard limit is 1000 rows anyway.
+          if (offset >= 1000) break;
         }
 
-        const safeRecipes = (recipes || []) as any[];
+        const safeRecipes = all;
         if (safeRecipes.length === 0) return [];
 
         const ids = safeRecipes.map((r) => r.id).filter(Boolean);
