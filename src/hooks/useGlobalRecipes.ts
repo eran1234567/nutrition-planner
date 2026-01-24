@@ -99,6 +99,41 @@ export function useGlobalRecipes() {
     queryKey: ['global-recipes'],
     queryFn: async (): Promise<GlobalRecipe[]> => {
       try {
+        // Primary path: use backend function to avoid REST/RLS statement timeouts.
+        const fnRes = await supabase.functions.invoke('list-global-recipes', {
+          body: { limit: 1000 },
+        });
+
+        if (!fnRes.error && (fnRes.data as any)?.recipes) {
+          const fromFn = ((fnRes.data as any).recipes || []) as any[];
+          return fromFn.map((r: any) => ({
+            id: r.id,
+            title: r.title,
+            description: r.description ?? null,
+            image_url: r.image_url ?? null,
+            prep_time: r.prep_time ?? null,
+            cook_time: r.cook_time ?? null,
+            total_time: r.total_time ?? null,
+            servings: r.servings ?? null,
+            serving_size: r.serving_size ?? null,
+            difficulty: r.difficulty ?? null,
+            cuisine: r.cuisine ?? null,
+            is_kid_friendly: r.is_kid_friendly ?? null,
+            is_meal_prep_friendly: r.is_meal_prep_friendly ?? null,
+            is_budget_friendly: r.is_budget_friendly ?? null,
+            scope: r.scope ?? 'global',
+            nutrition: r.nutrition ?? undefined,
+            ingredients: [],
+            steps: [],
+            tags: r.tags ?? [],
+            isUserRecipe: false,
+          })) as GlobalRecipe[];
+        }
+
+        if (fnRes.error && import.meta.env.DEV) {
+          console.warn('[useGlobalRecipes] list-global-recipes failed, falling back to REST:', fnRes.error);
+        }
+
         // Fetch list essentials first (fast), then fetch tags + nutrition in separate queries.
         // This avoids heavy nested joins that can hit statement timeouts as the catalog grows.
         const { data: recipes, error: recipesError } = await supabase
