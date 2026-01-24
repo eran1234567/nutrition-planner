@@ -44,6 +44,16 @@ const HEALTH_BADGE_TOOLTIPS: Record<string, string> = {
   'heart-healthy': '≥ 5g fiber + < 300mg sodium',
 };
 
+// Diet badge tooltip definitions
+const DIET_BADGE_TOOLTIPS: Record<string, string> = {
+  keto: '≤ 8g carbs, ≥ 60% fat, ≤ 35% protein',
+  paleo: 'No grains, legumes, dairy, or refined oils',
+  mediterranean: 'No red meat, processed foods, or refined grains',
+  vegan: 'No animal products',
+  vegetarian: 'No meat or fish',
+  pescatarian: 'Fish allowed, no meat',
+};
+
 // Cuisine badge config with colors and icons
 const CUISINE_BADGES: Record<string, { label: string; icon: React.ReactNode; bgClass: string; textClass: string }> = {
   american: { label: 'American', icon: <UtensilsCrossed className="w-3 h-3" />, bgClass: 'bg-red-500/90', textClass: 'text-white' },
@@ -322,10 +332,30 @@ export default function RecipeDetail() {
                     {cuisineBadge.label}
                   </span>
                 )}
-                {/* Diet badges */}
+                {/* Diet badges with tooltips */}
                 {dietBadges.map((diet) => {
                   const badge = DIET_BADGES[diet];
                   if (!badge) return null;
+                  const tooltip = DIET_BADGE_TOOLTIPS[diet];
+                  
+                  if (tooltip) {
+                    return (
+                      <Tooltip key={diet}>
+                        <TooltipTrigger asChild>
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1 cursor-help ${badge.bgClass} ${badge.textClass}`}
+                          >
+                            {badge.icon}
+                            {badge.label}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="text-xs">
+                          {tooltip}
+                        </TooltipContent>
+                      </Tooltip>
+                    );
+                  }
+                  
                   return (
                     <span
                       key={diet}

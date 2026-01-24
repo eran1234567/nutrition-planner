@@ -53,6 +53,16 @@ const HEALTH_BADGE_TOOLTIPS: Record<string, string> = {
   'heart-healthy': '≥ 5g fiber + < 300mg sodium',
 };
 
+// Diet badge tooltip definitions
+const DIET_BADGE_TOOLTIPS: Record<string, string> = {
+  keto: '≤ 8g carbs, ≥ 60% fat, ≤ 35% protein',
+  paleo: 'No grains, legumes, dairy, or refined oils',
+  mediterranean: 'No red meat, processed foods, or refined grains',
+  vegan: 'No animal products',
+  vegetarian: 'No meat or fish',
+  pescatarian: 'Fish allowed, no meat',
+};
+
 // Cuisine badge config with colors and icons
 const CUISINE_BADGES: Record<string, { label: string; icon: React.ReactNode; bgClass: string; textClass: string }> = {
   american: { label: 'American', icon: <UtensilsCrossed className="w-3 h-3" />, bgClass: 'bg-red-500/90', textClass: 'text-white' },
@@ -200,7 +210,7 @@ export function RecipeCard({
             {visibleBadges.map((badgeKey) => {
               const badge = DIET_BADGES[badgeKey];
               if (!badge) return null;
-              const tooltip = HEALTH_BADGE_TOOLTIPS[badgeKey];
+              const tooltip = HEALTH_BADGE_TOOLTIPS[badgeKey] || DIET_BADGE_TOOLTIPS[badgeKey];
               
               const badgeElement = (
                 <span
@@ -215,7 +225,7 @@ export function RecipeCard({
                 </span>
               );
 
-              // Wrap health badges with tooltip
+              // Wrap badges with tooltip if available
               if (tooltip) {
                 return (
                   <Tooltip key={badgeKey}>
