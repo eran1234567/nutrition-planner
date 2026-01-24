@@ -112,6 +112,7 @@ async function fetchPage(offset: number): Promise<PageData> {
           'id',
           'title',
           'description',
+          'image_url',
           'prep_time',
           'cook_time',
           'total_time',
@@ -182,10 +183,7 @@ async function fetchPage(offset: number): Promise<PageData> {
       id: r.id,
       title: r.title,
       description: r.description ?? null,
-      // IMPORTANT: We intentionally do NOT fetch image_url in list queries.
-      // Many rows currently store very large base64 strings which can trigger statement timeouts.
-      // The UI will show a placeholder image in the grid; RecipeDetail fetches the full record.
-      image_url: null,
+      image_url: r.image_url ?? null,
       prep_time: r.prep_time ?? null,
       cook_time: r.cook_time ?? null,
       total_time: r.total_time ?? null,
