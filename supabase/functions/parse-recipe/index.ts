@@ -195,34 +195,56 @@ serve(async (req) => {
       );
     }
 
-    // Create a client with user's token to validate authentication
-    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
+    const token = authHeader.replace('Bearer ', '');
+    
+    // Check if this is a service-role request for seeding global recipes
+    const isServiceRole = token === supabaseServiceKey;
+    
+    let userId: string | null = null;
+    
+    if (isServiceRole) {
+      // Service role access - for seeding global recipes
+      console.log('Service role access: seeding global recipes');
+    } else {
+      // Regular user authentication
+      const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } }
+      });
 
-    // Use getUser() to validate the token and get user info
-    const { data: userData, error: userError } = await supabaseAuth.auth.getUser();
-    if (userError || !userData?.user) {
-      console.error('Authentication failed:', userError?.message || 'No user found');
-      return new Response(
-        JSON.stringify({ success: false, error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      // Use getUser() to validate the token and get user info
+      const { data: userData, error: userError } = await supabaseAuth.auth.getUser();
+      if (userError || !userData?.user) {
+        console.error('Authentication failed:', userError?.message || 'No user found');
+        return new Response(
+          JSON.stringify({ success: false, error: 'Unauthorized' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      userId = userData.user.id;
+      console.log(`Authenticated user: ${userId}`);
     }
-
-    const userId = userData.user.id;
-    console.log(`Authenticated user: ${userId}`);
 
     // Create service role client for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { uploadId, content, sourceUrl, fileType, isImage } = await req.json();
+    const { uploadId, content, sourceUrl, fileType, isImage, title, filters, seedGlobal } = await req.json();
+
+    // ========== SEED GLOBAL MODE VALIDATION ==========
+    // If seedGlobal is true, service-role is required and uploadId is optional
+    if (seedGlobal && !isServiceRole) {
+      console.error('Seed global mode requires service-role authentication');
+      return new Response(
+        JSON.stringify({ success: false, error: 'Forbidden: seedGlobal requires service-role access' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // ========== INPUT VALIDATION ==========
     
-    // 1. Validate uploadId format (UUID)
+    // 1. Validate uploadId format (UUID) - skip if seedGlobal mode
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uploadId || typeof uploadId !== 'string' || !uuidRegex.test(uploadId)) {
+    if (!seedGlobal && (!uploadId || typeof uploadId !== 'string' || !uuidRegex.test(uploadId))) {
       console.error('Invalid upload ID format:', uploadId);
       return new Response(
         JSON.stringify({ success: false, error: 'Invalid upload ID format' }),
@@ -328,10 +350,12 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Processing upload ${uploadId}, isImage: ${isImage}, isDocx: ${isDocx}, isPdf: ${isPdf}`);
+    console.log(`Processing ${seedGlobal ? 'seed global' : 'upload ' + uploadId}, isImage: ${isImage}, isDocx: ${isDocx}, isPdf: ${isPdf}`);
 
-    // Update status to parsing
-    await supabase.from('uploads').update({ status: 'parsing' }).eq('id', uploadId);
+    // Update status to parsing (skip if seedGlobal mode)
+    if (!seedGlobal && uploadId) {
+      await supabase.from('uploads').update({ status: 'parsing' }).eq('id', uploadId);
+    }
 
     // Build the prompt based on content type
     const systemPrompt = `You are an AI expert in nutrition science, metabolic health, professional cooking, recipe engineering, macro calculation, and meal scaling.
@@ -605,24 +629,35 @@ CRITICAL RULES:
       throw new Error('Invalid AI response: missing recipes array');
     }
 
-    // Get the upload to find owner
-    const { data: upload } = await supabase
-      .from('uploads')
-      .select('owner_user_id')
-      .eq('id', uploadId)
-      .single();
+    // For seedGlobal mode, we don't need an upload record
+    let ownerUserId: string | null = null;
+    
+    if (seedGlobal) {
+      // Global recipes have no owner
+      ownerUserId = null;
+      console.log('Seed global mode: creating global recipes with no owner');
+    } else {
+      // Get the upload to find owner
+      const { data: upload } = await supabase
+        .from('uploads')
+        .select('owner_user_id')
+        .eq('id', uploadId)
+        .single();
 
-    if (!upload) {
-      throw new Error('Upload not found');
-    }
+      if (!upload) {
+        throw new Error('Upload not found');
+      }
 
-    // ========== OWNERSHIP VERIFICATION ==========
-    if (upload.owner_user_id !== userId) {
-      console.error(`Ownership mismatch: upload owner ${upload.owner_user_id} vs authenticated user ${userId}`);
-      return new Response(
-        JSON.stringify({ success: false, error: 'Forbidden: You do not own this upload' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      // ========== OWNERSHIP VERIFICATION ==========
+      if (upload.owner_user_id !== userId) {
+        console.error(`Ownership mismatch: upload owner ${upload.owner_user_id} vs authenticated user ${userId}`);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Forbidden: You do not own this upload' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      ownerUserId = upload.owner_user_id;
     }
 
     console.log(`Found ${parsedRecipes.recipes.length} recipes to save`);
@@ -663,7 +698,7 @@ CRITICAL RULES:
       const { data: newRecipe, error: recipeError } = await supabase
         .from('recipes')
         .insert({
-          owner_user_id: upload.owner_user_id,
+          owner_user_id: ownerUserId,
           title: sanitizedTitle,
           description: sanitizedDescription,
           prep_time: sanitizedPrepTime,
@@ -672,7 +707,7 @@ CRITICAL RULES:
           servings: sanitizedServings,
           difficulty: sanitizedDifficulty,
           cuisine: sanitizedCuisine,
-          scope: 'private',
+          scope: seedGlobal ? 'global' : 'private',
           is_kid_friendly: typeof recipe.is_kid_friendly === 'boolean' ? recipe.is_kid_friendly : false,
           is_meal_prep_friendly: typeof recipe.is_meal_prep_friendly === 'boolean' ? recipe.is_meal_prep_friendly : false,
           is_budget_friendly: typeof recipe.is_budget_friendly === 'boolean' ? recipe.is_budget_friendly : false,
@@ -789,11 +824,13 @@ CRITICAL RULES:
         relatedPromises.push(supabase.from('recipe_tags').insert(allTags));
       }
 
-      // Link upload to recipe
-      relatedPromises.push(supabase.from('upload_recipe_links').insert({
-        upload_id: uploadId,
-        recipe_id: newRecipe.id,
-      }));
+      // Link upload to recipe (skip for seedGlobal mode)
+      if (!seedGlobal && uploadId) {
+        relatedPromises.push(supabase.from('upload_recipe_links').insert({
+          upload_id: uploadId,
+          recipe_id: newRecipe.id,
+        }));
+      }
 
       await Promise.all(relatedPromises);
       
@@ -805,19 +842,21 @@ CRITICAL RULES:
 
     console.log(`Successfully saved ${createdRecipes.length} recipes in ${Date.now() - aiStartTime}ms total`);
 
-    // Update upload status
-    const recipesCount = createdRecipes.length;
-    if (recipesCount === 1 && createdRecipes[0]?.title) {
-      await supabase.from('uploads').update({
-        status: 'parsed',
-        parsed_text: aiContent,
-        file_name: createdRecipes[0].title,
-      }).eq('id', uploadId);
-    } else {
-      await supabase.from('uploads').update({
-        status: 'parsed',
-        parsed_text: aiContent,
-      }).eq('id', uploadId);
+    // Update upload status (skip for seedGlobal mode)
+    if (!seedGlobal && uploadId) {
+      const recipesCount = createdRecipes.length;
+      if (recipesCount === 1 && createdRecipes[0]?.title) {
+        await supabase.from('uploads').update({
+          status: 'parsed',
+          parsed_text: aiContent,
+          file_name: createdRecipes[0].title,
+        }).eq('id', uploadId);
+      } else {
+        await supabase.from('uploads').update({
+          status: 'parsed',
+          parsed_text: aiContent,
+        }).eq('id', uploadId);
+      }
     }
 
     // Generate images in background AFTER returning response
