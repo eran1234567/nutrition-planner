@@ -34,7 +34,7 @@ export function MacroGapIndicator({
     const carbsPercent = dailyTargets.carbs > 0 ? (carbsDev / dailyTargets.carbs) * 100 : 0;
     const fatPercent = dailyTargets.fat > 0 ? (fatDev / dailyTargets.fat) * 100 : 0;
     
-    // Only show significant deviations (>5%)
+    // Only show significant deviations (>5%) - Order: Cal, Protein, Fat, Carbs
     if (Math.abs(caloriePercent) > 5) {
       result.push({
         macro: 'calories',
@@ -57,17 +57,6 @@ export function MacroGapIndicator({
       });
     }
     
-    if (Math.abs(carbsPercent) > 5) {
-      result.push({
-        macro: 'carbs',
-        deviation: carbsDev,
-        percent: carbsPercent,
-        label: `${carbsDev > 0 ? '+' : ''}${Math.round(carbsDev)}g C`,
-        icon: <Wheat className="w-3.5 h-3.5" />,
-        color: 'hsl(var(--carbs))',
-      });
-    }
-    
     if (Math.abs(fatPercent) > 5) {
       result.push({
         macro: 'fat',
@@ -76,6 +65,17 @@ export function MacroGapIndicator({
         label: `${fatDev > 0 ? '+' : ''}${Math.round(fatDev)}g F`,
         icon: <Droplets className="w-3.5 h-3.5" />,
         color: 'hsl(var(--fat))',
+      });
+    }
+    
+    if (Math.abs(carbsPercent) > 5) {
+      result.push({
+        macro: 'carbs',
+        deviation: carbsDev,
+        percent: carbsPercent,
+        label: `${carbsDev > 0 ? '+' : ''}${Math.round(carbsDev)}g C`,
+        icon: <Wheat className="w-3.5 h-3.5" />,
+        color: 'hsl(var(--carbs))',
       });
     }
     

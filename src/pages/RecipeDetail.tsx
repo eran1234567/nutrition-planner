@@ -380,12 +380,12 @@ export default function RecipeDetail() {
                   <p className="text-xs text-muted-foreground">protein</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-bold text-carbs">{perServingNutrition.carbs_g}g</p>
-                  <p className="text-xs text-muted-foreground">carbs</p>
-                </div>
-                <div className="text-center">
                   <p className="text-lg font-bold text-fat">{perServingNutrition.fat_g}g</p>
                   <p className="text-xs text-muted-foreground">fat</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold text-carbs">{perServingNutrition.carbs_g}g</p>
+                  <p className="text-xs text-muted-foreground">carbs</p>
                 </div>
                 <div className="text-center">
                   <p className="text-lg font-bold text-fiber">{perServingNutrition.fiber_g}g</p>
