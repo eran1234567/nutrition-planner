@@ -84,6 +84,8 @@ export default function RecipeDetail() {
       protein_g: Math.round(n.protein_g || 0),
       carbs_g: Math.round(n.carbs_g || 0),
       fat_g: Math.round(n.fat_g || 0),
+      fiber_g: Math.round(n.fiber_g || 0),
+      sodium_mg: Math.round(n.sodium_mg || 0),
     };
   }, [recipe?.nutrition]);
 
@@ -327,22 +329,30 @@ export default function RecipeDetail() {
                 <Flame className="w-4 h-4 text-primary" />
                 Nutrition per serving
               </h3>
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-6 gap-2">
                 <div className="text-center">
-                  <p className="text-xl font-bold text-primary">{perServingNutrition.calories}</p>
+                  <p className="text-lg font-bold text-primary">{perServingNutrition.calories}</p>
                   <p className="text-xs text-muted-foreground">kcal</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-xl font-bold text-success">{perServingNutrition.protein_g}g</p>
+                  <p className="text-lg font-bold text-protein">{perServingNutrition.protein_g}g</p>
                   <p className="text-xs text-muted-foreground">protein</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-xl font-bold text-warning">{perServingNutrition.carbs_g}g</p>
+                  <p className="text-lg font-bold text-carbs">{perServingNutrition.carbs_g}g</p>
                   <p className="text-xs text-muted-foreground">carbs</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-xl font-bold text-destructive">{perServingNutrition.fat_g}g</p>
+                  <p className="text-lg font-bold text-fat">{perServingNutrition.fat_g}g</p>
                   <p className="text-xs text-muted-foreground">fat</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold text-fiber">{perServingNutrition.fiber_g}g</p>
+                  <p className="text-xs text-muted-foreground">fiber</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-bold text-sodium">{perServingNutrition.sodium_mg}</p>
+                  <p className="text-xs text-muted-foreground">sodium</p>
                 </div>
               </div>
             </div>

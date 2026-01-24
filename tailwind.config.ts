@@ -81,6 +81,7 @@ export default {
         carbs: "hsl(var(--carbs))",
         fat: "hsl(var(--fat))",
         fiber: "hsl(var(--fiber))",
+        sodium: "hsl(var(--sodium))",
         // Meal type colors
         breakfast: "hsl(var(--breakfast))",
         lunch: "hsl(var(--lunch))",
