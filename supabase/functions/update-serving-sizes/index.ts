@@ -83,28 +83,37 @@ serve(async (req) => {
 Title: ${recipe.title}
 Ingredients: ${ingredientsList}
 
-Describe what ONE SERVING equals in terms of the COMPLETED DISH, not ingredient weights.
+Calculate what ONE SERVING equals in terms of the COMPLETED DISH with SPECIFIC COUNTS.
 
-RULES BY DISH TYPE:
-- Single-item dishes (bowls, sandwiches, wraps, plates): "1 bowl" or "1 sandwich" or "1 wrap"
-- Countable items (meatballs, patties, tacos, stuffed peppers): "4 meatballs" or "2 tacos" or "1 stuffed pepper"
-- Multi-component dishes (meatballs + sides): "4 meatballs + 1.5 cups potatoes + 1 cup sauce"
-- Rice/grain dishes: "1 cup rice mixture" or "1.5 cups fried rice"
-- Liquids (soups, shakes, smoothies, drinks): "1 cup soup" or "12 oz shake" or "1 bowl (2 cups)"
-- Protein + sides: "1 chicken breast + 1 cup vegetables" or "6 oz salmon + 1 cup rice"
+CRITICAL CALCULATION RULES:
+1. For countable protein items (chicken tenders, wings, drumsticks, meatballs, patties, nuggets):
+   - Calculate: total quantity ÷ number of servings = pieces per serving
+   - Example: "1.5 lbs chicken tenders" ≈ 12 tenders total ÷ 4 servings = "3 chicken tenders"
+   - Example: "16 meatballs total" ÷ 4 servings = "4 meatballs"
+   - If the ingredient says "chicken tenders" or "tenderloins", calculate approximate count (1 lb ≈ 6-8 tenders)
 
-DO NOT include ingredient gram weights. Focus on the final plated/served portions.
+2. For whole protein pieces (chicken breasts, steaks, pork chops, fish fillets):
+   - Use piece count if countable: "1 chicken breast" or "1 pork chop"
+   - Or use weight per serving: "6 oz salmon" or "5 oz steak"
+
+3. For non-countable items (soups, stews, rice dishes, salads):
+   - Use volume: "1 cup soup" or "1.5 cups fried rice" or "1 bowl"
+
+4. For multi-component dishes:
+   - Combine protein count + sides: "3 chicken tenders + 1 cup vegetables"
+
+DO NOT say generic things like "1 chicken breast equivalent" - be SPECIFIC with actual piece counts or weights.
 
 Respond with ONLY the serving size description, no explanation. Keep it under 60 characters.
 Examples:
-- "1 bowl"
+- "3 chicken tenders"
 - "4 meatballs + 1.5 cups potatoes + sauce"
-- "2 tacos"
-- "1 stuffed pepper + 0.5 cup rice"
-- "1 cup soup"
+- "6 oz salmon + 1 cup rice"
 - "1 chicken breast + 1 cup vegetables"
 - "12 oz smoothie"
-- "1.5 cups fried rice"`;
+- "1 bowl (2 cups)"`;
+
+
 
           const aiResponse = await fetch(LOVABLE_API_URL, {
             method: 'POST',

@@ -492,24 +492,33 @@ SERVINGS AND MEAL PREP RULES
 
 SERVING SIZE DESCRIPTION (serving_size field):
 The serving_size field describes what ONE SERVING equals in terms of the COMPLETED DISH.
-DO NOT include ingredient gram weights. Focus on final plated/served portions.
+Be SPECIFIC with actual piece counts - avoid generic descriptions.
 
-RULES BY DISH TYPE:
-- Single-item dishes (bowls, sandwiches, wraps): "1 bowl" or "1 sandwich" or "1 wrap"
-- Countable items (meatballs, patties, tacos, stuffed peppers): "4 meatballs" or "2 tacos"
-- Multi-component dishes: "4 meatballs + 1.5 cups potatoes + 1 cup sauce"
-- Rice/grain dishes: "1 cup rice mixture" or "1.5 cups fried rice"
-- Liquids (soups, shakes, smoothies): "1 cup soup" or "12 oz shake" or "1 bowl (2 cups)"
-- Protein + sides: "1 chicken breast + 1 cup vegetables" or "6 oz salmon + 1 cup rice"
+CRITICAL CALCULATION RULES:
+1. For countable protein items (chicken tenders, wings, drumsticks, meatballs, patties, nuggets):
+   - Calculate: total quantity ÷ number of servings = pieces per serving
+   - Example: "1.5 lbs chicken tenders" ≈ 12 tenders total ÷ 4 servings = "3 chicken tenders"
+   - Example: "16 meatballs total" ÷ 4 servings = "4 meatballs"
+   - Conversion: 1 lb raw chicken tenders ≈ 6-8 tenders
 
-DISCRETE FOODS RULE (For countable items like meatballs, patties, stuffed peppers):
-- State total units made in instructions
-- State how many units equal one serving in serving_size
-Example: Instructions say "Form into 16 meatballs", serving_size = "4 meatballs"
+2. For whole protein pieces (chicken breasts, steaks, pork chops, fish fillets):
+   - Use piece count if countable: "1 chicken breast" or "1 pork chop"
+   - Or use cooked weight per serving: "6 oz salmon" or "5 oz steak"
+
+3. For non-countable items (soups, stews, rice dishes, salads):
+   - Use volume: "1 cup soup" or "1.5 cups fried rice" or "1 bowl"
+
+4. For multi-component dishes:
+   - Combine protein count + sides: "3 chicken tenders + 1 cup vegetables"
+
+DO NOT say generic things like "1 chicken breast equivalent" - be SPECIFIC.
+
+DISCRETE FOODS RULE:
+- State total units made in instructions (e.g., "Form into 16 meatballs")
+- Calculate pieces per serving in serving_size (e.g., "4 meatballs")
 
 MEAL PREP MAPPING:
-- 1 container = 1 serving
-- Container contents must be explicit
+- 1 container = 1 serving with explicit contents
 Example: "1 container = 4 meatballs + 1 cup potatoes + 1/2 cup sauce"
 
 ═══════════════════════════════════════════════════════════════
