@@ -1367,8 +1367,147 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { cuisine, limit } = await req.json();
+    let body: { cuisine?: string; limit?: number } = {};
+    try {
+      body = await req.json();
+    } catch {
+      // No body provided, seed all cuisines
+    }
     
+    const { cuisine, limit } = body;
+    
+    // If no cuisine specified, seed ALL cuisines
+    if (!cuisine) {
+      const allResults: { cuisine: string; count: number; recipes: string[] }[] = [];
+      
+      for (const [cuisineName, cuisineRecipes] of Object.entries(recipesByCuisine)) {
+        const cuisineResults: string[] = [];
+        const recipesToAdd = limit ? cuisineRecipes.slice(0, limit) : cuisineRecipes;
+        
+        for (const recipe of recipesToAdd) {
+          // Check if recipe already exists
+          const { data: existing } = await supabase
+            .from("recipes")
+            .select("id")
+            .eq("title", recipe.title)
+            .eq("scope", "global")
+            .maybeSingle();
+
+          if (existing) {
+            cuisineResults.push(`${recipe.title} (exists)`);
+            continue;
+          }
+
+          // Calculate serving_size using AI Chef rules
+          const servingSize = await calculateServingSize(
+            recipe.title,
+            recipe.servings,
+            recipe.ingredients,
+            LOVABLE_API_KEY
+          );
+
+          // Generate AI image based on ingredients for accuracy
+          const generatedImage = await generateRecipeImage(
+            recipe.title,
+            recipe.description,
+            recipe.ingredients,
+            LOVABLE_API_KEY
+          );
+          
+          const imageUrl = generatedImage || getStaticImageUrl(recipe.title);
+
+          // Insert recipe
+          const { data: newRecipe, error: recipeError } = await supabase
+            .from("recipes")
+            .insert({
+              title: recipe.title,
+              description: recipe.description,
+              prep_time: recipe.prep_time,
+              cook_time: recipe.cook_time,
+              total_time: recipe.total_time,
+              servings: recipe.servings,
+              serving_size: servingSize,
+              difficulty: recipe.difficulty,
+              cuisine: cuisineName,
+              is_kid_friendly: recipe.is_kid_friendly,
+              is_meal_prep_friendly: recipe.is_meal_prep_friendly,
+              is_budget_friendly: recipe.is_budget_friendly,
+              scope: "global",
+              owner_user_id: null,
+              image_url: imageUrl
+            })
+            .select()
+            .single();
+
+          if (recipeError) {
+            cuisineResults.push(`${recipe.title} (error: ${recipeError.message})`);
+            continue;
+          }
+
+          // Insert nutrition
+          await supabase.from("recipe_nutrition").insert({
+            recipe_id: newRecipe.id,
+            calories: recipe.calories,
+            protein_g: recipe.protein_g,
+            carbs_g: recipe.carbs_g,
+            fat_g: recipe.fat_g,
+            fiber_g: recipe.fiber_g,
+            sodium_mg: recipe.sodium_mg
+          });
+
+          // Insert ingredients
+          for (let i = 0; i < recipe.ingredients.length; i++) {
+            const ing = recipe.ingredients[i];
+            await supabase.from("recipe_ingredients").insert({
+              recipe_id: newRecipe.id,
+              name: ing.name,
+              quantity: ing.quantity,
+              unit: ing.unit,
+              aisle: ing.aisle,
+              order_index: i,
+              normalized_name: ing.name.toLowerCase()
+            });
+          }
+
+          // Insert steps
+          for (let i = 0; i < recipe.steps.length; i++) {
+            await supabase.from("recipe_steps").insert({
+              recipe_id: newRecipe.id,
+              step_number: i + 1,
+              instruction: recipe.steps[i]
+            });
+          }
+
+          // Insert tags
+          for (const tag of recipe.tags) {
+            await supabase.from("recipe_tags").insert({
+              recipe_id: newRecipe.id,
+              tag_type: tag.tag_type,
+              tag_value: tag.tag_value
+            });
+          }
+
+          cuisineResults.push(`${recipe.title} (created)`);
+        }
+        
+        allResults.push({ 
+          cuisine: cuisineName, 
+          count: cuisineResults.filter(r => r.includes('created')).length,
+          recipes: cuisineResults 
+        });
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          totalCreated: allResults.reduce((sum, r) => sum + r.count, 0),
+          results: allResults 
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    // Single cuisine mode
     const cuisineRecipes = recipesByCuisine[cuisine];
     if (!cuisineRecipes) {
       return new Response(

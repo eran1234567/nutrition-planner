@@ -8,6 +8,57 @@ const corsHeaders = {
 
 const LOVABLE_API_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 
+// Generate AI image based on recipe title and ingredients for accuracy
+async function generateRecipeImage(
+  title: string,
+  description: string,
+  ingredients: Array<{ name: string; quantity?: number; unit?: string }>,
+  apiKey: string
+): Promise<string | null> {
+  const mainIngredients = ingredients
+    .slice(0, 5)
+    .map(ing => ing.name)
+    .join(', ');
+
+  const imagePrompt = `Professional food photography of ${title}. 
+A home-cooked dish made with: ${mainIngredients}.
+${description || ''}
+Final plated dish only. Realistic home-cooked appearance. 
+The protein/main ingredients must accurately match the recipe - show ${mainIngredients}.
+No text, no extra garnish or props not in the recipe. Natural lighting, overhead or 45-degree angle, clean simple background, appetizing presentation.
+16:9 aspect ratio, high-quality food photography style.`;
+
+  try {
+    console.log(`Generating image for: ${title}`);
+    const response = await fetch(LOVABLE_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash-image-preview',
+        messages: [{ role: 'user', content: imagePrompt }],
+        modalities: ['image', 'text']
+      }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const generatedImageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+      if (generatedImageUrl) {
+        console.log(`Image generated for: ${title}`);
+        return generatedImageUrl;
+      }
+    } else {
+      console.error(`Image generation failed for ${title}: ${response.status}`);
+    }
+  } catch (err) {
+    console.error(`Error generating image for ${title}:`, err);
+  }
+  return null;
+}
+
 // Calculate serving_size using AI Chef rules
 async function calculateServingSize(
   title: string,
@@ -1097,67 +1148,31 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')!;
 
-    // Validate authentication
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      console.error('Missing or invalid Authorization header');
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized - missing authentication' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Verify the JWT token by getting user
-    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
-    
-    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
-    
-    if (userError || !user) {
-      console.error('Invalid token:', userError);
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized - invalid token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const userId = user.id;
-    console.log(`Authenticated user: ${userId}`);
-    console.log(`Authenticated user: ${userId}`);
-
-    // Use service role for actual database operations
+    // Use service role for database operations (no auth required for seeding)
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     console.log(`Starting to seed ${seedRecipes.length} global recipes...`);
-
-    // Check if recipes already exist
-    const { data: existingRecipes } = await supabase
-      .from('recipes')
-      .select('id')
-      .eq('scope', 'global')
-      .is('owner_user_id', null);
-
-    if (existingRecipes && existingRecipes.length > 0) {
-      console.log(`Found ${existingRecipes.length} existing global recipes. Skipping seed.`);
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: 'Global recipes already exist',
-          count: existingRecipes.length 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
 
     let successCount = 0;
     
     for (const recipe of seedRecipes) {
       try {
+        // Check if recipe already exists
+        const { data: existing } = await supabase
+          .from('recipes')
+          .select('id')
+          .eq('title', recipe.title)
+          .eq('scope', 'global')
+          .maybeSingle();
+
+        if (existing) {
+          console.log(`Recipe already exists: ${recipe.title}`);
+          continue;
+        }
+
         // Calculate serving_size using AI Chef rules
         const servingSize = await calculateServingSize(
           recipe.title,
@@ -1165,6 +1180,16 @@ serve(async (req) => {
           recipe.ingredients,
           LOVABLE_API_KEY
         );
+
+        // Generate AI image based on ingredients for accuracy
+        const generatedImage = await generateRecipeImage(
+          recipe.title,
+          recipe.description,
+          recipe.ingredients,
+          LOVABLE_API_KEY
+        );
+        
+        const imageUrl = generatedImage || recipe.image_url;
         
         // Insert recipe (let database generate UUID)
         const { data: recipeData, error: recipeError } = await supabase
@@ -1179,7 +1204,7 @@ serve(async (req) => {
             total_time: recipe.total_time,
             cuisine: recipe.cuisine,
             difficulty: recipe.difficulty,
-            image_url: recipe.image_url,
+            image_url: imageUrl,
             is_kid_friendly: recipe.is_kid_friendly,
             is_meal_prep_friendly: recipe.is_meal_prep_friendly,
             is_budget_friendly: recipe.is_budget_friendly,
