@@ -660,6 +660,7 @@ export type Database = {
           owner_user_id: string | null
           prep_time: number | null
           scope: Database["public"]["Enums"]["scope_type"] | null
+          serving_size: string | null
           servings: number | null
           title: string
           total_time: number | null
@@ -683,6 +684,7 @@ export type Database = {
           owner_user_id?: string | null
           prep_time?: number | null
           scope?: Database["public"]["Enums"]["scope_type"] | null
+          serving_size?: string | null
           servings?: number | null
           title: string
           total_time?: number | null
@@ -706,6 +708,7 @@ export type Database = {
           owner_user_id?: string | null
           prep_time?: number | null
           scope?: Database["public"]["Enums"]["scope_type"] | null
+          serving_size?: string | null
           servings?: number | null
           title?: string
           total_time?: number | null

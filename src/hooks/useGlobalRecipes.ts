@@ -11,6 +11,7 @@ export interface GlobalRecipe {
   cook_time: number | null;
   total_time: number | null;
   servings: number | null;
+  serving_size: string | null;
   difficulty: string | null;
   cuisine: string | null;
   is_kid_friendly: boolean | null;
@@ -56,6 +57,7 @@ function getSeedFallback(): GlobalRecipe[] {
       cook_time: r.cook_time ?? null,
       total_time: r.total_time ?? null,
       servings: r.servings ?? null,
+      serving_size: null, // Seed recipes don't have serving_size
       difficulty: r.difficulty ?? null,
       cuisine: r.cuisine ?? null,
       is_kid_friendly: r.is_kid_friendly ?? null,
@@ -109,6 +111,7 @@ export function useGlobalRecipes() {
             cook_time,
             total_time,
             servings,
+            serving_size,
             difficulty,
             cuisine,
             is_kid_friendly,
@@ -143,6 +146,7 @@ export function useGlobalRecipes() {
             cook_time: r.cook_time,
             total_time: r.total_time,
             servings: r.servings,
+            serving_size: r.serving_size,
             difficulty: r.difficulty,
             cuisine: r.cuisine,
             is_kid_friendly: r.is_kid_friendly,
