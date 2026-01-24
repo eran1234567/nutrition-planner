@@ -8,6 +8,57 @@ const corsHeaders = {
 
 const LOVABLE_API_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 
+// Generate AI image based on recipe title and ingredients for accuracy
+async function generateRecipeImage(
+  title: string,
+  description: string,
+  ingredients: Array<{ name: string; quantity?: number; unit?: string }>,
+  apiKey: string
+): Promise<string | null> {
+  const mainIngredients = ingredients
+    .slice(0, 5)
+    .map(ing => ing.name)
+    .join(', ');
+
+  const imagePrompt = `Professional food photography of ${title}. 
+A home-cooked dish made with: ${mainIngredients}.
+${description || ''}
+Final plated dish only. Realistic home-cooked appearance. 
+The protein/main ingredients must accurately match the recipe - show ${mainIngredients}.
+No text, no extra garnish or props not in the recipe. Natural lighting, overhead or 45-degree angle, clean simple background, appetizing presentation.
+16:9 aspect ratio, high-quality food photography style.`;
+
+  try {
+    console.log(`Generating image for: ${title}`);
+    const response = await fetch(LOVABLE_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash-image-preview',
+        messages: [{ role: 'user', content: imagePrompt }],
+        modalities: ['image', 'text']
+      }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const generatedImageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+      if (generatedImageUrl) {
+        console.log(`Image generated for: ${title}`);
+        return generatedImageUrl;
+      }
+    } else {
+      console.error(`Image generation failed for ${title}: ${response.status}`);
+    }
+  } catch (err) {
+    console.error(`Error generating image for ${title}:`, err);
+  }
+  return null;
+}
+
 // Calculate serving_size using AI Chef rules
 async function calculateServingSize(
   title: string,
@@ -40,7 +91,7 @@ CRITICAL CALCULATION RULES:
 4. For multi-component dishes:
    - Combine protein count + sides: "3 chicken tenders + 1 cup vegetables"
 
-DO NOT say generic things like "1 chicken breast equivalent" - be SPECIFIC.
+DO NOT say generic things like "1 chicken breast equivalent" - be SPECIFIC with actual piece counts or weights.
 
 Respond with ONLY the serving size description, no explanation. Keep it under 60 characters.`;
 
@@ -878,6 +929,16 @@ serve(async (req) => {
             LOVABLE_API_KEY
           );
 
+          // Generate AI image based on ingredients for accuracy
+          const generatedImage = await generateRecipeImage(
+            recipe.title,
+            recipe.description,
+            recipe.ingredients,
+            LOVABLE_API_KEY
+          );
+          
+          const imageUrl = generatedImage || `/recipe-images/${recipe.image_filename}`;
+
           // Insert recipe
           const { data: recipeData, error: recipeError } = await supabase
             .from("recipes")
@@ -894,7 +955,7 @@ serve(async (req) => {
               is_kid_friendly: recipe.is_kid_friendly,
               is_meal_prep_friendly: recipe.is_meal_prep_friendly,
               is_budget_friendly: recipe.is_budget_friendly,
-              image_url: `/recipe-images/${recipe.image_filename}`,
+              image_url: imageUrl,
               scope: "global",
             })
             .select("id")
