@@ -115,7 +115,6 @@ export function useGlobalRecipes() {
               id,
               title,
               description,
-              image_url,
               prep_time,
               cook_time,
               total_time,
@@ -192,7 +191,8 @@ export function useGlobalRecipes() {
             id: r.id,
             title: r.title,
             description: r.description,
-            image_url: r.image_url,
+              // IMPORTANT: do not load image_url in list queries (many are huge base64 strings)
+              image_url: null,
             prep_time: r.prep_time,
             cook_time: r.cook_time,
             total_time: r.total_time,
@@ -232,7 +232,7 @@ export function useRecipeById(id: string | undefined) {
         .from('recipes')
         .select('*')
         .eq('id', id)
-        .single();
+        .maybeSingle();
 
       if (recipeError || !recipeData) return null;
 
@@ -240,7 +240,7 @@ export function useRecipeById(id: string | undefined) {
       const [ingredientsRes, stepsRes, nutritionRes, tagsRes] = await Promise.all([
         supabase.from('recipe_ingredients').select('*').eq('recipe_id', id).order('order_index'),
         supabase.from('recipe_steps').select('*').eq('recipe_id', id).order('step_number'),
-        supabase.from('recipe_nutrition').select('*').eq('recipe_id', id).single(),
+        supabase.from('recipe_nutrition').select('*').eq('recipe_id', id).maybeSingle(),
         supabase.from('recipe_tags').select('*').eq('recipe_id', id),
       ]);
 
