@@ -14,6 +14,7 @@ import { PlanModeHeader } from '@/components/plan/PlanModeHeader';
 import { AddToPlanModal } from '@/components/plan/AddToPlanModal';
 import { FilterDropdown } from '@/components/discover/FilterDropdown';
 import { MultiSelectDropdown } from '@/components/discover/MultiSelectDropdown';
+import { FilterHelpModal } from '@/components/discover/FilterHelpModal';
 import { useGlobalRecipes } from '@/hooks/useGlobalRecipes';
 import { useAppStore } from '@/stores/appStore';
 import { useMealPlanStore } from '@/stores/mealPlanStore';
@@ -1005,7 +1006,8 @@ export default function Discover() {
         )}
 
         {/* Filter Dropdowns - all in one row */}
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-4 mb-4">
+        <div className="flex gap-2 items-center overflow-x-auto scrollbar-hide pb-4 mb-4">
+          <FilterHelpModal />
           {/* Meal Type - hidden in plan mode when slot is selected */}
           {(!isPlanMode || !currentSlotFilter) && (
             <FilterDropdown
