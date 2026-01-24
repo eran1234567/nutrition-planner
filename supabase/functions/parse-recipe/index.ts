@@ -490,15 +490,25 @@ SERVINGS AND MEAL PREP RULES
 - Default to 4 servings for main dishes, 1 serving for snacks
 - Every recipe MUST define serving size explicitly
 
+SERVING SIZE DESCRIPTION (serving_size field):
+The serving_size field describes what ONE SERVING equals in terms of the COMPLETED DISH.
+DO NOT include ingredient gram weights. Focus on final plated/served portions.
+
+RULES BY DISH TYPE:
+- Single-item dishes (bowls, sandwiches, wraps): "1 bowl" or "1 sandwich" or "1 wrap"
+- Countable items (meatballs, patties, tacos, stuffed peppers): "4 meatballs" or "2 tacos"
+- Multi-component dishes: "4 meatballs + 1.5 cups potatoes + 1 cup sauce"
+- Rice/grain dishes: "1 cup rice mixture" or "1.5 cups fried rice"
+- Liquids (soups, shakes, smoothies): "1 cup soup" or "12 oz shake" or "1 bowl (2 cups)"
+- Protein + sides: "1 chicken breast + 1 cup vegetables" or "6 oz salmon + 1 cup rice"
+
 DISCRETE FOODS RULE (For countable items like meatballs, patties, stuffed peppers):
-- State total units made
-- State how many units equal one serving
-- Instructions must say how many units to form
-Example: "Makes 16 meatballs. 1 serving = 4 meatballs."
+- State total units made in instructions
+- State how many units equal one serving in serving_size
+Example: Instructions say "Form into 16 meatballs", serving_size = "4 meatballs"
 
 MEAL PREP MAPPING:
 - 1 container = 1 serving
-- Number of containers = number of servings
 - Container contents must be explicit
 Example: "1 container = 4 meatballs + 1 cup potatoes + 1/2 cup sauce"
 
@@ -540,7 +550,7 @@ Always respond with valid JSON only, no markdown code blocks or explanation.`;
       "cook_time": 30,
       "total_time": 45,
       "servings": 4,
-      "serving_size": "4 meatballs + 1 cup potatoes + sauce",
+      "serving_size": "Human-readable portion description (e.g., '1 bowl', '4 meatballs + 1.5 cups potatoes', '1 cup soup', '12 oz shake')",
       "difficulty": "easy|medium|hard",
       "cuisine": "American|Italian|Mexican|Asian|Mediterranean|Indian|Japanese|Thai|French|Greek|Brazilian",
       "is_kid_friendly": false,

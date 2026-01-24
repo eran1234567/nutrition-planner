@@ -83,19 +83,28 @@ serve(async (req) => {
 Title: ${recipe.title}
 Ingredients: ${ingredientsList}
 
-Calculate what ONE SERVING contains. Be specific about quantities.
+Describe what ONE SERVING equals in terms of the COMPLETED DISH, not ingredient weights.
 
-For discrete items (meatballs, stuffed peppers, patties, etc.): state how many per serving.
-For soups/stews: state approximate cup measurement.
-For main dishes: describe the protein portion and sides.
+RULES BY DISH TYPE:
+- Single-item dishes (bowls, sandwiches, wraps, plates): "1 bowl" or "1 sandwich" or "1 wrap"
+- Countable items (meatballs, patties, tacos, stuffed peppers): "4 meatballs" or "2 tacos" or "1 stuffed pepper"
+- Multi-component dishes (meatballs + sides): "4 meatballs + 1.5 cups potatoes + 1 cup sauce"
+- Rice/grain dishes: "1 cup rice mixture" or "1.5 cups fried rice"
+- Liquids (soups, shakes, smoothies, drinks): "1 cup soup" or "12 oz shake" or "1 bowl (2 cups)"
+- Protein + sides: "1 chicken breast + 1 cup vegetables" or "6 oz salmon + 1 cup rice"
+
+DO NOT include ingredient gram weights. Focus on the final plated/served portions.
 
 Respond with ONLY the serving size description, no explanation. Keep it under 60 characters.
 Examples:
+- "1 bowl"
 - "4 meatballs + 1.5 cups potatoes + sauce"
+- "2 tacos"
 - "1 stuffed pepper + 0.5 cup rice"
-- "6 oz chicken + 1 cup vegetables"
-- "2 cups soup with 4 oz chicken"
-- "1 chicken breast + 1 cup rice"`;
+- "1 cup soup"
+- "1 chicken breast + 1 cup vegetables"
+- "12 oz smoothie"
+- "1.5 cups fried rice"`;
 
           const aiResponse = await fetch(LOVABLE_API_URL, {
             method: 'POST',
