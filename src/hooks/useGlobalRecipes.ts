@@ -99,9 +99,9 @@ export function useGlobalRecipes() {
     queryKey: ['global-recipes'],
     queryFn: async (): Promise<GlobalRecipe[]> => {
       try {
-        // Optimized query: fetch only essential fields for list view
-        // Ingredients/steps are fetched on-demand via useRecipeById
-        const { data, error } = await supabase
+        // Fetch list essentials first (fast), then fetch tags + nutrition in separate queries.
+        // This avoids heavy nested joins that can hit statement timeouts as the catalog grows.
+        const { data: recipes, error: recipesError } = await supabase
           .from('recipes')
           .select(
             `
@@ -119,24 +119,58 @@ export function useGlobalRecipes() {
             is_kid_friendly,
             is_meal_prep_friendly,
             is_budget_friendly,
-            scope,
-            recipe_nutrition(calories, protein_g, carbs_g, fat_g, fiber_g, sodium_mg),
-            recipe_tags(tag_type, tag_value)
+            scope
           `
           )
           .eq('scope', 'global')
-          .or('is_deleted.is.null,is_deleted.eq.false')
-          .order('title');
+          .eq('is_deleted', false)
+          .order('title')
+          .limit(1000);
 
-        if (error) {
-          if (import.meta.env.DEV) console.warn('[useGlobalRecipes] backend error, using seed fallback:', error);
+        if (recipesError) {
+          if (import.meta.env.DEV) console.warn('[useGlobalRecipes] backend error, using seed fallback:', recipesError);
           return getSeedFallback();
         }
 
-        return (data || []).map((r: any) => {
-          // recipe_nutrition is a one-to-one relation, so it's an object (or null), not an array
-          const nutritionData = r.recipe_nutrition;
+        const safeRecipes = (recipes || []) as any[];
+        if (safeRecipes.length === 0) return [];
 
+        const ids = safeRecipes.map((r) => r.id).filter(Boolean);
+        if (ids.length === 0) return [];
+
+        const [nutritionRes, tagsRes] = await Promise.all([
+          supabase
+            .from('recipe_nutrition')
+            .select('recipe_id, calories, protein_g, carbs_g, fat_g, fiber_g, sodium_mg')
+            .in('recipe_id', ids),
+          supabase
+            .from('recipe_tags')
+            .select('recipe_id, tag_type, tag_value')
+            .in('recipe_id', ids),
+        ]);
+
+        const nutritionById = new Map<string, GlobalRecipe['nutrition']>();
+        (nutritionRes.data || []).forEach((n: any) => {
+          if (!n?.recipe_id) return;
+          nutritionById.set(n.recipe_id, {
+            calories: n.calories ?? null,
+            protein_g: n.protein_g ?? null,
+            carbs_g: n.carbs_g ?? null,
+            fat_g: n.fat_g ?? null,
+            fiber_g: n.fiber_g ?? null,
+            sodium_mg: n.sodium_mg ?? null,
+          });
+        });
+
+        const tagsById = new Map<string, GlobalRecipe['tags']>();
+        (tagsRes.data || []).forEach((t: any) => {
+          if (!t?.recipe_id) return;
+          const list = tagsById.get(t.recipe_id) || [];
+          list.push({ tag_type: t.tag_type, tag_value: t.tag_value });
+          tagsById.set(t.recipe_id, list);
+        });
+
+        return safeRecipes.map((r: any) => {
           return {
             id: r.id,
             title: r.title,
@@ -153,10 +187,10 @@ export function useGlobalRecipes() {
             is_meal_prep_friendly: r.is_meal_prep_friendly,
             is_budget_friendly: r.is_budget_friendly,
             scope: r.scope,
-            nutrition: nutritionData || undefined,
+            nutrition: nutritionById.get(r.id) || undefined,
             ingredients: [], // Loaded on-demand via useRecipeById
             steps: [], // Loaded on-demand via useRecipeById
-            tags: r.recipe_tags || [],
+            tags: tagsById.get(r.id) || [],
             isUserRecipe: false,
           } as GlobalRecipe;
         });
