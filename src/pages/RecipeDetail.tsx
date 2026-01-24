@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Loader2, Pencil, Leaf, Fish, Drumstick, Sun, CalendarPlus } from 'lucide-react';
+import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Loader2, Pencil, Leaf, Fish, Drumstick, Sun, CalendarPlus, Heart, Droplets, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BottomNav } from '@/components/layout/BottomNav';
@@ -13,6 +13,7 @@ import { useMealPlanStore } from '@/stores/mealPlanStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import type { Recipe } from '@/types';
+import { getHealthBadges } from '@/lib/nutrition/healthDetection';
 
 // Diet badge config with colors and icons
 const DIET_BADGES: Record<string, { label: string; icon: React.ReactNode; bgClass: string; textClass: string }> = {
@@ -22,6 +23,11 @@ const DIET_BADGES: Record<string, { label: string; icon: React.ReactNode; bgClas
   pescatarian: { label: 'Pescatarian', icon: <Fish className="w-3 h-3" />, bgClass: 'bg-sky-500/90', textClass: 'text-white' },
   paleo: { label: 'Paleo', icon: <Drumstick className="w-3 h-3" />, bgClass: 'bg-amber-600/90', textClass: 'text-white' },
   mediterranean: { label: 'Mediterranean', icon: <Sun className="w-3 h-3" />, bgClass: 'bg-orange-500/90', textClass: 'text-white' },
+  // Health consideration badges
+  'diabetes-friendly': { label: 'Diabetes Friendly', icon: <Activity className="w-3 h-3" />, bgClass: 'bg-blue-500/90', textClass: 'text-white' },
+  'heart-healthy': { label: 'Heart Healthy', icon: <Heart className="w-3 h-3" />, bgClass: 'bg-rose-500/90', textClass: 'text-white' },
+  'low-sodium': { label: 'Low Sodium', icon: <Droplets className="w-3 h-3" />, bgClass: 'bg-cyan-500/90', textClass: 'text-white' },
+  'kidney-friendly': { label: 'Kidney Friendly', icon: <Droplets className="w-3 h-3" />, bgClass: 'bg-purple-500/90', textClass: 'text-white' },
 };
 
 // Diet exclusions for auto-detection
@@ -175,6 +181,12 @@ export default function RecipeDetail() {
     return badges;
   }, [recipe, isKetoFriendly, isPaleoFriendly, isMediterraneanFriendly]);
 
+  // Build health badges array using auto-detection
+  const healthBadges = useMemo(() => {
+    if (!recipe?.nutrition) return [];
+    return getHealthBadges(recipe.nutrition);
+  }, [recipe?.nutrition]);
+
   // Format quantity for display (remove trailing zeros)
   const formatQuantity = (qty: number | null) => {
     if (qty === null) return '';
@@ -272,6 +284,20 @@ export default function RecipeDetail() {
                 return (
                   <span
                     key={diet}
+                    className={`px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${badge.bgClass} ${badge.textClass}`}
+                  >
+                    {badge.icon}
+                    {badge.label}
+                  </span>
+                );
+              })}
+              {/* Health consideration badges */}
+              {healthBadges.map((health) => {
+                const badge = DIET_BADGES[health];
+                if (!badge) return null;
+                return (
+                  <span
+                    key={health}
                     className={`px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${badge.bgClass} ${badge.textClass}`}
                   >
                     {badge.icon}
