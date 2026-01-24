@@ -2,6 +2,12 @@ import { useState } from 'react';
 import { Clock, Users, Check, Plus, Trash2, Minus, Flame, Leaf, Fish, Drumstick, Sun, Heart, Droplets, Activity, Globe, Pizza, UtensilsCrossed, Soup, Cherry } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface NutritionData {
   calories?: number | null;
@@ -37,6 +43,14 @@ const DIET_BADGES: Record<string, { label: string; icon: React.ReactNode; bgClas
   'heart-healthy': { label: 'Heart', icon: <Heart className="w-3 h-3" />, bgClass: 'bg-rose-500/90', textClass: 'text-white' },
   'low-sodium': { label: 'Low Na', icon: <Droplets className="w-3 h-3" />, bgClass: 'bg-cyan-500/90', textClass: 'text-white' },
   'kidney-friendly': { label: 'Kidney', icon: <Droplets className="w-3 h-3" />, bgClass: 'bg-purple-500/90', textClass: 'text-white' },
+};
+
+// Health badge tooltip definitions
+const HEALTH_BADGE_TOOLTIPS: Record<string, string> = {
+  'low-sodium': '< 300mg sodium per serving',
+  'kidney-friendly': '< 400mg sodium + < 30g protein',
+  'diabetes-friendly': '≥ 5g fiber + < 40g carbs',
+  'heart-healthy': '≥ 5g fiber + < 300mg sodium',
 };
 
 // Cuisine badge config with colors and icons
@@ -169,42 +183,61 @@ export function RecipeCard({
         )}
 
         {/* Cuisine, diet and health badges - single row */}
-        <div className="absolute bottom-2 right-2 flex items-center gap-1">
-          {cuisineBadge && (
-            <span
-              className={cn(
-                'px-1.5 py-0.5 rounded-full text-2xs font-semibold flex items-center gap-0.5 whitespace-nowrap',
-                cuisineBadge.bgClass,
-                cuisineBadge.textClass
-              )}
-            >
-              {cuisineBadge.icon}
-              <span className="hidden sm:inline">{cuisineBadge.label}</span>
-            </span>
-          )}
-          {visibleBadges.map((badgeKey) => {
-            const badge = DIET_BADGES[badgeKey];
-            if (!badge) return null;
-            return (
+        <TooltipProvider delayDuration={300}>
+          <div className="absolute bottom-2 right-2 flex items-center gap-1">
+            {cuisineBadge && (
               <span
-                key={badgeKey}
                 className={cn(
                   'px-1.5 py-0.5 rounded-full text-2xs font-semibold flex items-center gap-0.5 whitespace-nowrap',
-                  badge.bgClass,
-                  badge.textClass
+                  cuisineBadge.bgClass,
+                  cuisineBadge.textClass
                 )}
               >
-                {badge.icon}
-                <span className="hidden sm:inline">{badge.label}</span>
+                {cuisineBadge.icon}
+                <span className="hidden sm:inline">{cuisineBadge.label}</span>
               </span>
-            );
-          })}
-          {showKidBadge && recipe.is_kid_friendly && (
-            <span className="px-1.5 py-0.5 rounded-full bg-warning/90 text-warning-foreground text-2xs font-medium whitespace-nowrap">
-              👶<span className="hidden sm:inline"> Kid</span>
-            </span>
-          )}
-        </div>
+            )}
+            {visibleBadges.map((badgeKey) => {
+              const badge = DIET_BADGES[badgeKey];
+              if (!badge) return null;
+              const tooltip = HEALTH_BADGE_TOOLTIPS[badgeKey];
+              
+              const badgeElement = (
+                <span
+                  className={cn(
+                    'px-1.5 py-0.5 rounded-full text-2xs font-semibold flex items-center gap-0.5 whitespace-nowrap',
+                    badge.bgClass,
+                    badge.textClass
+                  )}
+                >
+                  {badge.icon}
+                  <span className="hidden sm:inline">{badge.label}</span>
+                </span>
+              );
+
+              // Wrap health badges with tooltip
+              if (tooltip) {
+                return (
+                  <Tooltip key={badgeKey}>
+                    <TooltipTrigger asChild>
+                      {badgeElement}
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      {tooltip}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              }
+
+              return <span key={badgeKey}>{badgeElement}</span>;
+            })}
+            {showKidBadge && recipe.is_kid_friendly && (
+              <span className="px-1.5 py-0.5 rounded-full bg-warning/90 text-warning-foreground text-2xs font-medium whitespace-nowrap">
+                👶<span className="hidden sm:inline"> Kid</span>
+              </span>
+            )}
+          </div>
+        </TooltipProvider>
       </div>
 
       {/* Content */}

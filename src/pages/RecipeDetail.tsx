@@ -5,6 +5,12 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Loader2, Pencil, Leaf, Fish, Drumstick, Sun, CalendarPlus, Heart, Droplets, Activity, Globe, Pizza, UtensilsCrossed, Soup, Cherry } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { RecipeEditor } from '@/components/recipe/RecipeEditor';
 import { AddToPlanModal } from '@/components/plan/AddToPlanModal';
@@ -28,6 +34,14 @@ const DIET_BADGES: Record<string, { label: string; icon: React.ReactNode; bgClas
   'heart-healthy': { label: 'Heart Healthy', icon: <Heart className="w-3 h-3" />, bgClass: 'bg-rose-500/90', textClass: 'text-white' },
   'low-sodium': { label: 'Low Sodium', icon: <Droplets className="w-3 h-3" />, bgClass: 'bg-cyan-500/90', textClass: 'text-white' },
   'kidney-friendly': { label: 'Kidney Friendly', icon: <Droplets className="w-3 h-3" />, bgClass: 'bg-purple-500/90', textClass: 'text-white' },
+};
+
+// Health badge tooltip definitions
+const HEALTH_BADGE_TOOLTIPS: Record<string, string> = {
+  'low-sodium': '< 300mg sodium per serving',
+  'kidney-friendly': '< 400mg sodium + < 30g protein',
+  'diabetes-friendly': '≥ 5g fiber + < 40g carbs',
+  'heart-healthy': '≥ 5g fiber + < 300mg sodium',
 };
 
 // Cuisine badge config with colors and icons
@@ -297,45 +311,56 @@ export default function RecipeDetail() {
           {/* Title and badges */}
           <div className="mb-4">
             <h1 className="text-2xl font-bold text-foreground mb-2">{recipe.title}</h1>
-            <div className="flex flex-wrap gap-2">
-              {/* Cuisine badge */}
-              {cuisineBadge && (
-                <span
-                  className={`px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${cuisineBadge.bgClass} ${cuisineBadge.textClass}`}
-                >
-                  {cuisineBadge.icon}
-                  {cuisineBadge.label}
-                </span>
-              )}
-              {/* Diet badges */}
-              {dietBadges.map((diet) => {
-                const badge = DIET_BADGES[diet];
-                if (!badge) return null;
-                return (
+            <TooltipProvider delayDuration={300}>
+              <div className="flex flex-wrap gap-2">
+                {/* Cuisine badge */}
+                {cuisineBadge && (
                   <span
-                    key={diet}
-                    className={`px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${badge.bgClass} ${badge.textClass}`}
+                    className={`px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${cuisineBadge.bgClass} ${cuisineBadge.textClass}`}
                   >
-                    {badge.icon}
-                    {badge.label}
+                    {cuisineBadge.icon}
+                    {cuisineBadge.label}
                   </span>
-                );
-              })}
-              {/* Health consideration badges */}
-              {healthBadges.map((health) => {
-                const badge = DIET_BADGES[health];
-                if (!badge) return null;
-                return (
-                  <span
-                    key={health}
-                    className={`px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${badge.bgClass} ${badge.textClass}`}
-                  >
-                    {badge.icon}
-                    {badge.label}
-                  </span>
-                );
-              })}
-            </div>
+                )}
+                {/* Diet badges */}
+                {dietBadges.map((diet) => {
+                  const badge = DIET_BADGES[diet];
+                  if (!badge) return null;
+                  return (
+                    <span
+                      key={diet}
+                      className={`px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${badge.bgClass} ${badge.textClass}`}
+                    >
+                      {badge.icon}
+                      {badge.label}
+                    </span>
+                  );
+                })}
+                {/* Health consideration badges with tooltips */}
+                {healthBadges.map((health) => {
+                  const badge = DIET_BADGES[health];
+                  if (!badge) return null;
+                  const tooltip = HEALTH_BADGE_TOOLTIPS[health];
+                  return (
+                    <Tooltip key={health}>
+                      <TooltipTrigger asChild>
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1 cursor-help ${badge.bgClass} ${badge.textClass}`}
+                        >
+                          {badge.icon}
+                          {badge.label}
+                        </span>
+                      </TooltipTrigger>
+                      {tooltip && (
+                        <TooltipContent side="bottom" className="text-xs">
+                          {tooltip}
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                  );
+                })}
+              </div>
+            </TooltipProvider>
           </div>
 
           {/* Quick info */}
