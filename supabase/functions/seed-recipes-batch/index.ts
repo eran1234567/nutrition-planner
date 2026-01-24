@@ -773,18 +773,33 @@ const recipesByCuisine: Record<string, Array<{
     },
     {
       title: "Biryani",
-      description: "Fragrant layered rice with spiced meat and saffron",
+      description: "Fragrant layered rice with spiced chicken, saffron, and aromatic whole spices",
       prep_time: 40, cook_time: 60, total_time: 100, servings: 6, difficulty: "hard",
       is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: false,
-      calories: 520, protein_g: 28, carbs_g: 58, fat_g: 20, fiber_g: 3, sodium_mg: 720,
+      calories: 480, protein_g: 26, carbs_g: 52, fat_g: 18, fiber_g: 3, sodium_mg: 450,
       ingredients: [
         { name: "Basmati rice", quantity: 2, unit: "cups", aisle: "Grains" },
-        { name: "Chicken or lamb", quantity: 1.5, unit: "lbs", aisle: "Meat" },
-        { name: "Saffron", quantity: 0.5, unit: "tsp", aisle: "Spices" }
+        { name: "Chicken thighs", quantity: 1.5, unit: "lbs", aisle: "Meat" },
+        { name: "Plain yogurt", quantity: 0.5, unit: "cup", aisle: "Dairy" },
+        { name: "Saffron threads", quantity: 0.5, unit: "tsp", aisle: "Spices" },
+        { name: "Garam masala", quantity: 1, unit: "tbsp", aisle: "Spices" },
+        { name: "Fresh ginger", quantity: 2, unit: "tbsp", aisle: "Produce" },
+        { name: "Garlic", quantity: 4, unit: "cloves", aisle: "Produce" },
+        { name: "Onions", quantity: 2, unit: "large", aisle: "Produce" },
+        { name: "Fresh mint", quantity: 0.25, unit: "cup", aisle: "Produce" },
+        { name: "Fresh cilantro", quantity: 0.25, unit: "cup", aisle: "Produce" },
+        { name: "Ghee", quantity: 3, unit: "tbsp", aisle: "Dairy" }
       ],
-      steps: ["Parboil rice with whole spices.", "Cook meat in rich gravy.", "Layer and dum cook covered."],
-      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "protein", tag_value: "chicken" }],
-      image_prompt: "Hyderabadi biryani with saffron rice, tender meat, fried onions, mint, raita on side, Indian feast, food photography"
+      steps: [
+        "Marinate chicken in yogurt, garam masala, ginger, and garlic for at least 30 minutes.",
+        "Parboil rice with whole spices (bay leaves, cardamom, cinnamon) until 70% cooked, drain.",
+        "Caramelize sliced onions in ghee until deep golden brown.",
+        "Layer marinated chicken, then rice, then fried onions, mint, and cilantro.",
+        "Drizzle saffron soaked in warm milk over the top.",
+        "Cover tightly and dum cook on low heat for 25-30 minutes."
+      ],
+      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "protein", tag_value: "chicken" }, { tag_type: "cuisine", tag_value: "indian" }],
+      image_prompt: "Hyderabadi chicken biryani with saffron rice, tender meat, caramelized fried onions, fresh mint and cilantro, served in copper handi, Indian feast, food photography"
     }
   ],
   Japanese: [
