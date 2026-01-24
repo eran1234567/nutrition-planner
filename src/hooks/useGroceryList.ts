@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useMealPlanStore } from '@/stores/mealPlanStore';
-import { useGlobalRecipes } from '@/hooks/useGlobalRecipes';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface GroceryItem {
   id: string;
@@ -14,6 +15,19 @@ export interface GroceryItem {
 export interface GroceryAisle {
   aisle: string;
   items: GroceryItem[];
+}
+
+interface RecipeIngredient {
+  recipe_id: string;
+  name: string;
+  quantity: number | null;
+  unit: string | null;
+  aisle: string | null;
+}
+
+interface RecipeServings {
+  id: string;
+  servings: number | null;
 }
 
 // Normalize ingredient names for aggregation (lowercase, trim, remove plurals)
@@ -50,18 +64,70 @@ const AISLE_ORDER: Record<string, number> = {
 
 export function useGroceryList() {
   const { generatedPlan, numberOfDays } = useMealPlanStore();
-  const { data: recipes, isLoading: recipesLoading } = useGlobalRecipes();
+
+  // Extract unique recipe IDs from the plan
+  const recipeIds = useMemo(() => {
+    if (!generatedPlan || generatedPlan.days.length === 0) return [];
+    
+    const ids = new Set<string>();
+    const daysToProcess = generatedPlan.days.slice(0, numberOfDays);
+    
+    for (const day of daysToProcess) {
+      for (const slot of day.slots) {
+        if (slot.recipeId) {
+          ids.add(slot.recipeId);
+        }
+      }
+    }
+    
+    return Array.from(ids);
+  }, [generatedPlan, numberOfDays]);
+
+  // Fetch ingredients for all recipes in the plan
+  const { data: ingredientsData, isLoading: ingredientsLoading } = useQuery({
+    queryKey: ['grocery-ingredients', recipeIds],
+    queryFn: async () => {
+      if (recipeIds.length === 0) return { ingredients: [], servings: [] };
+
+      const [ingredientsRes, servingsRes] = await Promise.all([
+        supabase
+          .from('recipe_ingredients')
+          .select('recipe_id, name, quantity, unit, aisle')
+          .in('recipe_id', recipeIds),
+        supabase
+          .from('recipes')
+          .select('id, servings')
+          .in('id', recipeIds),
+      ]);
+
+      return {
+        ingredients: (ingredientsRes.data || []) as RecipeIngredient[],
+        servings: (servingsRes.data || []) as RecipeServings[],
+      };
+    },
+    enabled: recipeIds.length > 0,
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+  });
 
   const groceryList = useMemo<GroceryAisle[]>(() => {
-    if (!generatedPlan || !recipes || recipes.length === 0) {
+    if (!generatedPlan || !ingredientsData || ingredientsData.ingredients.length === 0) {
       return [];
     }
 
-    // Build a map of recipeId -> recipe for quick lookup
-    const recipeMap = new Map(recipes.map(r => [r.id, r]));
+    // Build maps for quick lookup
+    const ingredientsByRecipe = new Map<string, RecipeIngredient[]>();
+    for (const ing of ingredientsData.ingredients) {
+      const list = ingredientsByRecipe.get(ing.recipe_id) || [];
+      list.push(ing);
+      ingredientsByRecipe.set(ing.recipe_id, list);
+    }
+
+    const servingsMap = new Map<string, number>();
+    for (const r of ingredientsData.servings) {
+      servingsMap.set(r.id, r.servings || 1);
+    }
 
     // Aggregate ingredients across all days and slots
-    // Key: normalized name + unit combo, Value: aggregated data
     const ingredientMap = new Map<string, {
       name: string;
       quantity: number;
@@ -74,16 +140,14 @@ export function useGroceryList() {
 
     for (const day of daysToProcess) {
       for (const slot of day.slots) {
-        const recipe = recipeMap.get(slot.recipeId);
-        if (!recipe) continue;
+        const ingredients = ingredientsByRecipe.get(slot.recipeId);
+        if (!ingredients || ingredients.length === 0) continue;
 
-        // servingMultiplier is the absolute number of servings needed for this slot
-        // We need to calculate the ratio vs the recipe's base servings
-        const baseServings = recipe.servings || 1;
+        const baseServings = servingsMap.get(slot.recipeId) || 1;
         const neededServings = slot.servingMultiplier || 1;
         const ingredientRatio = neededServings / baseServings;
 
-        for (const ingredient of recipe.ingredients) {
+        for (const ingredient of ingredients) {
           const normalizedName = normalizeIngredientName(ingredient.name);
           const unit = ingredient.unit?.toLowerCase().trim() || null;
           
@@ -143,7 +207,7 @@ export function useGroceryList() {
       }));
 
     return sortedAisles;
-  }, [generatedPlan, recipes, numberOfDays]);
+  }, [generatedPlan, ingredientsData, numberOfDays]);
 
   const totalItems = useMemo(() => 
     groceryList.reduce((acc, aisle) => acc + aisle.items.length, 0),
@@ -156,7 +220,7 @@ export function useGroceryList() {
     groceryList,
     totalItems,
     hasPlan,
-    isLoading: recipesLoading,
+    isLoading: ingredientsLoading,
     numberOfDays,
   };
 }
