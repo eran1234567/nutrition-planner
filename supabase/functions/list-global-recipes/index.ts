@@ -75,7 +75,6 @@ serve(async (req) => {
       )
       .eq("scope", "global")
       .eq("is_deleted", false)
-      .order("title", { ascending: true })
       .limit(limit);
 
     if (recipesError) {
@@ -88,7 +87,12 @@ serve(async (req) => {
 
     // The Deno/esm typings for supabase-js can produce overly-broad union types;
     // we narrow defensively here.
-    const safeRecipes = ((recipes ?? []) as unknown as RecipeRow[]).filter((r) => !!r?.id);
+    const safeRecipes = ((recipes ?? []) as unknown as RecipeRow[])
+      .filter((r) => !!r?.id)
+      // Sort in-app rather than in the DB.
+      // We have repeatedly hit DB statement timeouts on ORDER BY even with relatively small datasets.
+      // Sorting in JS avoids DB-level sorts and keeps the endpoint reliable.
+      .sort((a, b) => (a.title ?? "").localeCompare(b.title ?? "", undefined, { sensitivity: "base" }));
     const ids = safeRecipes.map((r) => r.id);
 
     if (ids.length === 0) {
