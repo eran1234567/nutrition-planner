@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,6 +7,7 @@ const corsHeaders = {
 
 type ListGlobalRecipesBody = {
   limit?: number;
+  cursor?: string; // title of last recipe from previous page (cursor-based pagination)
 };
 
 type RecipeRow = {
@@ -46,58 +46,79 @@ serve(async (req) => {
     const body: ListGlobalRecipesBody = req.body
       ? await req.json().catch(() => ({}))
       : {};
-    const limit = Math.min(Math.max(Number(body?.limit ?? 1000) || 1000, 1), 1000);
+    const limit = Math.min(Math.max(Number(body?.limit ?? 100) || 100, 1), 200);
+    const cursor = typeof body?.cursor === "string" ? body.cursor : null;
 
-    const admin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
+    // Use raw REST API to bypass any SDK overhead
+    // Build query params
+    const selectCols = [
+      "id",
+      "title",
+      "description",
+      "image_url",
+      "prep_time",
+      "cook_time",
+      "total_time",
+      "servings",
+      "serving_size",
+      "difficulty",
+      "cuisine",
+      "is_kid_friendly",
+      "is_meal_prep_friendly",
+      "is_budget_friendly",
+      "scope",
+    ].join(",");
+
+    const url = new URL(`${supabaseUrl}/rest/v1/recipes`);
+    url.searchParams.set("select", selectCols);
+    url.searchParams.set("scope", "eq.global");
+    url.searchParams.set("is_deleted", "eq.false");
+    if (cursor) {
+      url.searchParams.set("title", `gt.${cursor}`);
+    }
+    // Fetch one extra to detect next page
+    url.searchParams.set("limit", String(limit + 1));
+
+    const recipesRes = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        apikey: supabaseServiceKey,
+        Authorization: `Bearer ${supabaseServiceKey}`,
+        "Content-Type": "application/json",
+        Prefer: "count=none",
+      },
     });
 
-    const { data: recipes, error: recipesError } = await admin
-      .from("recipes")
-      .select(
-        [
-          "id",
-          "title",
-          "description",
-          "image_url",
-          "prep_time",
-          "cook_time",
-          "total_time",
-          "servings",
-          "serving_size",
-          "difficulty",
-          "cuisine",
-          "is_kid_friendly",
-          "is_meal_prep_friendly",
-          "is_budget_friendly",
-          "scope",
-        ].join(","),
-      )
-      .eq("scope", "global")
-      .eq("is_deleted", false)
-      .limit(limit);
-
-    if (recipesError) {
-      console.error("[list-global-recipes] recipes query failed:", recipesError);
+    if (!recipesRes.ok) {
+      const errText = await recipesRes.text();
+      console.error("[list-global-recipes] recipes fetch failed:", errText);
       return new Response(
         JSON.stringify({ error: "Failed to load recipes" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    // The Deno/esm typings for supabase-js can produce overly-broad union types;
-    // we narrow defensively here.
-    const safeRecipes = ((recipes ?? []) as unknown as RecipeRow[])
+    const recipesRaw = (await recipesRes.json()) as RecipeRow[];
+
+    // Sort in-app to avoid DB sort timeout
+    let safeRecipes = recipesRaw
       .filter((r) => !!r?.id)
-      // Sort in-app rather than in the DB.
-      // We have repeatedly hit DB statement timeouts on ORDER BY even with relatively small datasets.
-      // Sorting in JS avoids DB-level sorts and keeps the endpoint reliable.
       .sort((a, b) => (a.title ?? "").localeCompare(b.title ?? "", undefined, { sensitivity: "base" }));
+
+    // Determine if there's a next page
+    const hasNextPage = safeRecipes.length > limit;
+    if (hasNextPage) {
+      safeRecipes = safeRecipes.slice(0, limit);
+    }
+    const nextCursor = hasNextPage && safeRecipes.length > 0
+      ? safeRecipes[safeRecipes.length - 1].title
+      : null;
+
     const ids = safeRecipes.map((r) => r.id);
 
     if (ids.length === 0) {
       return new Response(
-        JSON.stringify({ recipes: [] }),
+        JSON.stringify({ recipes: [], nextCursor: null, hasNextPage: false }),
         {
           status: 200,
           headers: {
@@ -109,26 +130,37 @@ serve(async (req) => {
       );
     }
 
+    // Fetch nutrition and tags in parallel via REST
+    const nutritionUrl = new URL(`${supabaseUrl}/rest/v1/recipe_nutrition`);
+    nutritionUrl.searchParams.set("select", "recipe_id,calories,protein_g,carbs_g,fat_g,fiber_g,sodium_mg");
+    nutritionUrl.searchParams.set("recipe_id", `in.(${ids.join(",")})`);
+
+    const tagsUrl = new URL(`${supabaseUrl}/rest/v1/recipe_tags`);
+    tagsUrl.searchParams.set("select", "recipe_id,tag_type,tag_value");
+    tagsUrl.searchParams.set("recipe_id", `in.(${ids.join(",")})`);
+
     const [nutritionRes, tagsRes] = await Promise.all([
-      admin
-        .from("recipe_nutrition")
-        .select("recipe_id, calories, protein_g, carbs_g, fat_g, fiber_g, sodium_mg")
-        .in("recipe_id", ids),
-      admin
-        .from("recipe_tags")
-        .select("recipe_id, tag_type, tag_value")
-        .in("recipe_id", ids),
+      fetch(nutritionUrl.toString(), {
+        headers: {
+          apikey: supabaseServiceKey,
+          Authorization: `Bearer ${supabaseServiceKey}`,
+          "Content-Type": "application/json",
+        },
+      }),
+      fetch(tagsUrl.toString(), {
+        headers: {
+          apikey: supabaseServiceKey,
+          Authorization: `Bearer ${supabaseServiceKey}`,
+          "Content-Type": "application/json",
+        },
+      }),
     ]);
 
-    if (nutritionRes.error) {
-      console.error("[list-global-recipes] nutrition query failed:", nutritionRes.error);
-    }
-    if (tagsRes.error) {
-      console.error("[list-global-recipes] tags query failed:", tagsRes.error);
-    }
+    const nutritionData = nutritionRes.ok ? ((await nutritionRes.json()) as any[]) : [];
+    const tagsData = tagsRes.ok ? ((await tagsRes.json()) as any[]) : [];
 
     const nutritionById = new Map<string, any>();
-    (nutritionRes.data ?? []).forEach((n: any) => {
+    nutritionData.forEach((n) => {
       if (!n?.recipe_id) return;
       nutritionById.set(n.recipe_id, {
         calories: n.calories ?? null,
@@ -141,7 +173,7 @@ serve(async (req) => {
     });
 
     const tagsById = new Map<string, any[]>();
-    (tagsRes.data ?? []).forEach((t: any) => {
+    tagsData.forEach((t) => {
       if (!t?.recipe_id) return;
       const list = tagsById.get(t.recipe_id) ?? [];
       list.push({ tag_type: t.tag_type, tag_value: t.tag_value });
@@ -155,13 +187,12 @@ serve(async (req) => {
     }));
 
     return new Response(
-      JSON.stringify({ recipes: payload }),
+      JSON.stringify({ recipes: payload, nextCursor, hasNextPage }),
       {
         status: 200,
         headers: {
           ...corsHeaders,
           "Content-Type": "application/json",
-          // Cache briefly to reduce repeated load during browsing
           "Cache-Control": "public, max-age=60",
         },
       },

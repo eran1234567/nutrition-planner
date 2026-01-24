@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { Search, Clock, Sparkles, BookOpen, ChefHat, Baby, Plus, Check, Target, UtensilsCrossed, AlertTriangle, HeartPulse, X, Flame, Wheat, Droplets, RefreshCw, LogOut } from 'lucide-react';
+import { Search, Clock, Sparkles, BookOpen, ChefHat, Baby, Plus, Check, Target, UtensilsCrossed, AlertTriangle, HeartPulse, X, Flame, Wheat, Droplets, RefreshCw, LogOut, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -15,7 +15,7 @@ import { AddToPlanModal } from '@/components/plan/AddToPlanModal';
 import { FilterDropdown } from '@/components/discover/FilterDropdown';
 import { MultiSelectDropdown } from '@/components/discover/MultiSelectDropdown';
 import { FilterHelpModal } from '@/components/discover/FilterHelpModal';
-import { useGlobalRecipes } from '@/hooks/useGlobalRecipes';
+import { useGlobalRecipesInfinite } from '@/hooks/useGlobalRecipesInfinite';
 import { useAppStore } from '@/stores/appStore';
 import { useMealPlanStore } from '@/stores/mealPlanStore';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -519,7 +519,37 @@ export default function Discover() {
     });
   }, [userAgeGroup]);
 
-  const { data: globalRecipes = [], isLoading: isLoadingGlobal } = useGlobalRecipes();
+  const {
+    data: infiniteData,
+    isLoading: isLoadingGlobal,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useGlobalRecipesInfinite();
+
+  // Flatten pages into a single array
+  const globalRecipes = useMemo(() => {
+    return infiniteData?.pages.flatMap((page) => page.recipes) ?? [];
+  }, [infiniteData]);
+
+  // Infinite scroll observer
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!hasNextPage || isFetchingNextPage) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          fetchNextPage();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    const el = loadMoreRef.current;
+    if (el) observer.observe(el);
+    return () => {
+      if (el) observer.unobserve(el);
+    };
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   useEffect(() => {
     if (!user) return;
@@ -1132,61 +1162,70 @@ export default function Discover() {
 
         {/* Recipe Grid */}
         {!isLoadingGlobal && (
-          <div className="grid grid-cols-2 gap-3">
-            {filteredRecipes.map((recipe) => {
-              const inCurrentPool = isPlanMode && currentSlotFilter && (recipePoolsBySlot[currentSlotFilter] || []).includes(recipe.id);
-              const isChildUser = userAgeGroup === 'toddler' || userAgeGroup === 'child';
-              
-              // Build diet badges array from auto-detection + tags
-              const recipeDietTags = (recipe.tags || [])
-                .filter((t: { tag_type: string; tag_value: string }) => t.tag_type === 'diet')
-                .map((t: { tag_type: string; tag_value: string }) => t.tag_value.toLowerCase());
-              
-              // Build badges with auto-detection for keto, paleo, mediterranean
-              const dietBadges: string[] = [];
-              
-              // Keto: auto-detect from macros
-              if (isKetoFriendly(recipe.nutrition)) {
-                dietBadges.push('keto');
-              }
-              
-              // Paleo: auto-detect from ingredients or use tag
-              if (recipeDietTags.includes('paleo') || isPaleoFriendly(recipe.ingredients)) {
-                dietBadges.push('paleo');
-              }
-              
-              // Mediterranean: auto-detect from ingredients or use tag
-              if (recipeDietTags.includes('mediterranean') || isMediterraneanFriendly(recipe.ingredients)) {
-                dietBadges.push('mediterranean');
-              }
-              
-              // Vegan, vegetarian, pescatarian: rely on tags only (require explicit tagging)
-              ['vegan', 'vegetarian', 'pescatarian'].forEach(diet => {
-                if (recipeDietTags.includes(diet) && !dietBadges.includes(diet)) {
-                  dietBadges.push(diet);
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              {filteredRecipes.map((recipe) => {
+                const inCurrentPool = isPlanMode && currentSlotFilter && (recipePoolsBySlot[currentSlotFilter] || []).includes(recipe.id);
+                const isChildUser = userAgeGroup === 'toddler' || userAgeGroup === 'child';
+                
+                // Build diet badges array from auto-detection + tags
+                const recipeDietTags = (recipe.tags || [])
+                  .filter((t: { tag_type: string; tag_value: string }) => t.tag_type === 'diet')
+                  .map((t: { tag_type: string; tag_value: string }) => t.tag_value.toLowerCase());
+                
+                // Build badges with auto-detection for keto, paleo, mediterranean
+                const dietBadges: string[] = [];
+                
+                // Keto: auto-detect from macros
+                if (isKetoFriendly(recipe.nutrition)) {
+                  dietBadges.push('keto');
                 }
-              });
-              
-              // Auto-detect health badges from nutrition
-              const healthBadges = getHealthBadges(recipe.nutrition);
-              
-              return (
-                <RecipeCard
-                  key={recipe.id}
-                  recipe={recipe as any}
-                  isSelected={isSelected(recipe.id)}
-                  isRemovable={inCurrentPool}
-                  onSelect={() => handleSelect(recipe)}
-                  onClick={() => handleRecipeCardClick(recipe)}
-                  compact
-                  dietBadges={dietBadges}
-                  healthBadges={healthBadges}
-                  showCuisineBadge={true}
-                  showKidBadge={isChildUser}
-                />
-              );
-            })}
-          </div>
+                
+                // Paleo: auto-detect from ingredients or use tag
+                if (recipeDietTags.includes('paleo') || isPaleoFriendly(recipe.ingredients)) {
+                  dietBadges.push('paleo');
+                }
+                
+                // Mediterranean: auto-detect from ingredients or use tag
+                if (recipeDietTags.includes('mediterranean') || isMediterraneanFriendly(recipe.ingredients)) {
+                  dietBadges.push('mediterranean');
+                }
+                
+                // Vegan, vegetarian, pescatarian: rely on tags only (require explicit tagging)
+                ['vegan', 'vegetarian', 'pescatarian'].forEach(diet => {
+                  if (recipeDietTags.includes(diet) && !dietBadges.includes(diet)) {
+                    dietBadges.push(diet);
+                  }
+                });
+                
+                // Auto-detect health badges from nutrition
+                const healthBadges = getHealthBadges(recipe.nutrition);
+                
+                return (
+                  <RecipeCard
+                    key={recipe.id}
+                    recipe={recipe as any}
+                    isSelected={isSelected(recipe.id)}
+                    isRemovable={inCurrentPool}
+                    onSelect={() => handleSelect(recipe)}
+                    onClick={() => handleRecipeCardClick(recipe)}
+                    compact
+                    dietBadges={dietBadges}
+                    healthBadges={healthBadges}
+                    showCuisineBadge={true}
+                    showKidBadge={isChildUser}
+                  />
+                );
+              })}
+            </div>
+
+            {/* Infinite scroll sentinel + loading indicator */}
+            <div ref={loadMoreRef} className="flex justify-center py-6">
+              {isFetchingNextPage && (
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              )}
+            </div>
+          </>
         )}
 
         {!isLoadingGlobal && filteredRecipes.length === 0 && (
