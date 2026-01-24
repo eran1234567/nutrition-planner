@@ -69,18 +69,18 @@ export function DayTotalsSummary({ dayTotals, dailyTargets }: DayTotalsSummaryPr
           colorClass="text-[hsl(var(--protein))]"
         />
         <MacroBox
-          label="Carbs"
-          value={dayTotals.carbs}
-          target={dailyTargets.carbs}
-          unit="g"
-          colorClass="text-[hsl(var(--carbs))]"
-        />
-        <MacroBox
           label="Fat"
           value={dayTotals.fat}
           target={dailyTargets.fat}
           unit="g"
           colorClass="text-[hsl(var(--fat))]"
+        />
+        <MacroBox
+          label="Carbs"
+          value={dayTotals.carbs}
+          target={dailyTargets.carbs}
+          unit="g"
+          colorClass="text-[hsl(var(--carbs))]"
         />
       </div>
     </div>

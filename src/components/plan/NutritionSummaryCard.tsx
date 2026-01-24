@@ -72,18 +72,18 @@ export function NutritionSummaryCard({
             textColorClass="text-[hsl(var(--protein))]"
           />
           <MacroRing
-            label="Carbs"
-            actual={dayTotals.carbs}
-            target={dailyTargets.carbs}
-            colorClass="stroke-[hsl(var(--carbs))]"
-            textColorClass="text-[hsl(var(--carbs))]"
-          />
-          <MacroRing
             label="Fat"
             actual={dayTotals.fat}
             target={dailyTargets.fat}
             colorClass="stroke-[hsl(var(--fat))]"
             textColorClass="text-[hsl(var(--fat))]"
+          />
+          <MacroRing
+            label="Carbs"
+            actual={dayTotals.carbs}
+            target={dailyTargets.carbs}
+            colorClass="stroke-[hsl(var(--carbs))]"
+            textColorClass="text-[hsl(var(--carbs))]"
           />
         </div>
       </div>

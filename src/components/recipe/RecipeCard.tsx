@@ -233,12 +233,12 @@ export function RecipeCard({
                 <p className="text-2xs text-muted-foreground">protein</p>
               </div>
               <div className="text-center flex-1">
-                <p className="text-sm font-bold text-[hsl(var(--carbs))]">{nutrition?.carbs_g ?? '-'}g</p>
-                <p className="text-2xs text-muted-foreground">carbs</p>
-              </div>
-              <div className="text-center flex-1">
                 <p className="text-sm font-bold text-[hsl(var(--fat))]">{nutrition?.fat_g ?? '-'}g</p>
                 <p className="text-2xs text-muted-foreground">fat</p>
+              </div>
+              <div className="text-center flex-1">
+                <p className="text-sm font-bold text-[hsl(var(--carbs))]">{nutrition?.carbs_g ?? '-'}g</p>
+                <p className="text-2xs text-muted-foreground">carbs</p>
               </div>
             </div>
           </div>
