@@ -279,21 +279,6 @@ export default function RecipeDetail() {
                   </span>
                 );
               })}
-              {recipe.is_kid_friendly && (
-                <Badge variant="secondary" className="bg-warning/20 text-warning-foreground">
-                  👶 Kid Friendly
-                </Badge>
-              )}
-              {recipe.is_meal_prep_friendly && (
-                <Badge variant="secondary" className="bg-primary/20 text-primary">
-                  📦 Meal Prep
-                </Badge>
-              )}
-              {recipe.is_budget_friendly && (
-                <Badge variant="secondary" className="bg-success/20 text-success">
-                  💰 Budget
-                </Badge>
-              )}
             </div>
           </div>
 
