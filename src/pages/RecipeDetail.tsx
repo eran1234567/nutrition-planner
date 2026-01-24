@@ -351,7 +351,7 @@ export default function RecipeDetail() {
                   <p className="text-xs text-muted-foreground">fiber</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-bold text-sodium">{perServingNutrition.sodium_mg}</p>
+                  <p className="text-lg font-bold text-sodium">{perServingNutrition.sodium_mg}mg</p>
                   <p className="text-xs text-muted-foreground">sodium</p>
                 </div>
               </div>
