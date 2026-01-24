@@ -6,5 +6,8 @@ verify_jwt = false
 [functions.seed-global-recipes]
 verify_jwt = false
 
+[functions.seed-global-recipe]
+verify_jwt = false
+
 [functions.upload-recipe-images]
 verify_jwt = false
