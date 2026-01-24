@@ -8,6 +8,18 @@ const corsHeaders = {
 
 const LOVABLE_API_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 
+// Generate image URL from recipe title by converting to kebab-case
+function getImageUrl(title: string): string {
+  const slug = title
+    .toLowerCase()
+    .replace(/['']/g, '')           // Remove apostrophes
+    .replace(/[^a-z0-9\s-]/g, '')   // Remove special characters
+    .replace(/\s+/g, '-')           // Replace spaces with hyphens
+    .replace(/-+/g, '-')            // Remove multiple hyphens
+    .trim();
+  return `/recipe-images/${slug}.jpg`;
+}
+
 // Calculate serving_size using AI Chef rules
 async function calculateServingSize(
   title: string,
@@ -1356,7 +1368,7 @@ serve(async (req) => {
           is_budget_friendly: recipe.is_budget_friendly,
           scope: "global",
           owner_user_id: null,
-          image_url: null // Will be updated separately
+          image_url: getImageUrl(recipe.title)
         })
         .select()
         .single();
