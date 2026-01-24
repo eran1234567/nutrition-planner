@@ -6,6 +6,77 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const LOVABLE_API_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
+
+// Calculate serving_size using AI Chef rules
+async function calculateServingSize(
+  title: string,
+  servings: number,
+  ingredients: Array<{ name: string; quantity: number; unit: string }>,
+  apiKey: string
+): Promise<string> {
+  const ingredientsList = ingredients
+    .map(ing => `${ing.quantity || ''} ${ing.unit || ''} ${ing.name}`.trim())
+    .join(', ');
+
+  const prompt = `Given this recipe with ${servings} servings:
+Title: ${title}
+Ingredients: ${ingredientsList}
+
+Calculate what ONE SERVING equals in terms of the COMPLETED DISH with SPECIFIC COUNTS.
+
+CRITICAL CALCULATION RULES:
+1. For countable protein items (chicken tenders, wings, drumsticks, meatballs, patties, nuggets):
+   - Calculate: total quantity ÷ number of servings = pieces per serving
+   - Example: "1.5 lbs chicken tenders" ≈ 12 tenders total ÷ 4 servings = "3 chicken tenders"
+
+2. For whole protein pieces (chicken breasts, steaks, pork chops, fish fillets):
+   - Use piece count if countable: "1 chicken breast" or "1 pork chop"
+   - Or use weight per serving: "6 oz salmon" or "5 oz steak"
+
+3. For non-countable items (soups, stews, rice dishes, salads):
+   - Use volume: "1 cup soup" or "1.5 cups fried rice" or "1 bowl"
+
+4. For multi-component dishes:
+   - Combine protein count + sides: "3 chicken tenders + 1 cup vegetables"
+
+DO NOT say generic things like "1 chicken breast equivalent" - be SPECIFIC with actual piece counts or weights.
+
+Respond with ONLY the serving size description, no explanation. Keep it under 60 characters.`;
+
+  try {
+    const response = await fetch(LOVABLE_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { role: 'system', content: 'You are a nutrition assistant. Respond with ONLY the serving size description, nothing else.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.2,
+      }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      let servingSize = data.choices?.[0]?.message?.content?.trim();
+      if (servingSize) {
+        return servingSize
+          .replace(/^["']|["']$/g, '')
+          .replace(/^\*+|\*+$/g, '')
+          .substring(0, 100);
+      }
+    }
+  } catch (err) {
+    console.error('Error calculating serving size:', err);
+  }
+  return '1 serving';
+}
+
 // Seed recipes data
 const seedRecipes = [
   {
@@ -1028,6 +1099,7 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')!;
 
     // Validate authentication
     const authHeader = req.headers.get('Authorization');
@@ -1086,6 +1158,14 @@ serve(async (req) => {
     
     for (const recipe of seedRecipes) {
       try {
+        // Calculate serving_size using AI Chef rules
+        const servingSize = await calculateServingSize(
+          recipe.title,
+          recipe.servings,
+          recipe.ingredients,
+          LOVABLE_API_KEY
+        );
+        
         // Insert recipe (let database generate UUID)
         const { data: recipeData, error: recipeError } = await supabase
           .from('recipes')
@@ -1093,6 +1173,7 @@ serve(async (req) => {
             title: recipe.title,
             description: recipe.description,
             servings: recipe.servings,
+            serving_size: servingSize,
             prep_time: recipe.prep_time,
             cook_time: recipe.cook_time,
             total_time: recipe.total_time,
