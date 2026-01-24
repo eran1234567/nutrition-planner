@@ -99,6 +99,8 @@ export function useGlobalRecipes() {
     queryKey: ['global-recipes'],
     queryFn: async (): Promise<GlobalRecipe[]> => {
       try {
+        // Optimized query: fetch only essential fields for list view
+        // Ingredients/steps are fetched on-demand via useRecipeById
         const { data, error } = await supabase
           .from('recipes')
           .select(
@@ -119,8 +121,6 @@ export function useGlobalRecipes() {
             is_budget_friendly,
             scope,
             recipe_nutrition(calories, protein_g, carbs_g, fat_g, fiber_g, sodium_mg),
-            recipe_ingredients(name, quantity, unit, normalized_name, aisle, order_index),
-            recipe_steps(step_number, instruction),
             recipe_tags(tag_type, tag_value)
           `
           )
@@ -154,8 +154,8 @@ export function useGlobalRecipes() {
             is_budget_friendly: r.is_budget_friendly,
             scope: r.scope,
             nutrition: nutritionData || undefined,
-            ingredients: r.recipe_ingredients || [],
-            steps: r.recipe_steps || [],
+            ingredients: [], // Loaded on-demand via useRecipeById
+            steps: [], // Loaded on-demand via useRecipeById
             tags: r.recipe_tags || [],
             isUserRecipe: false,
           } as GlobalRecipe;
