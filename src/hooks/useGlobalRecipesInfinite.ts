@@ -53,6 +53,25 @@ interface PageData {
 
 const PAGE_SIZE = 100;
 
+// IMPORTANT: Many DB recipes currently have extremely large base64 `image_url` values.
+// Fetching that column in list queries can trigger statement timeouts and cause the UI
+// to fall back to the 30 seed recipes.
+//
+// For the Discover grid we instead derive a lightweight static image path from the title.
+// These images live in /public/recipe-images/*.jpg.
+function getStaticImageUrlFromTitle(title: string | null | undefined): string | null {
+  if (!title) return null;
+  const slug = title
+    .toLowerCase()
+    .replace(/[’']/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .trim();
+  if (!slug) return null;
+  return `/recipe-images/${slug}.jpg`;
+}
+
 function getSeedFallback(): GlobalRecipe[] {
   return seedRecipes
     .filter((r) => r.scope === 'global' && !r.is_deleted)
@@ -112,7 +131,6 @@ async function fetchPage(offset: number): Promise<PageData> {
           'id',
           'title',
           'description',
-          'image_url',
           'prep_time',
           'cook_time',
           'total_time',
@@ -183,7 +201,8 @@ async function fetchPage(offset: number): Promise<PageData> {
       id: r.id,
       title: r.title,
       description: r.description ?? null,
-      image_url: r.image_url ?? null,
+      // Do not read image_url in list queries; use a lightweight static thumbnail instead.
+      image_url: getStaticImageUrlFromTitle(r.title),
       prep_time: r.prep_time ?? null,
       cook_time: r.cook_time ?? null,
       total_time: r.total_time ?? null,
