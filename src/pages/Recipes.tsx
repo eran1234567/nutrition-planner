@@ -35,6 +35,7 @@ import {
   DrawerTitle,
 } from '@/components/ui/drawer';
 import { Input } from '@/components/ui/input';
+import { getHealthBadges, meetsHealthConsideration } from '@/lib/nutrition/healthDetection';
 
 // Filter options (same as Discover page)
 const timeFilterOptions = [
@@ -386,11 +387,12 @@ export default function Recipes() {
         if (matchesBlockedIngredients()) return false;
       }
       
-      // Health considerations filter
+      // Health considerations filter - use auto-detection
       if (selectedHealthConsiderations.length > 0) {
-        const recipeMedicalTags = (recipe.tags || []).filter(t => t.tag_type === 'medical').map(t => t.tag_value);
-        const hasAllHealthTags = selectedHealthConsiderations.every(pref => recipeMedicalTags.includes(pref));
-        if (!hasAllHealthTags) return false;
+        const recipeMeetsAll = selectedHealthConsiderations.every(pref => 
+          meetsHealthConsideration(pref, recipe.nutrition)
+        );
+        if (!recipeMeetsAll) return false;
       }
       
       return true;
@@ -866,6 +868,7 @@ export default function Recipes() {
                       nutrition: recipe.nutrition,
                     }} 
                     dietBadges={getDietBadges(recipe)}
+                    healthBadges={getHealthBadges(recipe.nutrition)}
                     onClick={() => navigate(`/recipe/${recipe.id}`)}
                     onDelete={() => handleDeleteClick(recipe)}
                   />

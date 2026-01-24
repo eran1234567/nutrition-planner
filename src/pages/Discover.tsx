@@ -23,6 +23,7 @@ import { useUserData } from '@/hooks/useUserData';
 import { supabase } from '@/integrations/supabase/client';
 import type { MealSlotId, MealSlot } from '@/types/mealPlan';
 import { MEAL_SLOT_DEFINITIONS, getDefaultPercentsForSlots } from '@/types/mealPlan';
+import { getHealthBadges, meetsHealthConsideration } from '@/lib/nutrition/healthDetection';
 
 // Age-based meal suitability
 type AgeGroup = 'toddler' | 'child' | 'teen' | 'adult';
@@ -709,10 +710,12 @@ export default function Discover() {
           return false;
         }
       }
-      if (!recipe.isUserRecipe && activeHealthPreferences.length > 0) {
-        const recipeMedicalTags = (recipe.tags || []).filter(t => t.tag_type === 'medical').map(t => t.tag_value);
-        const hasAllHealthTags = activeHealthPreferences.every(pref => recipeMedicalTags.includes(pref));
-        if (!hasAllHealthTags) return false;
+      // Health considerations filter - use auto-detection
+      if (activeHealthPreferences.length > 0) {
+        const recipeMeetsAll = activeHealthPreferences.every(pref => 
+          meetsHealthConsideration(pref, recipe.nutrition)
+        );
+        if (!recipeMeetsAll) return false;
       }
       return true;
     });
@@ -1162,6 +1165,9 @@ export default function Discover() {
                 }
               });
               
+              // Auto-detect health badges from nutrition
+              const healthBadges = getHealthBadges(recipe.nutrition);
+              
               return (
                 <RecipeCard
                   key={recipe.id}
@@ -1172,6 +1178,7 @@ export default function Discover() {
                   onClick={() => handleRecipeCardClick(recipe)}
                   compact
                   dietBadges={dietBadges}
+                  healthBadges={healthBadges}
                   showKidBadge={isChildUser}
                 />
               );

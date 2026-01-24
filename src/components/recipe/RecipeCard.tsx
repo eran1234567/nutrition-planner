@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, Users, Check, Plus, Trash2, Minus, Flame, Leaf, Fish, Drumstick, Apple, Sun } from 'lucide-react';
+import { Clock, Users, Check, Plus, Trash2, Minus, Flame, Leaf, Fish, Drumstick, Sun, Heart, Droplets, Activity } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
@@ -31,6 +31,11 @@ const DIET_BADGES: Record<string, { label: string; icon: React.ReactNode; bgClas
   pescatarian: { label: 'Pescatarian', icon: <Fish className="w-3 h-3" />, bgClass: 'bg-sky-500/90', textClass: 'text-white' },
   paleo: { label: 'Paleo', icon: <Drumstick className="w-3 h-3" />, bgClass: 'bg-amber-600/90', textClass: 'text-white' },
   mediterranean: { label: 'Mediterranean', icon: <Sun className="w-3 h-3" />, bgClass: 'bg-orange-500/90', textClass: 'text-white' },
+  // Health consideration badges
+  'diabetes-friendly': { label: 'Diabetes', icon: <Activity className="w-3 h-3" />, bgClass: 'bg-blue-500/90', textClass: 'text-white' },
+  'heart-healthy': { label: 'Heart', icon: <Heart className="w-3 h-3" />, bgClass: 'bg-rose-500/90', textClass: 'text-white' },
+  'low-sodium': { label: 'Low Na', icon: <Droplets className="w-3 h-3" />, bgClass: 'bg-cyan-500/90', textClass: 'text-white' },
+  'kidney-friendly': { label: 'Kidney', icon: <Droplets className="w-3 h-3" />, bgClass: 'bg-purple-500/90', textClass: 'text-white' },
 };
 
 interface RecipeCardProps {
@@ -42,6 +47,7 @@ interface RecipeCardProps {
   onDelete?: () => void;
   compact?: boolean;
   dietBadges?: string[]; // Array of diet types to show as badges
+  healthBadges?: string[]; // Array of health considerations to show as badges
   showKidBadge?: boolean;
 }
 
@@ -54,6 +60,7 @@ export function RecipeCard({
   onDelete,
   compact = false,
   dietBadges = [],
+  healthBadges = [],
   showKidBadge = false
 }: RecipeCardProps) {
   const nutrition = recipe.nutrition;
@@ -67,8 +74,9 @@ export function RecipeCard({
     nutrition.fat_g != null
   );
 
-  // Show up to 3 diet badges to balance visibility with space
-  const visibleDietBadges = dietBadges.slice(0, 3);
+  // Combine diet and health badges, show up to 3 to balance visibility with space
+  const allBadges = [...dietBadges, ...healthBadges];
+  const visibleBadges = allBadges.slice(0, 3);
 
   return (
     <motion.article
@@ -137,14 +145,14 @@ export function RecipeCard({
           </div>
         )}
 
-        {/* Diet badges - single row */}
+        {/* Diet and health badges - single row */}
         <div className="absolute bottom-2 right-2 flex items-center gap-1">
-          {visibleDietBadges.map((diet) => {
-            const badge = DIET_BADGES[diet];
+          {visibleBadges.map((badgeKey) => {
+            const badge = DIET_BADGES[badgeKey];
             if (!badge) return null;
             return (
               <span
-                key={diet}
+                key={badgeKey}
                 className={cn(
                   'px-1.5 py-0.5 rounded-full text-2xs font-semibold flex items-center gap-0.5 whitespace-nowrap',
                   badge.bgClass,
