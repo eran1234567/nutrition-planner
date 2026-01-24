@@ -79,6 +79,7 @@
     --carbs: 38 92% 50%;     /* Amber/Gold */
     --fat: 280 60% 55%;      /* Purple */
     --fiber: 160 50% 40%;    /* Teal */
+    --sodium: 220 15% 50%;   /* Slate gray */
 
     /* Meal type colors */
     --breakfast: 38 92% 50%;
@@ -141,6 +142,7 @@
     --carbs: 38 85% 50%;     /* Amber/Gold */
     --fat: 280 55% 55%;      /* Purple */
     --fiber: 160 45% 45%;    /* Teal */
+    --sodium: 220 15% 55%;   /* Slate gray */
 
     --breakfast: 38 85% 50%;
     --lunch: 142 55% 45%;
