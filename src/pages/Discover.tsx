@@ -1179,6 +1179,7 @@ export default function Discover() {
                   compact
                   dietBadges={dietBadges}
                   healthBadges={healthBadges}
+                  showCuisineBadge={true}
                   showKidBadge={isChildUser}
                 />
               );

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clock, Users, Check, Plus, Trash2, Minus, Flame, Leaf, Fish, Drumstick, Sun, Heart, Droplets, Activity } from 'lucide-react';
+import { Clock, Users, Check, Plus, Trash2, Minus, Flame, Leaf, Fish, Drumstick, Sun, Heart, Droplets, Activity, Globe, Pizza, UtensilsCrossed, Soup, Cherry } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 
@@ -16,6 +16,7 @@ interface RecipeCardRecipe {
   image_url?: string | null;
   total_time?: number | null;
   servings?: number | null;
+  cuisine?: string | null;
   is_kid_friendly?: boolean | null;
   is_meal_prep_friendly?: boolean | null;
   nutrition?: NutritionData | null;
@@ -38,6 +39,21 @@ const DIET_BADGES: Record<string, { label: string; icon: React.ReactNode; bgClas
   'kidney-friendly': { label: 'Kidney', icon: <Droplets className="w-3 h-3" />, bgClass: 'bg-purple-500/90', textClass: 'text-white' },
 };
 
+// Cuisine badge config with colors and icons
+const CUISINE_BADGES: Record<string, { label: string; icon: React.ReactNode; bgClass: string; textClass: string }> = {
+  american: { label: 'American', icon: <UtensilsCrossed className="w-3 h-3" />, bgClass: 'bg-red-500/90', textClass: 'text-white' },
+  italian: { label: 'Italian', icon: <Pizza className="w-3 h-3" />, bgClass: 'bg-green-700/90', textClass: 'text-white' },
+  mexican: { label: 'Mexican', icon: <Cherry className="w-3 h-3" />, bgClass: 'bg-red-600/90', textClass: 'text-white' },
+  asian: { label: 'Asian', icon: <Soup className="w-3 h-3" />, bgClass: 'bg-amber-500/90', textClass: 'text-white' },
+  mediterranean: { label: 'Mediterranean', icon: <Sun className="w-3 h-3" />, bgClass: 'bg-orange-500/90', textClass: 'text-white' },
+  indian: { label: 'Indian', icon: <Flame className="w-3 h-3" />, bgClass: 'bg-orange-600/90', textClass: 'text-white' },
+  japanese: { label: 'Japanese', icon: <Fish className="w-3 h-3" />, bgClass: 'bg-pink-500/90', textClass: 'text-white' },
+  thai: { label: 'Thai', icon: <Leaf className="w-3 h-3" />, bgClass: 'bg-teal-500/90', textClass: 'text-white' },
+  french: { label: 'French', icon: <UtensilsCrossed className="w-3 h-3" />, bgClass: 'bg-blue-600/90', textClass: 'text-white' },
+  greek: { label: 'Greek', icon: <Sun className="w-3 h-3" />, bgClass: 'bg-sky-600/90', textClass: 'text-white' },
+  brazilian: { label: 'Brazilian', icon: <Leaf className="w-3 h-3" />, bgClass: 'bg-yellow-500/90', textClass: 'text-white' },
+};
+
 interface RecipeCardProps {
   recipe: RecipeCardRecipe;
   isSelected?: boolean;
@@ -48,6 +64,7 @@ interface RecipeCardProps {
   compact?: boolean;
   dietBadges?: string[]; // Array of diet types to show as badges
   healthBadges?: string[]; // Array of health considerations to show as badges
+  showCuisineBadge?: boolean; // Whether to show cuisine badge
   showKidBadge?: boolean;
 }
 
@@ -61,6 +78,7 @@ export function RecipeCard({
   compact = false,
   dietBadges = [],
   healthBadges = [],
+  showCuisineBadge = false,
   showKidBadge = false
 }: RecipeCardProps) {
   const nutrition = recipe.nutrition;
@@ -74,9 +92,14 @@ export function RecipeCard({
     nutrition.fat_g != null
   );
 
+  // Get cuisine badge if enabled
+  const cuisineBadge = showCuisineBadge && recipe.cuisine 
+    ? CUISINE_BADGES[recipe.cuisine.toLowerCase()] 
+    : null;
+
   // Combine diet and health badges, show up to 3 to balance visibility with space
   const allBadges = [...dietBadges, ...healthBadges];
-  const visibleBadges = allBadges.slice(0, 3);
+  const visibleBadges = cuisineBadge ? allBadges.slice(0, 2) : allBadges.slice(0, 3);
 
   return (
     <motion.article
@@ -145,8 +168,20 @@ export function RecipeCard({
           </div>
         )}
 
-        {/* Diet and health badges - single row */}
+        {/* Cuisine, diet and health badges - single row */}
         <div className="absolute bottom-2 right-2 flex items-center gap-1">
+          {cuisineBadge && (
+            <span
+              className={cn(
+                'px-1.5 py-0.5 rounded-full text-2xs font-semibold flex items-center gap-0.5 whitespace-nowrap',
+                cuisineBadge.bgClass,
+                cuisineBadge.textClass
+              )}
+            >
+              {cuisineBadge.icon}
+              <span className="hidden sm:inline">{cuisineBadge.label}</span>
+            </span>
+          )}
           {visibleBadges.map((badgeKey) => {
             const badge = DIET_BADGES[badgeKey];
             if (!badge) return null;
