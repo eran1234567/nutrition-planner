@@ -580,7 +580,7 @@ export default function Discover() {
     if (swapContext && currentSlotFilter) {
       const slotMealType = getMealTypeForSlot(currentSlotFilter);
       return allRecipes.filter(recipe => {
-        if (!recipe.isUserRecipe && (!recipe.image_url || recipe.image_url.includes('undefined') || (!recipe.image_url.startsWith('http') && !recipe.image_url.startsWith('/')))) {
+        if (!recipe.isUserRecipe && (!recipe.image_url || recipe.image_url.includes('undefined') || (!recipe.image_url.startsWith('http') && !recipe.image_url.startsWith('/') && !recipe.image_url.startsWith('data:')))) {
           return false;
         }
         if (searchQuery) {
@@ -658,7 +658,7 @@ export default function Discover() {
     }
     
     let recipes = allRecipes.filter(recipe => {
-      if (!recipe.isUserRecipe && (!recipe.image_url || recipe.image_url.includes('undefined') || (!recipe.image_url.startsWith('http') && !recipe.image_url.startsWith('/')))) {
+      if (!recipe.isUserRecipe && (!recipe.image_url || recipe.image_url.includes('undefined') || (!recipe.image_url.startsWith('http') && !recipe.image_url.startsWith('/') && !recipe.image_url.startsWith('data:')))) {
         return false;
       }
       if (searchQuery) {
