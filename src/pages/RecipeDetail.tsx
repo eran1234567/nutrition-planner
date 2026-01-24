@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Loader2, Pencil, Leaf, Fish, Drumstick, Sun, CalendarPlus, Heart, Droplets, Activity } from 'lucide-react';
+import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Loader2, Pencil, Leaf, Fish, Drumstick, Sun, CalendarPlus, Heart, Droplets, Activity, Globe, Pizza, UtensilsCrossed, Soup, Cherry } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BottomNav } from '@/components/layout/BottomNav';
@@ -28,6 +28,21 @@ const DIET_BADGES: Record<string, { label: string; icon: React.ReactNode; bgClas
   'heart-healthy': { label: 'Heart Healthy', icon: <Heart className="w-3 h-3" />, bgClass: 'bg-rose-500/90', textClass: 'text-white' },
   'low-sodium': { label: 'Low Sodium', icon: <Droplets className="w-3 h-3" />, bgClass: 'bg-cyan-500/90', textClass: 'text-white' },
   'kidney-friendly': { label: 'Kidney Friendly', icon: <Droplets className="w-3 h-3" />, bgClass: 'bg-purple-500/90', textClass: 'text-white' },
+};
+
+// Cuisine badge config with colors and icons
+const CUISINE_BADGES: Record<string, { label: string; icon: React.ReactNode; bgClass: string; textClass: string }> = {
+  american: { label: 'American', icon: <UtensilsCrossed className="w-3 h-3" />, bgClass: 'bg-red-500/90', textClass: 'text-white' },
+  italian: { label: 'Italian', icon: <Pizza className="w-3 h-3" />, bgClass: 'bg-green-700/90', textClass: 'text-white' },
+  mexican: { label: 'Mexican', icon: <Cherry className="w-3 h-3" />, bgClass: 'bg-red-600/90', textClass: 'text-white' },
+  asian: { label: 'Asian', icon: <Soup className="w-3 h-3" />, bgClass: 'bg-amber-500/90', textClass: 'text-white' },
+  mediterranean: { label: 'Mediterranean', icon: <Sun className="w-3 h-3" />, bgClass: 'bg-orange-500/90', textClass: 'text-white' },
+  indian: { label: 'Indian', icon: <Flame className="w-3 h-3" />, bgClass: 'bg-orange-600/90', textClass: 'text-white' },
+  japanese: { label: 'Japanese', icon: <Fish className="w-3 h-3" />, bgClass: 'bg-pink-500/90', textClass: 'text-white' },
+  thai: { label: 'Thai', icon: <Leaf className="w-3 h-3" />, bgClass: 'bg-teal-500/90', textClass: 'text-white' },
+  french: { label: 'French', icon: <UtensilsCrossed className="w-3 h-3" />, bgClass: 'bg-blue-600/90', textClass: 'text-white' },
+  greek: { label: 'Greek', icon: <Sun className="w-3 h-3" />, bgClass: 'bg-sky-600/90', textClass: 'text-white' },
+  brazilian: { label: 'Brazilian', icon: <Leaf className="w-3 h-3" />, bgClass: 'bg-yellow-500/90', textClass: 'text-white' },
 };
 
 // Diet exclusions for auto-detection
@@ -187,6 +202,12 @@ export default function RecipeDetail() {
     return getHealthBadges(recipe.nutrition);
   }, [recipe?.nutrition]);
 
+  // Get cuisine badge from recipe data
+  const cuisineBadge = useMemo(() => {
+    if (!recipe?.cuisine) return null;
+    return CUISINE_BADGES[recipe.cuisine.toLowerCase()] || null;
+  }, [recipe?.cuisine]);
+
   // Format quantity for display (remove trailing zeros)
   const formatQuantity = (qty: number | null) => {
     if (qty === null) return '';
@@ -277,6 +298,15 @@ export default function RecipeDetail() {
           <div className="mb-4">
             <h1 className="text-2xl font-bold text-foreground mb-2">{recipe.title}</h1>
             <div className="flex flex-wrap gap-2">
+              {/* Cuisine badge */}
+              {cuisineBadge && (
+                <span
+                  className={`px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1 ${cuisineBadge.bgClass} ${cuisineBadge.textClass}`}
+                >
+                  {cuisineBadge.icon}
+                  {cuisineBadge.label}
+                </span>
+              )}
               {/* Diet badges */}
               {dietBadges.map((diet) => {
                 const badge = DIET_BADGES[diet];

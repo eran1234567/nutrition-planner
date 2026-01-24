@@ -153,6 +153,7 @@ interface UserRecipe {
   cook_time: number | null;
   total_time: number | null;
   servings: number | null;
+  cuisine: string | null;
   is_kid_friendly: boolean | null;
   is_meal_prep_friendly: boolean | null;
   nutrition?: RecipeNutrition | null;
@@ -863,12 +864,14 @@ export default function Recipes() {
                       image_url: recipe.image_url || undefined,
                       total_time: recipe.total_time || undefined,
                       servings: recipe.servings || 4,
+                      cuisine: recipe.cuisine || undefined,
                       is_kid_friendly: recipe.is_kid_friendly || false,
                       is_meal_prep_friendly: recipe.is_meal_prep_friendly || false,
                       nutrition: recipe.nutrition,
                     }} 
                     dietBadges={getDietBadges(recipe)}
                     healthBadges={getHealthBadges(recipe.nutrition)}
+                    showCuisineBadge={true}
                     onClick={() => navigate(`/recipe/${recipe.id}`)}
                     onDelete={() => handleDeleteClick(recipe)}
                   />
