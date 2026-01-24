@@ -128,8 +128,15 @@ async function generateRecipeImagesInBackground(
       try {
         console.log(`Generating image for recipe: ${recipe.title}`);
         
-        const imagePrompt = `Professional food photography of ${recipe.title}. ${recipe.description || ''} 
-Beautiful plated dish, overhead angle, natural lighting, appetizing presentation, high-quality food photography style, 16:9 aspect ratio.`;
+        // Image prompt following strict guidelines:
+        // - Show final plated dish only
+        // - Match ingredients, portions, and cooking method
+        // - No extra garnish, props, or text
+        // - Realistic, home-cooked appearance
+        const imagePrompt = `Professional food photography of a home-cooked ${recipe.title}. ${recipe.description || ''}
+Final plated dish only. Realistic home-cooked appearance. Match the actual ingredients and portions from the recipe.
+No text, no extra garnish or props not in the recipe. Natural lighting, overhead or 45-degree angle, clean simple background, appetizing presentation.
+16:9 aspect ratio, high-quality food photography style.`;
 
         const imageResponse = await fetch(LOVABLE_API_URL, {
           method: 'POST',
@@ -327,39 +334,75 @@ serve(async (req) => {
     await supabase.from('uploads').update({ status: 'parsing' }).eq('id', uploadId);
 
     // Build the prompt based on content type
-    const systemPrompt = `You are an expert recipe extraction and nutrition calculation AI. Your job is to:
-1. Extract EVERY recipe from the provided content
-2. For each recipe, extract all ingredients with exact quantities and units
-3. Calculate accurate nutrition per serving based on the ingredients
-4. Always respond with valid JSON only, no markdown code blocks or explanation.
+    const systemPrompt = `You are an AI expert in nutrition science, metabolic health, professional cooking, recipe engineering, macro calculation, and meal scaling.
+Your job is to extract and generate complete, accurate recipes from any provided content.
 
-CRITICAL: 
-- Extract ALL recipes if there are multiple
+CORE PRINCIPLES:
+- Be accurate, deterministic, and practical
+- Extract ALL recipes if multiple are present
 - Each ingredient needs: name, quantity (numeric), unit (or null)
-- Calculate realistic nutrition values based on actual ingredients
+- Calculate realistic nutrition per serving based on actual ingredients
 
-For nutrition calculation:
-- Calculate based on the actual ingredients and quantities
+SERVINGS RULE:
+- Never assume servings unless clearly stated in the source
+- Default to 1 serving if the source does not specify
+- Every recipe MUST define serving size explicitly
+
+DISCRETE FOODS RULE (For countable items like meatballs, patties, stuffed peppers):
+- State total units made
+- State how many units equal one serving
+- Instructions must specify how many units to form
+Example: "Makes 12 meatballs. 1 serving = 4 meatballs."
+
+NUTRITION CALCULATION (per serving):
+- Calculate based on actual ingredients and quantities
 - Divide by servings to get per-serving values
-- Use standard nutrition databases knowledge for common ingredients`;
+- Calories must be accurate within ±2%
+- Use standard nutrition databases knowledge
+
+HEALTH RULES (Hard Constraints - only tag if fully compliant):
+- Low Sodium: < 300 mg sodium per serving
+- Kidney Friendly: < 400 mg sodium AND < 30 g protein per serving
+- Diabetes Friendly: ≥ 5 g fiber AND < 40 g carbs per serving
+- Heart Healthy: ≥ 5 g fiber AND < 300 mg sodium per serving
+
+DIET RULES (Strict compliance required for tags):
+- Keto: ≤ 8g net carbs, ≥ 60% calories from fat, ≤ 35% calories from protein
+- Paleo: No grains, legumes, dairy, or refined oils
+- Mediterranean: No red meat, processed foods, or refined grains
+- Vegan: No animal products
+- Vegetarian: No meat or fish
+- Pescatarian: Fish allowed, no meat
+
+EXTERNAL CONTENT INGESTION:
+- Extract ingredients, cooking method, servings, and nutrition if available
+- Reconstruct missing macros based on ingredients if unavoidable
+- Normalize into the standard output structure
+- Never copy raw content blindly
+
+Always respond with valid JSON only, no markdown code blocks or explanation.`;
     
     const jsonFormat = `REQUIRED JSON structure (respond with ONLY this JSON, no markdown):
 {
   "recipes": [
     {
       "title": "Recipe title",
-      "description": "Brief description of the dish",
+      "description": "Brief description of the dish including what makes it special",
       "prep_time": 15,
       "cook_time": 30,
       "total_time": 45,
       "servings": 4,
+      "serving_size": "1 cup" or "2 patties" or "1 plate",
       "difficulty": "easy|medium|hard",
-      "cuisine": "American|Italian|Mexican|Asian|etc",
+      "cuisine": "American|Italian|Mexican|Asian|Mediterranean|Indian|Japanese|Thai|French|Greek|Brazilian",
+      "is_kid_friendly": false,
+      "is_meal_prep_friendly": true,
+      "is_budget_friendly": true,
       "ingredients": [
-        { "name": "ingredient name", "quantity": 2, "unit": "cups" }
+        { "name": "ingredient name", "quantity": 2, "unit": "cups", "aisle": "produce" }
       ],
       "steps": [
-        "Step 1 instruction",
+        "Step 1 instruction with specific details",
         "Step 2 instruction"
       ],
       "nutrition": {
@@ -367,20 +410,30 @@ For nutrition calculation:
         "protein_g": 12,
         "carbs_g": 3,
         "fat_g": 20,
-        "fiber_g": 0,
+        "fiber_g": 5,
         "sodium_mg": 180
       },
-      "tags": ["lunch", "quick", "high-protein"]
+      "tags": ["lunch", "quick", "high-protein", "low-sodium", "keto"],
+      "diet_tags": ["keto", "low-carb"],
+      "health_tags": ["low-sodium", "heart-healthy"],
+      "units_info": {
+        "total_units": 12,
+        "units_per_serving": 4,
+        "unit_name": "meatballs"
+      }
     }
   ]
 }
 
-IMPORTANT: 
-- Extract ALL recipes from the document
-- Extract EVERY ingredient for each recipe
-- Calculate realistic nutrition values
-- If servings not specified, estimate based on recipe size
-- If no recipes found, return: { "recipes": [], "error": "Could not extract recipe information" }`;
+CRITICAL RULES:
+1. Extract ALL recipes from the document
+2. Extract EVERY ingredient with exact quantities
+3. Calculate accurate nutrition per serving
+4. Default to 1 serving if not specified in source
+5. For countable items (meatballs, patties, etc), include units_info
+6. Only add diet_tags and health_tags if recipe FULLY complies with rules
+7. Include serving_size as a human-readable portion description
+8. If no recipes found, return: { "recipes": [], "error": "Could not extract recipe information" }`;
 
     // Build messages based on whether we have an image, document, or text
     let messages: any[] = [];
@@ -602,7 +655,11 @@ IMPORTANT:
       const validDifficulties = ['easy', 'medium', 'hard'];
       const sanitizedDifficulty = validDifficulties.includes(recipe.difficulty) ? recipe.difficulty : 'medium';
 
-      // Insert recipe
+      // Insert recipe with enhanced fields
+      const sanitizedServingSize = typeof recipe.serving_size === 'string'
+        ? recipe.serving_size.trim().substring(0, 100)
+        : null;
+      
       const { data: newRecipe, error: recipeError } = await supabase
         .from('recipes')
         .insert({
@@ -616,6 +673,9 @@ IMPORTANT:
           difficulty: sanitizedDifficulty,
           cuisine: sanitizedCuisine,
           scope: 'private',
+          is_kid_friendly: typeof recipe.is_kid_friendly === 'boolean' ? recipe.is_kid_friendly : false,
+          is_meal_prep_friendly: typeof recipe.is_meal_prep_friendly === 'boolean' ? recipe.is_meal_prep_friendly : false,
+          is_budget_friendly: typeof recipe.is_budget_friendly === 'boolean' ? recipe.is_budget_friendly : false,
         })
         .select()
         .single();
@@ -680,20 +740,53 @@ IMPORTANT:
         sodium_mg: validateNutrition(recipe.nutrition?.sodium_mg, 50000),
       }));
 
-      // Tags
-      if (Array.isArray(recipe.tags) && recipe.tags.length > 0) {
-        const validTags = recipe.tags
+      // Tags - combine general tags, diet_tags, and health_tags
+      const allTags: { recipe_id: string; tag_type: string; tag_value: string }[] = [];
+      
+      // General tags (meal type, quick, etc.)
+      if (Array.isArray(recipe.tags)) {
+        recipe.tags
           .filter((tag: any) => typeof tag === 'string' && tag.trim())
           .slice(0, 20)
-          .map((tag: string) => ({
-            recipe_id: newRecipe.id,
-            tag_type: 'meal',
-            tag_value: tag.trim().substring(0, 50),
-          }));
-        
-        if (validTags.length > 0) {
-          relatedPromises.push(supabase.from('recipe_tags').insert(validTags));
-        }
+          .forEach((tag: string) => {
+            allTags.push({
+              recipe_id: newRecipe.id,
+              tag_type: 'meal',
+              tag_value: tag.trim().substring(0, 50),
+            });
+          });
+      }
+      
+      // Diet tags (keto, paleo, vegan, etc.)
+      if (Array.isArray(recipe.diet_tags)) {
+        recipe.diet_tags
+          .filter((tag: any) => typeof tag === 'string' && tag.trim())
+          .slice(0, 10)
+          .forEach((tag: string) => {
+            allTags.push({
+              recipe_id: newRecipe.id,
+              tag_type: 'diet',
+              tag_value: tag.trim().toLowerCase().substring(0, 50),
+            });
+          });
+      }
+      
+      // Health tags (low-sodium, heart-healthy, etc.)
+      if (Array.isArray(recipe.health_tags)) {
+        recipe.health_tags
+          .filter((tag: any) => typeof tag === 'string' && tag.trim())
+          .slice(0, 10)
+          .forEach((tag: string) => {
+            allTags.push({
+              recipe_id: newRecipe.id,
+              tag_type: 'health',
+              tag_value: tag.trim().toLowerCase().substring(0, 50),
+            });
+          });
+      }
+      
+      if (allTags.length > 0) {
+        relatedPromises.push(supabase.from('recipe_tags').insert(allTags));
       }
 
       // Link upload to recipe
