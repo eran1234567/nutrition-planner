@@ -182,6 +182,9 @@ const recipesByCuisine: Record<string, Array<{
   fat_g: number;
   fiber_g: number;
   sodium_mg: number;
+  sugar_g?: number;
+  saturated_fat_g?: number;
+  cholesterol_mg?: number;
   ingredients: Array<{ name: string; quantity: number; unit: string; aisle: string }>;
   steps: string[];
   tags: Array<{ tag_type: string; tag_value: string }>;
@@ -1976,7 +1979,10 @@ serve(async (req) => {
             carbs_g: recipe.carbs_g,
             fat_g: recipe.fat_g,
             fiber_g: recipe.fiber_g,
-            sodium_mg: recipe.sodium_mg
+            sodium_mg: recipe.sodium_mg,
+            sugar_g: recipe.sugar_g || null,
+            saturated_fat_g: recipe.saturated_fat_g || null,
+            cholesterol_mg: recipe.cholesterol_mg || null
           });
 
           // Insert ingredients
@@ -2128,7 +2134,10 @@ serve(async (req) => {
         carbs_g: recipe.carbs_g,
         fat_g: recipe.fat_g,
         fiber_g: recipe.fiber_g,
-        sodium_mg: recipe.sodium_mg
+        sodium_mg: recipe.sodium_mg,
+        sugar_g: recipe.sugar_g || null,
+        saturated_fat_g: recipe.saturated_fat_g || null,
+        cholesterol_mg: recipe.cholesterol_mg || null
       });
 
       // Insert ingredients
