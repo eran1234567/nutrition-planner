@@ -821,10 +821,8 @@ export default function Discover() {
   };
 
   const isSelected = (recipeId: string) => {
-    if (isPlanMode) {
-      return isInPool(recipeId);
-    }
-    return selectedMeals.some(r => r.id === recipeId);
+    // Check if recipe is in any pool (for showing check mark)
+    return Object.values(recipePoolsBySlot).some(pool => pool.includes(recipeId));
   };
 
   const { removeFromPool } = useMealPlanStore();
@@ -838,29 +836,29 @@ export default function Discover() {
   };
   
   const handleSelect = (recipe: any) => {
-    if (isPlanMode) {
-      // If in swap mode, directly replace the recipe and go back to Plan
-      if (swapContext) {
-        swapRecipe(swapContext.dayIndex, swapContext.slotId, recipe.id);
-        setSwapContext(null);
-        setIsPlanMode(false);
-        navigate('/plan');
-        return;
-      }
-      // If viewing a specific slot and recipe is in that slot's pool, remove it
-      if (currentSlotFilter && isInPool(recipe.id)) {
-        removeFromPool(currentSlotFilter, recipe.id);
-        return;
-      }
-      // Open add to plan modal
-      openAddToPlanModal(recipe);
-    } else {
-      if (isSelected(recipe.id)) {
-        removeSelectedMeal(recipe.id);
-      } else {
-        addSelectedMeal(recipe);
-      }
+    // If in swap mode, directly replace the recipe and go back to Plan
+    if (isPlanMode && swapContext) {
+      swapRecipe(swapContext.dayIndex, swapContext.slotId, recipe.id);
+      setSwapContext(null);
+      setIsPlanMode(false);
+      navigate('/plan');
+      return;
     }
+    
+    // If viewing a specific slot in plan mode and recipe is in that slot's pool, remove it
+    if (isPlanMode && currentSlotFilter && isInPool(recipe.id)) {
+      removeFromPool(currentSlotFilter, recipe.id);
+      return;
+    }
+    
+    // For authenticated users, always open add to plan modal
+    if (isAuthenticated) {
+      openAddToPlanModal(recipe);
+      return;
+    }
+    
+    // For non-authenticated users, navigate to auth
+    navigate('/auth');
   };
 
   const handleRecipeCardClick = (recipe: any) => {
