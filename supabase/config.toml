@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.backfill-nutrition]
 verify_jwt = false
+
+[functions.regenerate-recipes]
+verify_jwt = false
