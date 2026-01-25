@@ -1253,37 +1253,20 @@ export default function Discover() {
 
       {/* Sticky Actions - hidden in swap mode */}
       <StickyActions show={!swapContext}>
-        {isPlanMode ? (
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-sm">
-              <span className="font-semibold text-primary">{totalPoolRecipes}</span>
-              <span className="text-muted-foreground"> recipes added</span>
-            </div>
-            <Button
-              onClick={() => navigate('/plan')}
-              disabled={!canGeneratePlan}
-              className="gradient-primary"
-            >
-              <Sparkles className="w-4 h-4 mr-2" />
-              {t('plan.generatePlan', 'Generate Plan')}
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <div className="text-sm">
-              <span className="font-semibold text-primary">{selectedMeals.length}</span>
-              <span className="text-muted-foreground"> {t('common.selected', 'selected')}</span>
-            </div>
-            <Button
-              onClick={() => navigate('/plan')}
-              disabled={selectedMeals.length === 0}
-              className="gradient-primary"
-            >
-              <Sparkles className="w-4 h-4 mr-2" />
-              {t('discover.generateWeek', 'Generate Week')}
-            </Button>
+            <span className="font-semibold text-primary">{totalPoolRecipes}</span>
+            <span className="text-muted-foreground"> recipes added</span>
           </div>
-        )}
+          <Button
+            onClick={() => navigate('/plan')}
+            disabled={totalPoolRecipes === 0}
+            className="gradient-primary"
+          >
+            <Sparkles className="w-4 h-4 mr-2" />
+            {t('discover.generateWeek', 'Generate Week')}
+          </Button>
+        </div>
       </StickyActions>
 
       <BottomNav />
