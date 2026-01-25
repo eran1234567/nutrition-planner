@@ -88,7 +88,7 @@ export default function RecipeDetail() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { selectedMealSlots, generatedPlan } = useMealPlanStore();
+  const { selectedMealSlots, generatedPlan, recipePoolsBySlot, exactAssignments } = useMealPlanStore();
   const [isEditing, setIsEditing] = useState(false);
   const [showAddToPlanModal, setShowAddToPlanModal] = useState(false);
 
@@ -119,13 +119,36 @@ export default function RecipeDetail() {
   // Check if user has a meal plan configured
   const hasMealPlanSetup = selectedMealSlots.length > 0;
 
-  // Check if this recipe is already in the active meal plan
+  // Check if this recipe is already in the active meal plan (generated plan, pools, or exact assignments)
   const isAlreadyInPlan = useMemo(() => {
-    if (!generatedPlan || !id) return false;
-    return generatedPlan.days.some(day => 
+    if (!id) return false;
+    
+    // Check generated plan
+    if (generatedPlan?.days.some(day => 
       day.slots.some(slot => slot.recipeId === id)
-    );
-  }, [generatedPlan, id]);
+    )) {
+      return true;
+    }
+    
+    // Check recipe pools
+    for (const slotId in recipePoolsBySlot) {
+      if (recipePoolsBySlot[slotId]?.includes(id)) {
+        return true;
+      }
+    }
+    
+    // Check exact assignments
+    for (const dayIndex in exactAssignments) {
+      const dayAssignments = exactAssignments[Number(dayIndex)];
+      for (const slotId in dayAssignments) {
+        if (dayAssignments[slotId]?.recipeId === id) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }, [generatedPlan, recipePoolsBySlot, exactAssignments, id]);
 
   // Nutrition is ALWAYS per serving - never scaled
   // The nutrition values in the database represent what you get from one serving
