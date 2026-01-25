@@ -154,7 +154,7 @@ interface UserRecipe {
 export default function Discover() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { user, isAuthenticated, signOut } = useAuth();
+  const { user, isAuthenticated, signOut, isLoading: authLoading } = useAuth();
   const { profile, preferences } = useUserData();
   const { selectedMeals, addSelectedMeal, removeSelectedMeal } = useAppStore();
   const { 
@@ -902,7 +902,7 @@ export default function Discover() {
           title={isPlanMode ? t('plan.selectRecipes', 'Select Recipes') : t('discover.title')}
           subtitle={isPlanMode ? undefined : t('discover.subtitle')}
           rightAction={
-            isAuthenticated && !isPlanMode ? (
+            !authLoading && isAuthenticated && !isPlanMode ? (
               <Button
                 variant="ghost"
                 size="sm"
