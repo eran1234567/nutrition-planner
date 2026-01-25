@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { Search, Clock, Sparkles, BookOpen, ChefHat, Baby, Plus, Check, Target, UtensilsCrossed, AlertTriangle, HeartPulse, X, Flame, Wheat, Droplets, RefreshCw, LogOut, Loader2 } from 'lucide-react';
+import { Search, Clock, Sparkles, BookOpen, ChefHat, Baby, Plus, Check, Target, UtensilsCrossed, AlertTriangle, HeartPulse, X, Flame, Wheat, Droplets, RefreshCw, LogOut, LogIn, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -902,22 +902,33 @@ export default function Discover() {
           title={isPlanMode ? t('plan.selectRecipes', 'Select Recipes') : t('discover.title')}
           subtitle={isPlanMode ? undefined : t('discover.subtitle')}
           rightAction={
-            !authLoading && isAuthenticated && !isPlanMode ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={async () => {
-                  // Clear URL params before signing out
-                  setSearchParams({});
-                  setSearchQuery('');
-                  await signOut();
-                  navigate('/');
-                }}
-                className="gap-2 text-muted-foreground hover:text-foreground"
-              >
-                <LogOut className="w-4 h-4" />
-                <span className="hidden sm:inline">{t('auth.signOut', 'Sign Out')}</span>
-              </Button>
+            !authLoading && !isPlanMode ? (
+              isAuthenticated ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={async () => {
+                    // Clear URL params before signing out
+                    setSearchParams({});
+                    setSearchQuery('');
+                    await signOut();
+                  }}
+                  className="gap-2 text-muted-foreground hover:text-foreground"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span className="hidden sm:inline">{t('auth.signOut', 'Sign Out')}</span>
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate('/auth')}
+                  className="gap-2 text-muted-foreground hover:text-foreground"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span className="hidden sm:inline">{t('auth.signIn', 'Sign In')}</span>
+                </Button>
+              )
             ) : undefined
           }
         />
