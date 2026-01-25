@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.upload-recipe-images]
 verify_jwt = false
+
+[functions.backfill-nutrition]
+verify_jwt = false
