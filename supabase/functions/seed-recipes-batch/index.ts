@@ -1376,6 +1376,481 @@ const recipesByCuisine: Record<string, Array<{
       tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "protein", tag_value: "seafood" }],
       image_prompt: "Grilled octopus tentacles with char marks, olive oil, lemon wedges, Greek island cuisine, food photography"
     }
+  ],
+  Keto: [
+    {
+      title: "Keto Butter Chicken",
+      description: "Creamy low-carb butter chicken with rich tomato-cream sauce",
+      prep_time: 15, cook_time: 30, total_time: 45, servings: 4, difficulty: "medium",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 480, protein_g: 32, carbs_g: 6, fat_g: 36, fiber_g: 2, sodium_mg: 520,
+      ingredients: [
+        { name: "Chicken thighs", quantity: 1.5, unit: "lbs", aisle: "Meat" },
+        { name: "Heavy cream", quantity: 1, unit: "cup", aisle: "Dairy" },
+        { name: "Butter", quantity: 4, unit: "tbsp", aisle: "Dairy" },
+        { name: "Tomato paste", quantity: 2, unit: "tbsp", aisle: "Canned Goods" },
+        { name: "Garam masala", quantity: 2, unit: "tsp", aisle: "Spices" }
+      ],
+      steps: ["Sear chicken thighs in butter until golden.", "Add tomato paste and spices, cook 2 minutes.", "Pour in heavy cream and simmer until sauce thickens."],
+      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Creamy butter chicken in rich orange sauce with fresh cilantro, Indian keto cuisine, food photography"
+    },
+    {
+      title: "Garlic Butter Ribeye",
+      description: "Juicy ribeye steak basted in garlic herb butter",
+      prep_time: 10, cook_time: 15, total_time: 25, servings: 2, difficulty: "medium",
+      is_kid_friendly: false, is_meal_prep_friendly: false, is_budget_friendly: false,
+      calories: 650, protein_g: 42, carbs_g: 1, fat_g: 52, fiber_g: 0, sodium_mg: 380,
+      ingredients: [
+        { name: "Ribeye steak", quantity: 2, unit: "pieces", aisle: "Meat" },
+        { name: "Butter", quantity: 4, unit: "tbsp", aisle: "Dairy" },
+        { name: "Garlic cloves", quantity: 4, unit: "cloves", aisle: "Produce" },
+        { name: "Fresh thyme", quantity: 4, unit: "sprigs", aisle: "Produce" },
+        { name: "Fresh rosemary", quantity: 2, unit: "sprigs", aisle: "Produce" }
+      ],
+      steps: ["Season steaks and sear in hot cast iron.", "Add butter, garlic, and herbs.", "Baste steaks continuously until desired doneness."],
+      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Perfectly seared ribeye steak with melted garlic butter, fresh herbs, cast iron skillet, food photography"
+    },
+    {
+      title: "Cheese-Stuffed Chicken Breast",
+      description: "Tender chicken breast stuffed with cream cheese and spinach",
+      prep_time: 20, cook_time: 30, total_time: 50, servings: 4, difficulty: "medium",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 420, protein_g: 38, carbs_g: 3, fat_g: 28, fiber_g: 1, sodium_mg: 480,
+      ingredients: [
+        { name: "Chicken breasts", quantity: 4, unit: "pieces", aisle: "Meat" },
+        { name: "Cream cheese", quantity: 8, unit: "oz", aisle: "Dairy" },
+        { name: "Fresh spinach", quantity: 2, unit: "cups", aisle: "Produce" },
+        { name: "Mozzarella cheese", quantity: 1, unit: "cup", aisle: "Dairy" },
+        { name: "Garlic powder", quantity: 1, unit: "tsp", aisle: "Spices" }
+      ],
+      steps: ["Cut pocket in each chicken breast.", "Mix cream cheese with spinach and mozzarella.", "Stuff chicken, seal with toothpicks, bake at 375°F for 30 min."],
+      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Sliced stuffed chicken breast showing melted cheese and spinach filling, golden crust, food photography"
+    },
+    {
+      title: "Bacon-Wrapped Asparagus",
+      description: "Crispy bacon wrapped around tender asparagus spears",
+      prep_time: 10, cook_time: 20, total_time: 30, servings: 4, difficulty: "easy",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 280, protein_g: 12, carbs_g: 4, fat_g: 24, fiber_g: 2, sodium_mg: 520,
+      ingredients: [
+        { name: "Asparagus spears", quantity: 24, unit: "spears", aisle: "Produce" },
+        { name: "Bacon strips", quantity: 12, unit: "strips", aisle: "Meat" },
+        { name: "Olive oil", quantity: 2, unit: "tbsp", aisle: "Oils" },
+        { name: "Black pepper", quantity: 0.5, unit: "tsp", aisle: "Spices" }
+      ],
+      steps: ["Wrap 2 asparagus spears with each bacon strip.", "Arrange on baking sheet, drizzle with olive oil.", "Bake at 400°F until bacon is crispy."],
+      tags: [{ tag_type: "meal", tag_value: "snack" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Crispy bacon-wrapped asparagus bundles on white plate, golden brown bacon, food photography"
+    },
+    {
+      title: "Keto Salmon with Avocado Salsa",
+      description: "Pan-seared salmon topped with fresh avocado lime salsa",
+      prep_time: 15, cook_time: 12, total_time: 27, servings: 4, difficulty: "easy",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: false,
+      calories: 520, protein_g: 35, carbs_g: 6, fat_g: 40, fiber_g: 4, sodium_mg: 320,
+      ingredients: [
+        { name: "Salmon fillets", quantity: 4, unit: "pieces", aisle: "Seafood" },
+        { name: "Avocados", quantity: 2, unit: "whole", aisle: "Produce" },
+        { name: "Lime juice", quantity: 2, unit: "tbsp", aisle: "Produce" },
+        { name: "Red onion", quantity: 0.25, unit: "cup", aisle: "Produce" },
+        { name: "Olive oil", quantity: 3, unit: "tbsp", aisle: "Oils" }
+      ],
+      steps: ["Season salmon and pan-sear in olive oil.", "Dice avocado, mix with lime juice and onion.", "Top salmon with avocado salsa."],
+      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Pan-seared salmon fillet with chunky avocado salsa, lime wedges, fresh cilantro, food photography"
+    },
+    {
+      title: "Keto Zucchini Lasagna",
+      description: "Low-carb lasagna using zucchini slices instead of pasta",
+      prep_time: 30, cook_time: 45, total_time: 75, servings: 6, difficulty: "medium",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 380, protein_g: 28, carbs_g: 8, fat_g: 26, fiber_g: 2, sodium_mg: 580,
+      ingredients: [
+        { name: "Zucchini", quantity: 4, unit: "large", aisle: "Produce" },
+        { name: "Ground beef", quantity: 1, unit: "lb", aisle: "Meat" },
+        { name: "Ricotta cheese", quantity: 1, unit: "cup", aisle: "Dairy" },
+        { name: "Mozzarella cheese", quantity: 2, unit: "cups", aisle: "Dairy" },
+        { name: "Marinara sauce", quantity: 1, unit: "cup", aisle: "Canned Goods" }
+      ],
+      steps: ["Slice zucchini lengthwise and salt to remove moisture.", "Brown beef and mix with marinara.", "Layer zucchini, meat, ricotta, mozzarella. Bake 45 min."],
+      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Keto zucchini lasagna with layers visible, melted cheese on top, Italian low-carb, food photography"
+    },
+    {
+      title: "Keto Egg Salad Lettuce Wraps",
+      description: "Creamy egg salad served in crisp butter lettuce cups",
+      prep_time: 15, cook_time: 12, total_time: 27, servings: 4, difficulty: "easy",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 320, protein_g: 18, carbs_g: 3, fat_g: 26, fiber_g: 1, sodium_mg: 380,
+      ingredients: [
+        { name: "Eggs", quantity: 8, unit: "large", aisle: "Dairy" },
+        { name: "Mayonnaise", quantity: 0.5, unit: "cup", aisle: "Condiments" },
+        { name: "Dijon mustard", quantity: 2, unit: "tsp", aisle: "Condiments" },
+        { name: "Butter lettuce", quantity: 1, unit: "head", aisle: "Produce" },
+        { name: "Chives", quantity: 2, unit: "tbsp", aisle: "Produce" }
+      ],
+      steps: ["Hard boil eggs and chop.", "Mix with mayo, mustard, and chives.", "Serve in lettuce cups."],
+      tags: [{ tag_type: "meal", tag_value: "lunch" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Creamy egg salad in butter lettuce cups with fresh chives, keto lunch, food photography"
+    },
+    {
+      title: "Keto Cauliflower Mac and Cheese",
+      description: "Creamy cheese sauce over roasted cauliflower florets",
+      prep_time: 15, cook_time: 25, total_time: 40, servings: 4, difficulty: "easy",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 340, protein_g: 14, carbs_g: 8, fat_g: 28, fiber_g: 3, sodium_mg: 480,
+      ingredients: [
+        { name: "Cauliflower florets", quantity: 1, unit: "head", aisle: "Produce" },
+        { name: "Sharp cheddar", quantity: 2, unit: "cups", aisle: "Dairy" },
+        { name: "Heavy cream", quantity: 0.5, unit: "cup", aisle: "Dairy" },
+        { name: "Butter", quantity: 2, unit: "tbsp", aisle: "Dairy" },
+        { name: "Cream cheese", quantity: 4, unit: "oz", aisle: "Dairy" }
+      ],
+      steps: ["Steam cauliflower until tender.", "Make cheese sauce with cream, butter, cheeses.", "Pour over cauliflower and bake until bubbly."],
+      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Creamy keto cauliflower mac and cheese in cast iron, golden cheese bubbling, food photography"
+    },
+    {
+      title: "Keto Pork Belly Bites",
+      description: "Crispy cubed pork belly with Asian-inspired glaze",
+      prep_time: 10, cook_time: 45, total_time: 55, servings: 4, difficulty: "medium",
+      is_kid_friendly: false, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 520, protein_g: 22, carbs_g: 2, fat_g: 48, fiber_g: 0, sodium_mg: 420,
+      ingredients: [
+        { name: "Pork belly", quantity: 1.5, unit: "lbs", aisle: "Meat" },
+        { name: "Soy sauce", quantity: 2, unit: "tbsp", aisle: "Asian" },
+        { name: "Rice vinegar", quantity: 1, unit: "tbsp", aisle: "Asian" },
+        { name: "Sesame oil", quantity: 1, unit: "tbsp", aisle: "Oils" },
+        { name: "Green onions", quantity: 3, unit: "stalks", aisle: "Produce" }
+      ],
+      steps: ["Cut pork belly into 1-inch cubes.", "Roast at 400°F until crispy.", "Toss with soy sauce, vinegar, sesame oil. Top with green onions."],
+      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Crispy pork belly bites with caramelized edges, green onions, sesame seeds, food photography"
+    },
+    {
+      title: "Keto Shrimp Scampi",
+      description: "Garlic butter shrimp over zucchini noodles",
+      prep_time: 15, cook_time: 10, total_time: 25, servings: 4, difficulty: "easy",
+      is_kid_friendly: true, is_meal_prep_friendly: false, is_budget_friendly: false,
+      calories: 380, protein_g: 28, carbs_g: 6, fat_g: 28, fiber_g: 2, sodium_mg: 520,
+      ingredients: [
+        { name: "Large shrimp", quantity: 1.5, unit: "lbs", aisle: "Seafood" },
+        { name: "Butter", quantity: 4, unit: "tbsp", aisle: "Dairy" },
+        { name: "Garlic cloves", quantity: 6, unit: "cloves", aisle: "Produce" },
+        { name: "Zucchini", quantity: 4, unit: "medium", aisle: "Produce" },
+        { name: "White wine", quantity: 0.25, unit: "cup", aisle: "Alcohol" }
+      ],
+      steps: ["Spiralize zucchini into noodles.", "Sauté garlic in butter, add shrimp and wine.", "Serve shrimp over zoodles."],
+      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Garlic butter shrimp scampi over zucchini noodles, fresh parsley, lemon wedges, food photography"
+    },
+    {
+      title: "Keto Avocado Deviled Eggs",
+      description: "Classic deviled eggs with creamy avocado filling",
+      prep_time: 20, cook_time: 12, total_time: 32, servings: 6, difficulty: "easy",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 220, protein_g: 10, carbs_g: 4, fat_g: 18, fiber_g: 2, sodium_mg: 280,
+      ingredients: [
+        { name: "Eggs", quantity: 12, unit: "large", aisle: "Dairy" },
+        { name: "Avocado", quantity: 1, unit: "large", aisle: "Produce" },
+        { name: "Mayonnaise", quantity: 2, unit: "tbsp", aisle: "Condiments" },
+        { name: "Lime juice", quantity: 1, unit: "tbsp", aisle: "Produce" },
+        { name: "Paprika", quantity: 0.5, unit: "tsp", aisle: "Spices" }
+      ],
+      steps: ["Hard boil eggs and halve.", "Mash yolks with avocado, mayo, lime.", "Pipe filling into egg whites, dust with paprika."],
+      tags: [{ tag_type: "meal", tag_value: "snack" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Avocado deviled eggs with green creamy filling, paprika dusting, appetizer platter, food photography"
+    },
+    {
+      title: "Keto Chicken Alfredo",
+      description: "Creamy parmesan alfredo sauce over grilled chicken",
+      prep_time: 15, cook_time: 20, total_time: 35, servings: 4, difficulty: "easy",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 480, protein_g: 38, carbs_g: 4, fat_g: 34, fiber_g: 0, sodium_mg: 580,
+      ingredients: [
+        { name: "Chicken breasts", quantity: 1.5, unit: "lbs", aisle: "Meat" },
+        { name: "Heavy cream", quantity: 1, unit: "cup", aisle: "Dairy" },
+        { name: "Parmesan cheese", quantity: 1, unit: "cup", aisle: "Dairy" },
+        { name: "Butter", quantity: 3, unit: "tbsp", aisle: "Dairy" },
+        { name: "Garlic cloves", quantity: 4, unit: "cloves", aisle: "Produce" }
+      ],
+      steps: ["Grill chicken until cooked through.", "Make alfredo sauce with butter, cream, parmesan.", "Slice chicken, pour sauce over top."],
+      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Sliced grilled chicken with creamy parmesan alfredo sauce, fresh parsley, keto Italian, food photography"
+    },
+    {
+      title: "Keto Tuna Melt Stuffed Avocados",
+      description: "Tuna salad baked in avocado halves with melted cheese",
+      prep_time: 15, cook_time: 10, total_time: 25, servings: 4, difficulty: "easy",
+      is_kid_friendly: true, is_meal_prep_friendly: false, is_budget_friendly: true,
+      calories: 420, protein_g: 26, carbs_g: 6, fat_g: 34, fiber_g: 5, sodium_mg: 480,
+      ingredients: [
+        { name: "Canned tuna", quantity: 2, unit: "cans", aisle: "Canned Goods" },
+        { name: "Avocados", quantity: 4, unit: "halves", aisle: "Produce" },
+        { name: "Mayonnaise", quantity: 0.25, unit: "cup", aisle: "Condiments" },
+        { name: "Cheddar cheese", quantity: 1, unit: "cup", aisle: "Dairy" },
+        { name: "Celery", quantity: 0.25, unit: "cup", aisle: "Produce" }
+      ],
+      steps: ["Mix tuna with mayo and diced celery.", "Fill avocado halves with tuna mixture.", "Top with cheese and bake until melted."],
+      tags: [{ tag_type: "meal", tag_value: "lunch" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Baked tuna melt stuffed avocado halves with melted cheddar cheese, keto lunch, food photography"
+    },
+    {
+      title: "Keto Beef Burger Patties",
+      description: "Juicy bunless burgers with all the toppings",
+      prep_time: 10, cook_time: 12, total_time: 22, servings: 4, difficulty: "easy",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 480, protein_g: 32, carbs_g: 2, fat_g: 38, fiber_g: 0, sodium_mg: 420,
+      ingredients: [
+        { name: "Ground beef 80/20", quantity: 1.5, unit: "lbs", aisle: "Meat" },
+        { name: "Cheddar cheese", quantity: 4, unit: "slices", aisle: "Dairy" },
+        { name: "Bacon", quantity: 8, unit: "strips", aisle: "Meat" },
+        { name: "Butter lettuce", quantity: 8, unit: "leaves", aisle: "Produce" },
+        { name: "Avocado", quantity: 1, unit: "whole", aisle: "Produce" }
+      ],
+      steps: ["Form beef into 4 patties, season well.", "Grill or pan-fry to desired doneness.", "Top with cheese, bacon, serve on lettuce with avocado."],
+      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Juicy bunless burger patty with melted cheese, crispy bacon, avocado slices, lettuce wrap, food photography"
+    },
+    {
+      title: "Keto Creamy Tuscan Chicken",
+      description: "Chicken in sun-dried tomato cream sauce with spinach",
+      prep_time: 10, cook_time: 25, total_time: 35, servings: 4, difficulty: "medium",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 460, protein_g: 36, carbs_g: 6, fat_g: 32, fiber_g: 2, sodium_mg: 520,
+      ingredients: [
+        { name: "Chicken thighs", quantity: 1.5, unit: "lbs", aisle: "Meat" },
+        { name: "Sun-dried tomatoes", quantity: 0.5, unit: "cup", aisle: "Produce" },
+        { name: "Heavy cream", quantity: 1, unit: "cup", aisle: "Dairy" },
+        { name: "Fresh spinach", quantity: 3, unit: "cups", aisle: "Produce" },
+        { name: "Parmesan cheese", quantity: 0.5, unit: "cup", aisle: "Dairy" }
+      ],
+      steps: ["Sear chicken thighs until golden.", "Add sun-dried tomatoes and cream.", "Stir in spinach and parmesan until wilted."],
+      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Creamy Tuscan chicken with sun-dried tomatoes, spinach, parmesan cream sauce, food photography"
+    },
+    {
+      title: "Keto Bacon Wrapped Jalapeño Poppers",
+      description: "Cream cheese stuffed jalapeños wrapped in bacon",
+      prep_time: 20, cook_time: 25, total_time: 45, servings: 6, difficulty: "easy",
+      is_kid_friendly: false, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 280, protein_g: 12, carbs_g: 3, fat_g: 24, fiber_g: 1, sodium_mg: 480,
+      ingredients: [
+        { name: "Jalapeño peppers", quantity: 12, unit: "whole", aisle: "Produce" },
+        { name: "Cream cheese", quantity: 8, unit: "oz", aisle: "Dairy" },
+        { name: "Cheddar cheese", quantity: 1, unit: "cup", aisle: "Dairy" },
+        { name: "Bacon strips", quantity: 12, unit: "strips", aisle: "Meat" }
+      ],
+      steps: ["Halve jalapeños and remove seeds.", "Fill with cream cheese and cheddar mixture.", "Wrap with bacon, bake until crispy."],
+      tags: [{ tag_type: "meal", tag_value: "snack" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Crispy bacon wrapped jalapeño poppers with melted cheese oozing out, appetizer platter, food photography"
+    },
+    {
+      title: "Keto Cobb Salad",
+      description: "Classic Cobb salad with bacon, egg, avocado, and blue cheese",
+      prep_time: 20, cook_time: 15, total_time: 35, servings: 4, difficulty: "easy",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 480, protein_g: 32, carbs_g: 8, fat_g: 36, fiber_g: 4, sodium_mg: 580,
+      ingredients: [
+        { name: "Romaine lettuce", quantity: 2, unit: "heads", aisle: "Produce" },
+        { name: "Grilled chicken", quantity: 1, unit: "lb", aisle: "Meat" },
+        { name: "Bacon", quantity: 8, unit: "strips", aisle: "Meat" },
+        { name: "Hard-boiled eggs", quantity: 4, unit: "large", aisle: "Dairy" },
+        { name: "Avocado", quantity: 2, unit: "whole", aisle: "Produce" }
+      ],
+      steps: ["Chop lettuce and arrange in bowls.", "Arrange rows of chicken, bacon, egg, avocado.", "Top with blue cheese crumbles and dressing."],
+      tags: [{ tag_type: "meal", tag_value: "lunch" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Classic Cobb salad with rows of grilled chicken, bacon, eggs, avocado, blue cheese, food photography"
+    },
+    {
+      title: "Keto Lamb Chops with Mint Butter",
+      description: "Pan-seared lamb chops topped with fresh mint compound butter",
+      prep_time: 15, cook_time: 12, total_time: 27, servings: 4, difficulty: "medium",
+      is_kid_friendly: false, is_meal_prep_friendly: false, is_budget_friendly: false,
+      calories: 520, protein_g: 34, carbs_g: 1, fat_g: 42, fiber_g: 0, sodium_mg: 320,
+      ingredients: [
+        { name: "Lamb loin chops", quantity: 8, unit: "pieces", aisle: "Meat" },
+        { name: "Butter", quantity: 4, unit: "tbsp", aisle: "Dairy" },
+        { name: "Fresh mint", quantity: 0.25, unit: "cup", aisle: "Produce" },
+        { name: "Garlic cloves", quantity: 2, unit: "cloves", aisle: "Produce" },
+        { name: "Olive oil", quantity: 2, unit: "tbsp", aisle: "Oils" }
+      ],
+      steps: ["Make mint butter by mixing softened butter with chopped mint.", "Sear lamb chops in olive oil until medium-rare.", "Top with mint butter and rest before serving."],
+      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Pan-seared lamb chops with melting mint compound butter, fresh herbs, elegant plating, food photography"
+    },
+    {
+      title: "Keto Mushroom Swiss Burger",
+      description: "Bunless burger topped with sautéed mushrooms and Swiss cheese",
+      prep_time: 10, cook_time: 15, total_time: 25, servings: 4, difficulty: "easy",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 520, protein_g: 36, carbs_g: 4, fat_g: 40, fiber_g: 1, sodium_mg: 480,
+      ingredients: [
+        { name: "Ground beef", quantity: 1.5, unit: "lbs", aisle: "Meat" },
+        { name: "Swiss cheese", quantity: 4, unit: "slices", aisle: "Dairy" },
+        { name: "Cremini mushrooms", quantity: 8, unit: "oz", aisle: "Produce" },
+        { name: "Butter", quantity: 3, unit: "tbsp", aisle: "Dairy" },
+        { name: "Butter lettuce", quantity: 8, unit: "leaves", aisle: "Produce" }
+      ],
+      steps: ["Sauté mushrooms in butter until golden.", "Grill burger patties to desired doneness.", "Top with Swiss cheese and mushrooms, serve in lettuce."],
+      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Mushroom Swiss burger with sautéed mushrooms, melted Swiss cheese, lettuce wrap, food photography"
+    },
+    {
+      title: "Keto Caprese Chicken",
+      description: "Grilled chicken topped with fresh mozzarella, tomatoes, and basil",
+      prep_time: 10, cook_time: 20, total_time: 30, servings: 4, difficulty: "easy",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 420, protein_g: 42, carbs_g: 4, fat_g: 26, fiber_g: 1, sodium_mg: 420,
+      ingredients: [
+        { name: "Chicken breasts", quantity: 4, unit: "pieces", aisle: "Meat" },
+        { name: "Fresh mozzarella", quantity: 8, unit: "oz", aisle: "Dairy" },
+        { name: "Roma tomatoes", quantity: 2, unit: "medium", aisle: "Produce" },
+        { name: "Fresh basil", quantity: 0.25, unit: "cup", aisle: "Produce" },
+        { name: "Balsamic glaze", quantity: 2, unit: "tbsp", aisle: "Condiments" }
+      ],
+      steps: ["Grill chicken breasts until cooked through.", "Top with sliced mozzarella and broil to melt.", "Add tomato slices, basil, and drizzle with balsamic."],
+      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Caprese chicken with melted mozzarella, fresh tomatoes, basil leaves, balsamic drizzle, food photography"
+    },
+    {
+      title: "Keto Sausage and Peppers",
+      description: "Italian sausages with sautéed bell peppers and onions",
+      prep_time: 10, cook_time: 25, total_time: 35, servings: 4, difficulty: "easy",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 420, protein_g: 24, carbs_g: 8, fat_g: 32, fiber_g: 2, sodium_mg: 580,
+      ingredients: [
+        { name: "Italian sausages", quantity: 4, unit: "links", aisle: "Meat" },
+        { name: "Bell peppers", quantity: 3, unit: "whole", aisle: "Produce" },
+        { name: "Onion", quantity: 1, unit: "large", aisle: "Produce" },
+        { name: "Olive oil", quantity: 3, unit: "tbsp", aisle: "Oils" },
+        { name: "Italian seasoning", quantity: 1, unit: "tsp", aisle: "Spices" }
+      ],
+      steps: ["Brown sausages in a skillet.", "Add sliced peppers and onions.", "Cook until vegetables are tender and sausages cooked through."],
+      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Italian sausages with colorful sautéed bell peppers and onions, cast iron skillet, food photography"
+    },
+    {
+      title: "Keto Creamy Garlic Chicken",
+      description: "Chicken thighs in a rich garlic cream sauce",
+      prep_time: 10, cook_time: 25, total_time: 35, servings: 4, difficulty: "easy",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 480, protein_g: 32, carbs_g: 4, fat_g: 38, fiber_g: 0, sodium_mg: 480,
+      ingredients: [
+        { name: "Chicken thighs", quantity: 1.5, unit: "lbs", aisle: "Meat" },
+        { name: "Heavy cream", quantity: 1, unit: "cup", aisle: "Dairy" },
+        { name: "Garlic cloves", quantity: 8, unit: "cloves", aisle: "Produce" },
+        { name: "Butter", quantity: 3, unit: "tbsp", aisle: "Dairy" },
+        { name: "Parmesan cheese", quantity: 0.5, unit: "cup", aisle: "Dairy" }
+      ],
+      steps: ["Sear chicken thighs in butter until golden.", "Add minced garlic, cook 1 minute.", "Pour in cream and parmesan, simmer until thickened."],
+      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Creamy garlic chicken thighs in rich cream sauce, fresh parsley, comfort food, food photography"
+    },
+    {
+      title: "Keto Steak Bites with Blue Cheese",
+      description: "Cubed sirloin steak with blue cheese butter",
+      prep_time: 10, cook_time: 10, total_time: 20, servings: 4, difficulty: "easy",
+      is_kid_friendly: false, is_meal_prep_friendly: true, is_budget_friendly: false,
+      calories: 520, protein_g: 38, carbs_g: 1, fat_g: 40, fiber_g: 0, sodium_mg: 420,
+      ingredients: [
+        { name: "Sirloin steak", quantity: 1.5, unit: "lbs", aisle: "Meat" },
+        { name: "Blue cheese", quantity: 4, unit: "oz", aisle: "Dairy" },
+        { name: "Butter", quantity: 4, unit: "tbsp", aisle: "Dairy" },
+        { name: "Garlic powder", quantity: 1, unit: "tsp", aisle: "Spices" },
+        { name: "Fresh thyme", quantity: 4, unit: "sprigs", aisle: "Produce" }
+      ],
+      steps: ["Cut steak into 1-inch cubes, season well.", "Sear in hot skillet with butter and thyme.", "Top with crumbled blue cheese before serving."],
+      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Seared steak bites with melting blue cheese crumbles, fresh thyme, cast iron, food photography"
+    },
+    {
+      title: "Keto Cheesy Broccoli",
+      description: "Steamed broccoli smothered in cheddar cheese sauce",
+      prep_time: 10, cook_time: 15, total_time: 25, servings: 4, difficulty: "easy",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 280, protein_g: 12, carbs_g: 8, fat_g: 22, fiber_g: 3, sodium_mg: 380,
+      ingredients: [
+        { name: "Broccoli florets", quantity: 1.5, unit: "lbs", aisle: "Produce" },
+        { name: "Sharp cheddar", quantity: 1.5, unit: "cups", aisle: "Dairy" },
+        { name: "Heavy cream", quantity: 0.5, unit: "cup", aisle: "Dairy" },
+        { name: "Butter", quantity: 2, unit: "tbsp", aisle: "Dairy" }
+      ],
+      steps: ["Steam broccoli until tender-crisp.", "Make cheese sauce with butter, cream, and cheddar.", "Pour cheese sauce over broccoli."],
+      tags: [{ tag_type: "meal", tag_value: "snack" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Steamed broccoli florets covered in creamy cheddar cheese sauce, comfort side dish, food photography"
+    },
+    {
+      title: "Keto Philly Cheesesteak Bowl",
+      description: "Sliced beef with peppers, onions, and provolone cheese",
+      prep_time: 15, cook_time: 15, total_time: 30, servings: 4, difficulty: "easy",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 480, protein_g: 36, carbs_g: 6, fat_g: 34, fiber_g: 2, sodium_mg: 580,
+      ingredients: [
+        { name: "Ribeye steak", quantity: 1.5, unit: "lbs", aisle: "Meat" },
+        { name: "Bell peppers", quantity: 2, unit: "whole", aisle: "Produce" },
+        { name: "Onion", quantity: 1, unit: "large", aisle: "Produce" },
+        { name: "Provolone cheese", quantity: 6, unit: "slices", aisle: "Dairy" },
+        { name: "Olive oil", quantity: 3, unit: "tbsp", aisle: "Oils" }
+      ],
+      steps: ["Slice steak very thin, season well.", "Sauté peppers and onions until soft.", "Add steak, cook quickly, top with provolone."],
+      tags: [{ tag_type: "meal", tag_value: "lunch" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Keto Philly cheesesteak bowl with sliced beef, peppers, onions, melted provolone, food photography"
+    },
+    {
+      title: "Keto Spinach Artichoke Dip",
+      description: "Creamy hot dip with spinach, artichokes, and three cheeses",
+      prep_time: 15, cook_time: 25, total_time: 40, servings: 8, difficulty: "easy",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 220, protein_g: 8, carbs_g: 5, fat_g: 18, fiber_g: 2, sodium_mg: 420,
+      ingredients: [
+        { name: "Cream cheese", quantity: 8, unit: "oz", aisle: "Dairy" },
+        { name: "Frozen spinach", quantity: 10, unit: "oz", aisle: "Frozen" },
+        { name: "Artichoke hearts", quantity: 14, unit: "oz", aisle: "Canned Goods" },
+        { name: "Mozzarella cheese", quantity: 1, unit: "cup", aisle: "Dairy" },
+        { name: "Parmesan cheese", quantity: 0.5, unit: "cup", aisle: "Dairy" }
+      ],
+      steps: ["Thaw and drain spinach, chop artichokes.", "Mix with softened cream cheese and cheeses.", "Bake until bubbly and golden on top."],
+      tags: [{ tag_type: "meal", tag_value: "snack" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Bubbling spinach artichoke dip in cast iron with melted cheese, keto appetizer, food photography"
+    },
+    {
+      title: "Keto Chicken Wings",
+      description: "Crispy baked chicken wings with buffalo sauce",
+      prep_time: 10, cook_time: 45, total_time: 55, servings: 4, difficulty: "easy",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 420, protein_g: 32, carbs_g: 1, fat_g: 32, fiber_g: 0, sodium_mg: 580,
+      ingredients: [
+        { name: "Chicken wings", quantity: 2, unit: "lbs", aisle: "Meat" },
+        { name: "Butter", quantity: 4, unit: "tbsp", aisle: "Dairy" },
+        { name: "Hot sauce", quantity: 0.5, unit: "cup", aisle: "Condiments" },
+        { name: "Baking powder", quantity: 1, unit: "tbsp", aisle: "Baking" },
+        { name: "Garlic powder", quantity: 1, unit: "tsp", aisle: "Spices" }
+      ],
+      steps: ["Toss wings with baking powder and spices.", "Bake at 425°F for 45 min, flipping halfway.", "Toss in melted butter and hot sauce."],
+      tags: [{ tag_type: "meal", tag_value: "snack" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Crispy baked buffalo chicken wings with blue cheese dip, celery sticks, food photography"
+    },
+    {
+      title: "Keto Pesto Chicken",
+      description: "Grilled chicken breast topped with creamy basil pesto",
+      prep_time: 10, cook_time: 15, total_time: 25, servings: 4, difficulty: "easy",
+      is_kid_friendly: true, is_meal_prep_friendly: true, is_budget_friendly: true,
+      calories: 420, protein_g: 40, carbs_g: 2, fat_g: 28, fiber_g: 0, sodium_mg: 380,
+      ingredients: [
+        { name: "Chicken breasts", quantity: 4, unit: "pieces", aisle: "Meat" },
+        { name: "Basil pesto", quantity: 0.5, unit: "cup", aisle: "Condiments" },
+        { name: "Olive oil", quantity: 2, unit: "tbsp", aisle: "Oils" },
+        { name: "Fresh mozzarella", quantity: 4, unit: "oz", aisle: "Dairy" },
+        { name: "Cherry tomatoes", quantity: 1, unit: "cup", aisle: "Produce" }
+      ],
+      steps: ["Season and grill chicken breasts.", "Spread pesto over each breast.", "Top with sliced mozzarella and halved tomatoes."],
+      tags: [{ tag_type: "meal", tag_value: "dinner" }, { tag_type: "diet", tag_value: "keto" }],
+      image_prompt: "Grilled pesto chicken with fresh mozzarella, cherry tomatoes, basil leaves, Italian keto, food photography"
+    }
   ]
 };
 
