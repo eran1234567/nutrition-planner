@@ -1927,6 +1927,19 @@ serve(async (req) => {
             continue;
           }
 
+          // Double-check before insert to prevent race conditions
+          const { data: existingAgain } = await supabase
+            .from("recipes")
+            .select("id")
+            .eq("title", recipe.title)
+            .eq("scope", "global")
+            .maybeSingle();
+
+          if (existingAgain) {
+            cuisineResults.push(`${recipe.title} (exists - race prevented)`);
+            continue;
+          }
+
           // Insert recipe
           const { data: newRecipe, error: recipeError } = await supabase
             .from("recipes")
@@ -2063,6 +2076,19 @@ serve(async (req) => {
       
       if (!imageUrl) {
         results.push({ title: recipe.title, status: "error", error: "AI image generation failed - no fallback allowed" });
+        continue;
+      }
+
+      // Double-check before insert to prevent race conditions
+      const { data: existingAgain } = await supabase
+        .from("recipes")
+        .select("id")
+        .eq("title", recipe.title)
+        .eq("scope", "global")
+        .maybeSingle();
+
+      if (existingAgain) {
+        results.push({ title: recipe.title, status: "exists", note: "race prevented" });
         continue;
       }
 
