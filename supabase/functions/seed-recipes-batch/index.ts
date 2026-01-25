@@ -1,23 +1,34 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-lovable-internal",
 };
 
 const LOVABLE_API_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 
-// Generate AI image based on recipe title and ingredients for accuracy
+// Generate slug from title for file naming
+function titleToSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/['']/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .trim();
+}
+
+// Generate AI image and upload to Supabase Storage
 async function generateRecipeImage(
   title: string,
   description: string,
   ingredients: Array<{ name: string; quantity?: number; unit?: string }>,
-  apiKey: string
+  apiKey: string,
+  supabase: any
 ): Promise<string | null> {
-  // Build ingredient list for accurate image generation
   const mainIngredients = ingredients
-    .slice(0, 5) // Top 5 ingredients are most important
+    .slice(0, 5)
     .map(ing => ing.name)
     .join(', ');
 
@@ -46,10 +57,32 @@ No text, no extra garnish or props not in the recipe. Natural lighting, overhead
 
     if (response.ok) {
       const data = await response.json();
-      const generatedImageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-      if (generatedImageUrl) {
-        console.log(`Image generated for: ${title}`);
-        return generatedImageUrl;
+      const base64Url = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+      
+      if (base64Url && base64Url.startsWith("data:image")) {
+        // Upload to Supabase Storage
+        const base64Data = base64Url.replace(/^data:image\/\w+;base64,/, "");
+        const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+        const fileName = `${titleToSlug(title)}.jpg`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from("recipe-images")
+          .upload(`global/${fileName}`, binaryData, {
+            contentType: "image/jpeg",
+            upsert: true,
+          });
+        
+        if (uploadError) {
+          console.error(`Upload error for ${title}:`, uploadError);
+          return null;
+        }
+        
+        const { data: urlData } = supabase.storage
+          .from("recipe-images")
+          .getPublicUrl(`global/${fileName}`);
+        
+        console.log(`Image uploaded for: ${title}`);
+        return urlData.publicUrl;
       }
     } else {
       console.error(`Image generation failed for ${title}: ${response.status}`);
@@ -60,16 +93,9 @@ No text, no extra garnish or props not in the recipe. Natural lighting, overhead
   return null;
 }
 
-// Fallback: Generate image URL from recipe title by converting to kebab-case
+// Fallback: Generate static image URL from recipe title
 function getStaticImageUrl(title: string): string {
-  const slug = title
-    .toLowerCase()
-    .replace(/['']/g, '')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .trim();
-  return `/recipe-images/${slug}.jpg`;
+  return `/recipe-images/${titleToSlug(title)}.jpg`;
 }
 
 // Calculate serving_size using AI Chef rules
@@ -1420,7 +1446,8 @@ serve(async (req) => {
             recipe.title,
             recipe.description,
             recipe.ingredients,
-            LOVABLE_API_KEY
+            LOVABLE_API_KEY,
+            supabase
           );
           
           const imageUrl = generatedImage || getStaticImageUrl(recipe.title);
@@ -1555,7 +1582,8 @@ serve(async (req) => {
         recipe.title,
         recipe.description,
         recipe.ingredients,
-        LOVABLE_API_KEY
+        LOVABLE_API_KEY,
+        supabase
       );
       
       // Use AI-generated image or fallback to static image
