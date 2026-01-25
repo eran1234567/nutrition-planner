@@ -53,14 +53,28 @@ serve(async (req) => {
         throw new Error(`Failed to fetch recipes: ${recipeError.message}`);
       }
 
-      // Get ingredient counts for all recipes in one query
-      const { data: ingredientCounts, error: countError } = await supabase
-        .from("recipe_ingredients")
-        .select("recipe_id");
+      // Get ALL ingredient records (may be > 1000, need to paginate)
+      let allIngredientRows: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      
+      while (true) {
+        const { data: batch, error: countError } = await supabase
+          .from("recipe_ingredients")
+          .select("recipe_id")
+          .range(from, from + pageSize - 1);
 
-      if (countError) {
-        throw new Error(`Failed to count ingredients: ${countError.message}`);
+        if (countError) {
+          throw new Error(`Failed to count ingredients: ${countError.message}`);
+        }
+        
+        allIngredientRows = allIngredientRows.concat(batch || []);
+        
+        if (!batch || batch.length < pageSize) break;
+        from += pageSize;
       }
+      
+      const ingredientCounts = allIngredientRows;
 
       // Count ingredients per recipe
       const counts: Record<string, number> = {};
