@@ -63,25 +63,61 @@ const AISLE_ORDER: Record<string, number> = {
 };
 
 export function useGroceryList() {
-  const { generatedPlan, numberOfDays } = useMealPlanStore();
+  const { generatedPlan, numberOfDays, recipePoolsBySlot, exactAssignments } = useMealPlanStore();
 
-  // Extract unique recipe IDs from the plan
-  const recipeIds = useMemo(() => {
-    if (!generatedPlan || generatedPlan.days.length === 0) return [];
-    
-    const ids = new Set<string>();
-    const daysToProcess = generatedPlan.days.slice(0, numberOfDays);
-    
-    for (const day of daysToProcess) {
-      for (const slot of day.slots) {
-        if (slot.recipeId) {
-          ids.add(slot.recipeId);
+  type PlannedMeal = { recipeId: string; neededServings: number };
+
+  // Build a list of planned meals (may include duplicates across days/slots)
+  const plannedMeals = useMemo<PlannedMeal[]>(() => {
+    // 1) Prefer the generated plan when available
+    if (generatedPlan?.days?.length) {
+      const meals: PlannedMeal[] = [];
+      const daysToProcess = generatedPlan.days.slice(0, numberOfDays);
+      for (const day of daysToProcess) {
+        for (const slot of day.slots) {
+          if (!slot.recipeId) continue;
+          meals.push({
+            recipeId: slot.recipeId,
+            neededServings: slot.servingMultiplier || 1,
+          });
         }
       }
+      return meals;
     }
-    
+
+    // 2) Otherwise, use exact assignments (if present)
+    const exactMeals: PlannedMeal[] = [];
+    for (const [dayIndexStr, dayAssignments] of Object.entries(exactAssignments ?? {})) {
+      // Only process days that are part of the plan duration
+      const dayIndex = Number(dayIndexStr);
+      if (Number.isNaN(dayIndex) || dayIndex < 0 || dayIndex >= numberOfDays) continue;
+
+      for (const assignment of Object.values(dayAssignments ?? {})) {
+        if (!assignment?.recipeId) continue;
+        exactMeals.push({
+          recipeId: assignment.recipeId,
+          neededServings: assignment.servingMultiplier || 1,
+        });
+      }
+    }
+    if (exactMeals.length > 0) return exactMeals;
+
+    // 3) Finally, fall back to pools: include the first recipe in each slot pool (preview)
+    const poolMeals: PlannedMeal[] = [];
+    for (const pool of Object.values(recipePoolsBySlot ?? {})) {
+      const recipeId = pool?.[0];
+      if (!recipeId) continue;
+      poolMeals.push({ recipeId, neededServings: 1 });
+    }
+    return poolMeals;
+  }, [generatedPlan, numberOfDays, exactAssignments, recipePoolsBySlot]);
+
+  // Extract unique recipe IDs
+  const recipeIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const m of plannedMeals) ids.add(m.recipeId);
     return Array.from(ids);
-  }, [generatedPlan, numberOfDays]);
+  }, [plannedMeals]);
 
   // Fetch ingredients for all recipes in the plan
   const { data: ingredientsData, isLoading: ingredientsLoading } = useQuery({
@@ -110,7 +146,7 @@ export function useGroceryList() {
   });
 
   const groceryList = useMemo<GroceryAisle[]>(() => {
-    if (!generatedPlan || !ingredientsData || ingredientsData.ingredients.length === 0) {
+    if (!ingredientsData || ingredientsData.ingredients.length === 0 || plannedMeals.length === 0) {
       return [];
     }
 
@@ -135,38 +171,33 @@ export function useGroceryList() {
       aisle: string;
     }>();
 
-    // Only process days that are part of the plan
-    const daysToProcess = generatedPlan.days.slice(0, numberOfDays);
+    for (const meal of plannedMeals) {
+      const ingredients = ingredientsByRecipe.get(meal.recipeId);
+      if (!ingredients || ingredients.length === 0) continue;
 
-    for (const day of daysToProcess) {
-      for (const slot of day.slots) {
-        const ingredients = ingredientsByRecipe.get(slot.recipeId);
-        if (!ingredients || ingredients.length === 0) continue;
+      const baseServings = servingsMap.get(meal.recipeId) || 1;
+      const neededServings = meal.neededServings || 1;
+      const ingredientRatio = neededServings / baseServings;
 
-        const baseServings = servingsMap.get(slot.recipeId) || 1;
-        const neededServings = slot.servingMultiplier || 1;
-        const ingredientRatio = neededServings / baseServings;
+      for (const ingredient of ingredients) {
+        const normalizedName = normalizeIngredientName(ingredient.name);
+        const unit = ingredient.unit?.toLowerCase().trim() || null;
 
-        for (const ingredient of ingredients) {
-          const normalizedName = normalizeIngredientName(ingredient.name);
-          const unit = ingredient.unit?.toLowerCase().trim() || null;
-          
-          // Create a unique key for aggregation (name + unit)
-          const key = `${normalizedName}|${unit || ''}`;
+        // Create a unique key for aggregation (name + unit)
+        const key = `${normalizedName}|${unit || ''}`;
 
-          const existing = ingredientMap.get(key);
-          const scaledQuantity = (ingredient.quantity || 0) * ingredientRatio;
+        const existing = ingredientMap.get(key);
+        const scaledQuantity = (ingredient.quantity || 0) * ingredientRatio;
 
-          if (existing) {
-            existing.quantity += scaledQuantity;
-          } else {
-            ingredientMap.set(key, {
-              name: ingredient.name,
-              quantity: scaledQuantity,
-              unit: ingredient.unit || null,
-              aisle: ingredient.aisle || DEFAULT_AISLE,
-            });
-          }
+        if (existing) {
+          existing.quantity += scaledQuantity;
+        } else {
+          ingredientMap.set(key, {
+            name: ingredient.name,
+            quantity: scaledQuantity,
+            unit: ingredient.unit || null,
+            aisle: ingredient.aisle || DEFAULT_AISLE,
+          });
         }
       }
     }
@@ -207,14 +238,14 @@ export function useGroceryList() {
       }));
 
     return sortedAisles;
-  }, [generatedPlan, ingredientsData, numberOfDays]);
+  }, [ingredientsData, plannedMeals]);
 
   const totalItems = useMemo(() => 
     groceryList.reduce((acc, aisle) => acc + aisle.items.length, 0),
     [groceryList]
   );
 
-  const hasPlan = !!generatedPlan && generatedPlan.days.length > 0;
+  const hasPlan = plannedMeals.length > 0;
 
   return {
     groceryList,

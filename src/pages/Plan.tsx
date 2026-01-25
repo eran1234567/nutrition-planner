@@ -418,6 +418,7 @@ export default function Plan() {
   // Check if we have a plan to show
   const hasPlan = generatedPlan && generatedPlan.days.length > 0;
   const hasRecipesInPools = Object.values(recipePoolsBySlot).some(pool => pool.length > 0);
+  const hasExactAssignments = Object.keys(exactAssignments).length > 0;
 
   // Fallback slots when user hasn't configured any
   const fallbackSlots: MealSlot[] = useMemo(() => {
@@ -762,7 +763,7 @@ export default function Plan() {
             variant="outline" 
             className="flex-1" 
             onClick={() => navigate('/grocery')}
-            disabled={!hasPlan}
+            disabled={!hasPlan && !hasRecipesInPools && !hasExactAssignments}
           >
             <ShoppingCart className="w-4 h-4 mr-2" />
             {t('grocery.title')}
