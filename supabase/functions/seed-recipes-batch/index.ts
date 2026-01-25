@@ -93,10 +93,7 @@ No text, no extra garnish or props not in the recipe. Natural lighting, overhead
   return null;
 }
 
-// Fallback: Generate static image URL from recipe title
-function getStaticImageUrl(title: string): string {
-  return `/recipe-images/${titleToSlug(title)}.jpg`;
-}
+// No fallback - AI image generation is mandatory
 
 // Calculate serving_size using AI Chef rules
 async function calculateServingSize(
@@ -1441,8 +1438,8 @@ serve(async (req) => {
             LOVABLE_API_KEY
           );
 
-          // Generate AI image based on ingredients for accuracy
-          const generatedImage = await generateRecipeImage(
+          // Generate AI image based on ingredients for accuracy - MANDATORY
+          const imageUrl = await generateRecipeImage(
             recipe.title,
             recipe.description,
             recipe.ingredients,
@@ -1450,7 +1447,10 @@ serve(async (req) => {
             supabase
           );
           
-          const imageUrl = generatedImage || getStaticImageUrl(recipe.title);
+          if (!imageUrl) {
+            cuisineResults.push(`${recipe.title} (image failed)`);
+            continue;
+          }
 
           // Insert recipe
           const { data: newRecipe, error: recipeError } = await supabase
@@ -1577,8 +1577,8 @@ serve(async (req) => {
         LOVABLE_API_KEY
       );
 
-      // Generate AI image based on ingredients for accuracy
-      const generatedImage = await generateRecipeImage(
+      // Generate AI image based on ingredients for accuracy - MANDATORY
+      const imageUrl = await generateRecipeImage(
         recipe.title,
         recipe.description,
         recipe.ingredients,
@@ -1586,8 +1586,10 @@ serve(async (req) => {
         supabase
       );
       
-      // Use AI-generated image or fallback to static image
-      const imageUrl = generatedImage || getStaticImageUrl(recipe.title);
+      if (!imageUrl) {
+        results.push({ title: recipe.title, status: "error", error: "AI image generation failed - no fallback allowed" });
+        continue;
+      }
 
       // Insert recipe
       const { data: newRecipe, error: recipeError } = await supabase
