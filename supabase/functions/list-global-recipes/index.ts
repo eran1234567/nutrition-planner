@@ -33,6 +33,15 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Require internal header for access (Lovable agent only)
+  const internalHeader = req.headers.get("X-Lovable-Internal");
+  if (internalHeader !== "true") {
+    return new Response(
+      JSON.stringify({ error: "Unauthorized - internal use only" }),
+      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
