@@ -8,12 +8,13 @@ const corsHeaders = {
 
 const LOVABLE_API_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 
-// Generate ingredient-accurate recipe image using AI
+// Generate ingredient-accurate recipe image using AI and upload to storage
 async function generateRecipeImage(
   title: string,
   description: string,
   ingredients: Array<{ name: string; quantity?: number; unit?: string }>,
-  apiKey: string
+  apiKey: string,
+  supabase: any
 ): Promise<string | null> {
   const topIngredients = ingredients.slice(0, 5).map(i => i.name).join(", ");
   
@@ -40,10 +41,41 @@ Ultra high resolution, appetizing, restaurant quality presentation.`;
 
     if (response.ok) {
       const data = await response.json();
-      const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-      if (imageUrl) {
-        console.log(`Generated image for: ${title}`);
-        return imageUrl;
+      const base64Url = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+      if (base64Url && base64Url.startsWith("data:image")) {
+        // Upload base64 to Supabase Storage
+        const base64Data = base64Url.replace(/^data:image\/\w+;base64,/, "");
+        const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+        
+        // Generate slug for filename
+        const slug = title
+          .toLowerCase()
+          .replace(/['']/g, '')
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-')
+          .trim();
+        const fileName = `${slug}.jpg`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from("recipe-images")
+          .upload(`global/${fileName}`, binaryData, {
+            contentType: "image/jpeg",
+            upsert: true,
+          });
+        
+        if (uploadError) {
+          console.error(`Upload error for ${title}:`, uploadError);
+          return null;
+        }
+        
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from("recipe-images")
+          .getPublicUrl(`global/${fileName}`);
+        
+        console.log(`Generated and uploaded image for: ${title}`);
+        return urlData.publicUrl;
       }
     }
   } catch (err) {
@@ -1546,7 +1578,8 @@ serve(async (req) => {
             recipe.title,
             recipe.description,
             recipe.ingredients,
-            lovableApiKey
+            lovableApiKey,
+            supabase
           );
 
           // Calculate serving size using AI
