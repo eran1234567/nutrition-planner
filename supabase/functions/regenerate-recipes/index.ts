@@ -42,48 +42,39 @@ serve(async (req) => {
       recipes = result.data ? [result.data] : [];
       recipesError = result.error;
     } else {
-      // First, get the IDs of recipes with >= 5 ingredients (already processed)
-      const { data: processedIds, error: countError } = await supabase
-        .from("recipe_ingredients")
-        .select("recipe_id")
-        .then(async (res) => {
-          if (res.error) return { data: null, error: res.error };
-          
-          // Count ingredients per recipe
-          const counts: Record<string, number> = {};
-          for (const row of res.data || []) {
-            counts[row.recipe_id] = (counts[row.recipe_id] || 0) + 1;
-          }
-          
-          // Return IDs with >= 5 ingredients
-          const processed = Object.entries(counts)
-            .filter(([_, count]) => count >= 5)
-            .map(([id]) => id);
-          
-          return { data: processed, error: null };
-        });
-
-      if (countError) {
-        throw new Error(`Failed to count ingredients: ${countError.message}`);
-      }
-
-      // Get global recipes NOT in the processed list
-      const { data: unprocessedRecipes, error: recipeError } = await supabase
+      // Get global recipes with their ingredient counts using a subquery approach
+      const { data: allGlobalRecipes, error: recipeError } = await supabase
         .from("recipes")
         .select("id, title, cuisine, description, servings")
         .eq("scope", "global")
-        .eq("is_deleted", false)
-        .limit(batchSize);
+        .eq("is_deleted", false);
 
       if (recipeError) {
         throw new Error(`Failed to fetch recipes: ${recipeError.message}`);
       }
 
-      // Filter out already-processed recipes
-      const processedSet = new Set(processedIds || []);
-      recipes = (unprocessedRecipes || []).filter((r: any) => !processedSet.has(r.id));
+      // Get ingredient counts for all recipes in one query
+      const { data: ingredientCounts, error: countError } = await supabase
+        .from("recipe_ingredients")
+        .select("recipe_id");
+
+      if (countError) {
+        throw new Error(`Failed to count ingredients: ${countError.message}`);
+      }
+
+      // Count ingredients per recipe
+      const counts: Record<string, number> = {};
+      for (const row of ingredientCounts || []) {
+        counts[row.recipe_id] = (counts[row.recipe_id] || 0) + 1;
+      }
+
+      // Filter to recipes with < 5 ingredients
+      const unprocessedRecipes = (allGlobalRecipes || [])
+        .filter((r: any) => (counts[r.id] || 0) < 5)
+        .slice(0, batchSize);
       
-      console.log(`Found ${recipes.length} unprocessed recipes out of ${unprocessedRecipes?.length} total`);
+      recipes = unprocessedRecipes;
+      console.log(`Found ${recipes.length} unprocessed recipes (< 5 ingredients)`);
     }
 
     if (recipesError) {
