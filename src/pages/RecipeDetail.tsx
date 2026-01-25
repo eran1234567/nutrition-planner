@@ -192,13 +192,19 @@ export default function RecipeDetail() {
   const perServingNutrition = useMemo(() => {
     if (!recipe?.nutrition) return null;
     const n = recipe.nutrition;
+    const carbs = n.carbs_g || 0;
+    const fiber = n.fiber_g || 0;
     return {
       calories: Math.round(n.calories || 0),
       protein_g: Math.round(n.protein_g || 0),
-      carbs_g: Math.round(n.carbs_g || 0),
+      carbs_g: Math.round(carbs),
       fat_g: Math.round(n.fat_g || 0),
-      fiber_g: Math.round(n.fiber_g || 0),
+      fiber_g: Math.round(fiber),
       sodium_mg: Math.round(n.sodium_mg || 0),
+      sugar_g: Math.round(n.sugar_g || 0),
+      saturated_fat_g: Math.round(n.saturated_fat_g || 0),
+      cholesterol_mg: Math.round(n.cholesterol_mg || 0),
+      net_carbs_g: Math.round(Math.max(0, carbs - fiber)),
     };
   }, [recipe?.nutrition]);
 
@@ -573,30 +579,55 @@ export default function RecipeDetail() {
                   </span>
                 )}
               </div>
-              <div className="grid grid-cols-6 gap-2">
-                <div className="text-center">
-                  <p className="text-lg font-bold text-primary">{perServingNutrition.calories}</p>
+              
+              {/* Primary macros - always visible */}
+              <div className="grid grid-cols-4 gap-3 mb-4">
+                <div className="text-center bg-background rounded-lg p-2">
+                  <p className="text-xl font-bold text-primary">{perServingNutrition.calories}</p>
                   <p className="text-xs text-muted-foreground">kcal</p>
                 </div>
-                <div className="text-center">
-                  <p className="text-lg font-bold text-protein">{perServingNutrition.protein_g}g</p>
+                <div className="text-center bg-background rounded-lg p-2">
+                  <p className="text-xl font-bold text-protein">{perServingNutrition.protein_g}g</p>
                   <p className="text-xs text-muted-foreground">protein</p>
                 </div>
-                <div className="text-center">
-                  <p className="text-lg font-bold text-fat">{perServingNutrition.fat_g}g</p>
+                <div className="text-center bg-background rounded-lg p-2">
+                  <p className="text-xl font-bold text-fat">{perServingNutrition.fat_g}g</p>
                   <p className="text-xs text-muted-foreground">fat</p>
                 </div>
-                <div className="text-center">
-                  <p className="text-lg font-bold text-carbs">{perServingNutrition.carbs_g}g</p>
+                <div className="text-center bg-background rounded-lg p-2">
+                  <p className="text-xl font-bold text-carbs">{perServingNutrition.carbs_g}g</p>
                   <p className="text-xs text-muted-foreground">carbs</p>
                 </div>
-                <div className="text-center">
-                  <p className="text-lg font-bold text-fiber">{perServingNutrition.fiber_g}g</p>
-                  <p className="text-xs text-muted-foreground">fiber</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-lg font-bold text-sodium">{perServingNutrition.sodium_mg}mg</p>
-                  <p className="text-xs text-muted-foreground">sodium</p>
+              </div>
+              
+              {/* Detailed nutrition breakdown */}
+              <div className="border-t border-border pt-3">
+                <p className="text-xs font-medium text-muted-foreground mb-2">Detailed Breakdown</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="flex justify-between text-sm px-2 py-1 bg-background rounded">
+                    <span className="text-muted-foreground">Net Carbs</span>
+                    <span className="font-medium text-carbs">{perServingNutrition.net_carbs_g}g</span>
+                  </div>
+                  <div className="flex justify-between text-sm px-2 py-1 bg-background rounded">
+                    <span className="text-muted-foreground">Fiber</span>
+                    <span className="font-medium">{perServingNutrition.fiber_g}g</span>
+                  </div>
+                  <div className="flex justify-between text-sm px-2 py-1 bg-background rounded">
+                    <span className="text-muted-foreground">Sugar</span>
+                    <span className="font-medium">{perServingNutrition.sugar_g}g</span>
+                  </div>
+                  <div className="flex justify-between text-sm px-2 py-1 bg-background rounded">
+                    <span className="text-muted-foreground">Sat. Fat</span>
+                    <span className="font-medium">{perServingNutrition.saturated_fat_g}g</span>
+                  </div>
+                  <div className="flex justify-between text-sm px-2 py-1 bg-background rounded">
+                    <span className="text-muted-foreground">Cholesterol</span>
+                    <span className="font-medium">{perServingNutrition.cholesterol_mg}mg</span>
+                  </div>
+                  <div className="flex justify-between text-sm px-2 py-1 bg-background rounded">
+                    <span className="text-muted-foreground">Sodium</span>
+                    <span className="font-medium">{perServingNutrition.sodium_mg}mg</span>
+                  </div>
                 </div>
               </div>
             </div>
