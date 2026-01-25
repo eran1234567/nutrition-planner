@@ -533,7 +533,25 @@ export default function Discover() {
     return infiniteData?.pages.flatMap((page) => page.recipes) ?? [];
   }, [infiniteData]);
 
-  // Infinite scroll observer
+  // Check if any filters are active (excluding search which works fine with pagination)
+  const hasActiveFilters = useMemo(() => {
+    return !!selectedMealType ||
+      !!selectedDietType ||
+      selectedAllergies.length > 0 ||
+      selectedDislikes.length > 0 ||
+      selectedHealthConsiderations.length > 0 ||
+      !!selectedCuisine ||
+      !!selectedTime;
+  }, [selectedMealType, selectedDietType, selectedAllergies, selectedDislikes, selectedHealthConsiderations, selectedCuisine, selectedTime]);
+
+  // Auto-fetch all pages when filters are active to ensure complete filtering
+  useEffect(() => {
+    if (hasActiveFilters && hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasActiveFilters, hasNextPage, isFetchingNextPage, fetchNextPage, infiniteData]);
+
+  // Infinite scroll observer (for unfiltered browsing)
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!hasNextPage || isFetchingNextPage) return;
