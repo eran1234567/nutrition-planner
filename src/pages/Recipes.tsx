@@ -60,6 +60,7 @@ const cuisineFilterOptions = [
   { value: 'Mediterranean', label: 'Mediterranean' },
   { value: 'Indian', label: 'Indian' },
   { value: 'Japanese', label: 'Japanese' },
+  { value: 'Korean', label: 'Korean' },
   { value: 'Thai', label: 'Thai' },
   { value: 'French', label: 'French' },
   { value: 'Greek', label: 'Greek' },
