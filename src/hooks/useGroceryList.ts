@@ -164,10 +164,10 @@ export function useGroceryList() {
     }
 
     // Aggregate ingredients across all days and slots
+    // Group by normalized name only (merge different units of same ingredient)
     const ingredientMap = new Map<string, {
       name: string;
-      quantity: number;
-      unit: string | null;
+      quantities: Array<{ quantity: number; unit: string | null }>;
       aisle: string;
     }>();
 
@@ -182,25 +182,59 @@ export function useGroceryList() {
       for (const ingredient of ingredients) {
         const normalizedName = normalizeIngredientName(ingredient.name);
         const unit = ingredient.unit?.toLowerCase().trim() || null;
-
-        // Create a unique key for aggregation (name + unit)
-        const key = `${normalizedName}|${unit || ''}`;
-
-        const existing = ingredientMap.get(key);
         const scaledQuantity = (ingredient.quantity || 0) * ingredientRatio;
 
+        // Use normalized name only as key (merge all units of same ingredient)
+        const key = normalizedName;
+
+        const existing = ingredientMap.get(key);
         if (existing) {
-          existing.quantity += scaledQuantity;
+          // Try to find an existing entry with the same unit
+          const sameUnitEntry = existing.quantities.find(q => q.unit === unit);
+          if (sameUnitEntry) {
+            sameUnitEntry.quantity += scaledQuantity;
+          } else {
+            existing.quantities.push({ quantity: scaledQuantity, unit });
+          }
         } else {
           ingredientMap.set(key, {
             name: ingredient.name,
-            quantity: scaledQuantity,
-            unit: ingredient.unit || null,
+            quantities: [{ quantity: scaledQuantity, unit }],
             aisle: ingredient.aisle || DEFAULT_AISLE,
           });
         }
       }
     }
+
+    // Merge quantities into a single display string
+    const formatQuantities = (quantities: Array<{ quantity: number; unit: string | null }>): { quantity: number; unit: string | null } => {
+      if (quantities.length === 1) {
+        return {
+          quantity: Math.round(quantities[0].quantity * 100) / 100,
+          unit: quantities[0].unit,
+        };
+      }
+      
+      // Multiple units - sum all quantities and show combined
+      const total = quantities.reduce((sum, q) => sum + q.quantity, 0);
+      // Pick the most common unit or first one
+      const unitCounts = new Map<string | null, number>();
+      for (const q of quantities) {
+        unitCounts.set(q.unit, (unitCounts.get(q.unit) || 0) + q.quantity);
+      }
+      let bestUnit: string | null = null;
+      let maxCount = 0;
+      for (const [unit, count] of unitCounts) {
+        if (count > maxCount) {
+          maxCount = count;
+          bestUnit = unit;
+        }
+      }
+      return {
+        quantity: Math.round(total * 100) / 100,
+        unit: bestUnit,
+      };
+    };
 
     // Group by aisle
     const aisleMap = new Map<string, GroceryItem[]>();
@@ -208,6 +242,7 @@ export function useGroceryList() {
     let idCounter = 0;
     for (const [key, data] of ingredientMap) {
       const aisle = data.aisle || DEFAULT_AISLE;
+      const merged = formatQuantities(data.quantities);
       
       if (!aisleMap.has(aisle)) {
         aisleMap.set(aisle, []);
@@ -216,8 +251,8 @@ export function useGroceryList() {
       aisleMap.get(aisle)!.push({
         id: `grocery-${idCounter++}`,
         name: data.name,
-        quantity: Math.round(data.quantity * 100) / 100, // Round to 2 decimals
-        unit: data.unit,
+        quantity: merged.quantity,
+        unit: merged.unit,
         aisle,
         checked: false,
       });
