@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Loader2, Pencil, Leaf, Fish, Drumstick, Sun, CalendarPlus, Heart, Droplets, Activity, Globe, Pizza, UtensilsCrossed, Soup, Cherry } from 'lucide-react';
+import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Loader2, Pencil, Leaf, Fish, Drumstick, Sun, CalendarPlus, Trash2, Heart, Droplets, Activity, Globe, Pizza, UtensilsCrossed, Soup, Cherry } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -88,7 +88,17 @@ export default function RecipeDetail() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { selectedMealSlots, generatedPlan, recipePoolsBySlot, exactAssignments } = useMealPlanStore();
+  const {
+    selectedMealSlots,
+    generatedPlan,
+    recipePoolsBySlot,
+    exactAssignments,
+    lockedSlots,
+    removeFromPool,
+    removeExactAssignment,
+    setGeneratedPlan,
+    toggleSlotLock,
+  } = useMealPlanStore();
   const [isEditing, setIsEditing] = useState(false);
   const [showAddToPlanModal, setShowAddToPlanModal] = useState(false);
 
@@ -272,6 +282,66 @@ export default function RecipeDetail() {
 
   const handleAddToPlan = () => {
     setShowAddToPlanModal(true);
+  };
+
+  const handleRemoveFromPlan = () => {
+    if (!id) return;
+
+    // Remove from pools
+    for (const [slotId, pool] of Object.entries(recipePoolsBySlot)) {
+      if ((pool ?? []).includes(id)) {
+        removeFromPool(slotId, id);
+      }
+    }
+
+    // Remove from exact assignments
+    for (const [dayIndexStr, dayAssignments] of Object.entries(exactAssignments)) {
+      for (const [slotId, assignment] of Object.entries(dayAssignments ?? {})) {
+        if (assignment?.recipeId === id) {
+          removeExactAssignment(Number(dayIndexStr), slotId);
+        }
+      }
+    }
+
+    // Clear from generated plan (and unlock any affected slots)
+    if (generatedPlan) {
+      const locksToClear: Array<{ dayIndex: number; slotId: string }> = [];
+      let didChange = false;
+
+      const newDays = generatedPlan.days.map((day) => {
+        const dayLocks = lockedSlots[day.dayIndex] || [];
+        const newSlots = day.slots.map((slot) => {
+          if (slot.recipeId !== id) return slot;
+          didChange = true;
+
+          if (dayLocks.includes(slot.slotId)) {
+            locksToClear.push({ dayIndex: day.dayIndex, slotId: slot.slotId });
+          }
+
+          return {
+            ...slot,
+            recipeId: '',
+            servingMultiplier: 1,
+            isLocked: false,
+            slotTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+          };
+        });
+
+        return { ...day, slots: newSlots };
+      });
+
+      if (didChange) {
+        setGeneratedPlan({
+          ...generatedPlan,
+          days: newDays,
+        });
+      }
+
+      // Unlock after updating the plan (toggle-based API)
+      for (const l of locksToClear) {
+        toggleSlotLock(l.dayIndex, l.slotId);
+      }
+    }
   };
 
   const handleSaveEdit = (updatedRecipe: Recipe) => {
@@ -555,14 +625,22 @@ export default function RecipeDetail() {
 
               {/* Add to plan button */}
               <Button
-                onClick={handleAddToPlan}
+                onClick={isAlreadyInPlan ? handleRemoveFromPlan : handleAddToPlan}
                 disabled={!hasMealPlanSetup}
-                className={`w-full h-12 ${hasMealPlanSetup ? 'gradient-primary' : ''}`}
-                variant={hasMealPlanSetup ? 'default' : 'secondary'}
+                className={`w-full h-12 ${hasMealPlanSetup && !isAlreadyInPlan ? 'gradient-primary' : ''}`}
+                variant={!hasMealPlanSetup ? 'secondary' : isAlreadyInPlan ? 'destructive' : 'default'}
                 size="lg"
               >
-                <CalendarPlus className="w-5 h-5 mr-2" />
-                {hasMealPlanSetup ? 'Add to Plan' : 'Set Up Plan First'}
+                {isAlreadyInPlan ? (
+                  <Trash2 className="w-5 h-5 mr-2" />
+                ) : (
+                  <CalendarPlus className="w-5 h-5 mr-2" />
+                )}
+                {!hasMealPlanSetup
+                  ? 'Set Up Plan First'
+                  : isAlreadyInPlan
+                    ? 'Remove from Plan'
+                    : 'Add to Plan'}
               </Button>
             </>
           )}
