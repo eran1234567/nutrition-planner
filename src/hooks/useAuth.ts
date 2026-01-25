@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
 import { useMealPlanStore } from '@/stores/mealPlanStore';
+import { useAppStore } from '@/stores/appStore';
 
 // NOTE: This hook is used in many components (ProtectedRoute + pages).
 // With React StrictMode, effects can mount/unmount/mount during dev, and multiple
@@ -112,8 +113,20 @@ export const useAuth = () => {
 
   const signOut = async () => {
     try {
-      // Reset state first to ensure immediate UI feedback
+      // Reset auth state first to ensure immediate UI feedback
       useAuthStore.getState().reset();
+      
+      // Reset meal plan store to clear user-specific data
+      useMealPlanStore.getState().resetPlanState();
+      // Also set user ID to null so storage key switches
+      useMealPlanStore.getState().setCurrentUserId(null);
+      
+      // Clear selected meals from app store
+      useAppStore.getState().clearSelectedMeals();
+      
+      // Clear pending onboarding data from localStorage
+      localStorage.removeItem('pendingOnboarding');
+      
       const { error } = await supabase.auth.signOut();
       return { error };
     } catch (error) {
