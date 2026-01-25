@@ -88,7 +88,7 @@ export default function RecipeDetail() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { selectedMealSlots } = useMealPlanStore();
+  const { selectedMealSlots, generatedPlan } = useMealPlanStore();
   const [isEditing, setIsEditing] = useState(false);
   const [showAddToPlanModal, setShowAddToPlanModal] = useState(false);
 
@@ -118,6 +118,14 @@ export default function RecipeDetail() {
   
   // Check if user has a meal plan configured
   const hasMealPlanSetup = selectedMealSlots.length > 0;
+
+  // Check if this recipe is already in the active meal plan
+  const isAlreadyInPlan = useMemo(() => {
+    if (!generatedPlan || !id) return false;
+    return generatedPlan.days.some(day => 
+      day.slots.some(slot => slot.recipeId === id)
+    );
+  }, [generatedPlan, id]);
 
   // Nutrition is ALWAYS per serving - never scaled
   // The nutrition values in the database represent what you get from one serving
@@ -297,18 +305,20 @@ export default function RecipeDetail() {
               <Pencil className="w-5 h-5" />
             </button>
           )}
-          <button
-            onClick={handleAddToPlan}
-            disabled={!hasMealPlanSetup}
-            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-              hasMealPlanSetup
-                ? 'bg-card/90 backdrop-blur text-foreground hover:bg-card'
-                : 'bg-muted/60 text-muted-foreground cursor-not-allowed'
-            }`}
-            title={hasMealPlanSetup ? "Add to meal plan" : "Set up meal plan first"}
-          >
-            <CalendarPlus className="w-5 h-5" />
-          </button>
+          {!isAlreadyInPlan && (
+            <button
+              onClick={handleAddToPlan}
+              disabled={!hasMealPlanSetup}
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                hasMealPlanSetup
+                  ? 'bg-card/90 backdrop-blur text-foreground hover:bg-card'
+                  : 'bg-muted/60 text-muted-foreground cursor-not-allowed'
+              }`}
+              title={hasMealPlanSetup ? "Add to meal plan" : "Set up meal plan first"}
+            >
+              <CalendarPlus className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </div>
 
