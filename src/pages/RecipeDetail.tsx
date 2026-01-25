@@ -11,6 +11,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { RecipeEditor } from '@/components/recipe/RecipeEditor';
 import { AddToPlanModal } from '@/components/plan/AddToPlanModal';
@@ -19,6 +29,7 @@ import { useMealPlanStore } from '@/stores/mealPlanStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import type { Recipe } from '@/types';
+import { MEAL_SLOT_DEFINITIONS } from '@/types/mealPlan';
 import { getHealthBadges } from '@/lib/nutrition/healthDetection';
 
 // Diet badge config with colors and icons
@@ -101,6 +112,7 @@ export default function RecipeDetail() {
   } = useMealPlanStore();
   const [isEditing, setIsEditing] = useState(false);
   const [showAddToPlanModal, setShowAddToPlanModal] = useState(false);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
   // Get requested servings from URL (for coming from Plan page)
   // This is the actual number of servings needed, not a multiplier
@@ -130,20 +142,31 @@ export default function RecipeDetail() {
   const hasMealPlanSetup = selectedMealSlots.length > 0;
 
   // Check if this recipe is already in the active meal plan (generated plan, pools, or exact assignments)
-  const isAlreadyInPlan = useMemo(() => {
-    if (!id) return false;
+  // Also compute where it appears for the confirmation dialog
+  const planPresence = useMemo(() => {
+    if (!id) return { isInPlan: false, inPools: [] as string[], inExact: [] as string[], inGenerated: [] as string[] };
+    
+    const inPools: string[] = [];
+    const inExact: string[] = [];
+    const inGenerated: string[] = [];
     
     // Check generated plan
-    if (generatedPlan?.days.some(day => 
-      day.slots.some(slot => slot.recipeId === id)
-    )) {
-      return true;
+    if (generatedPlan?.days) {
+      for (const day of generatedPlan.days) {
+        for (const slot of day.slots) {
+          if (slot.recipeId === id) {
+            const slotDef = MEAL_SLOT_DEFINITIONS[slot.slotId as keyof typeof MEAL_SLOT_DEFINITIONS];
+            inGenerated.push(`Day ${day.dayIndex + 1} ${slotDef?.label || slot.slotId}`);
+          }
+        }
+      }
     }
     
     // Check recipe pools
     for (const slotId in recipePoolsBySlot) {
       if (recipePoolsBySlot[slotId]?.includes(id)) {
-        return true;
+        const slotDef = MEAL_SLOT_DEFINITIONS[slotId as keyof typeof MEAL_SLOT_DEFINITIONS];
+        inPools.push(slotDef?.label || slotId);
       }
     }
     
@@ -152,13 +175,17 @@ export default function RecipeDetail() {
       const dayAssignments = exactAssignments[Number(dayIndex)];
       for (const slotId in dayAssignments) {
         if (dayAssignments[slotId]?.recipeId === id) {
-          return true;
+          const slotDef = MEAL_SLOT_DEFINITIONS[slotId as keyof typeof MEAL_SLOT_DEFINITIONS];
+          inExact.push(`Day ${Number(dayIndex) + 1} ${slotDef?.label || slotId}`);
         }
       }
     }
     
-    return false;
+    const isInPlan = inGenerated.length > 0 || inPools.length > 0 || inExact.length > 0;
+    return { isInPlan, inPools, inExact, inGenerated };
   }, [generatedPlan, recipePoolsBySlot, exactAssignments, id]);
+
+  const isAlreadyInPlan = planPresence.isInPlan;
 
   // Nutrition is ALWAYS per serving - never scaled
   // The nutrition values in the database represent what you get from one serving
@@ -284,6 +311,10 @@ export default function RecipeDetail() {
     setShowAddToPlanModal(true);
   };
 
+  const handleRemoveClick = () => {
+    setShowRemoveConfirm(true);
+  };
+
   const handleRemoveFromPlan = () => {
     if (!id) return;
 
@@ -342,6 +373,13 @@ export default function RecipeDetail() {
         toggleSlotLock(l.dayIndex, l.slotId);
       }
     }
+
+    // Close the confirmation dialog
+    setShowRemoveConfirm(false);
+  };
+
+  const confirmRemove = () => {
+    handleRemoveFromPlan();
   };
 
   const handleSaveEdit = (updatedRecipe: Recipe) => {
@@ -625,7 +663,7 @@ export default function RecipeDetail() {
 
               {/* Add to plan button */}
               <Button
-                onClick={isAlreadyInPlan ? handleRemoveFromPlan : handleAddToPlan}
+                onClick={isAlreadyInPlan ? handleRemoveClick : handleAddToPlan}
                 disabled={!hasMealPlanSetup}
                 className={`w-full h-12 ${hasMealPlanSetup && !isAlreadyInPlan ? 'gradient-primary' : ''}`}
                 variant={!hasMealPlanSetup ? 'secondary' : isAlreadyInPlan ? 'destructive' : 'default'}
@@ -656,6 +694,48 @@ export default function RecipeDetail() {
           recipeName={recipe.title}
         />
       )}
+
+      {/* Remove Confirmation Dialog */}
+      <AlertDialog open={showRemoveConfirm} onOpenChange={setShowRemoveConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove from Meal Plan?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  This will remove <span className="font-semibold">{recipe?.title}</span> from your meal plan.
+                </p>
+                <div className="space-y-2 text-sm">
+                  {planPresence.inGenerated.length > 0 && (
+                    <div className="flex items-start gap-2">
+                      <span className="font-medium text-foreground">Generated Plan:</span>
+                      <span>{planPresence.inGenerated.join(', ')}</span>
+                    </div>
+                  )}
+                  {planPresence.inPools.length > 0 && (
+                    <div className="flex items-start gap-2">
+                      <span className="font-medium text-foreground">Recipe Pools:</span>
+                      <span>{planPresence.inPools.join(', ')}</span>
+                    </div>
+                  )}
+                  {planPresence.inExact.length > 0 && (
+                    <div className="flex items-start gap-2">
+                      <span className="font-medium text-foreground">Exact Assignments:</span>
+                      <span>{planPresence.inExact.join(', ')}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmRemove} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <BottomNav />
     </div>
