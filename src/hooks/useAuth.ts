@@ -116,10 +116,12 @@ export const useAuth = () => {
       // Reset auth state first to ensure immediate UI feedback
       useAuthStore.getState().reset();
       
-      // Reset meal plan store to clear user-specific data
-      useMealPlanStore.getState().resetPlanState();
-      // Also set user ID to null so storage key switches
+      // IMPORTANT: First switch to anonymous user ID. This changes the storage key
+      // so any subsequent resets only affect anonymous storage, NOT the user's saved data.
       useMealPlanStore.getState().setCurrentUserId(null);
+      
+      // Now reset the in-memory plan state (this will persist to anonymous storage, not user storage)
+      useMealPlanStore.getState().resetPlanState();
       
       // Clear selected meals from app store
       useAppStore.getState().clearSelectedMeals();
