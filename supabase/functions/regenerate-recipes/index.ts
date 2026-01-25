@@ -29,18 +29,62 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get recipes to regenerate - either specific one or batch of global recipes
-    let query = supabase
-      .from("recipes")
-      .select("id, title, cuisine, description, servings")
-      .eq("scope", "global")
-      .eq("is_deleted", false);
+    let recipes: any[] = [];
+    let recipesError: any = null;
 
     if (recipeId) {
-      query = query.eq("id", recipeId);
-    }
+      // Specific recipe requested
+      const result = await supabase
+        .from("recipes")
+        .select("id, title, cuisine, description, servings")
+        .eq("id", recipeId)
+        .single();
+      recipes = result.data ? [result.data] : [];
+      recipesError = result.error;
+    } else {
+      // First, get the IDs of recipes with >= 5 ingredients (already processed)
+      const { data: processedIds, error: countError } = await supabase
+        .from("recipe_ingredients")
+        .select("recipe_id")
+        .then(async (res) => {
+          if (res.error) return { data: null, error: res.error };
+          
+          // Count ingredients per recipe
+          const counts: Record<string, number> = {};
+          for (const row of res.data || []) {
+            counts[row.recipe_id] = (counts[row.recipe_id] || 0) + 1;
+          }
+          
+          // Return IDs with >= 5 ingredients
+          const processed = Object.entries(counts)
+            .filter(([_, count]) => count >= 5)
+            .map(([id]) => id);
+          
+          return { data: processed, error: null };
+        });
 
-    const { data: recipes, error: recipesError } = await query.limit(batchSize);
+      if (countError) {
+        throw new Error(`Failed to count ingredients: ${countError.message}`);
+      }
+
+      // Get global recipes NOT in the processed list
+      const { data: unprocessedRecipes, error: recipeError } = await supabase
+        .from("recipes")
+        .select("id, title, cuisine, description, servings")
+        .eq("scope", "global")
+        .eq("is_deleted", false)
+        .limit(batchSize);
+
+      if (recipeError) {
+        throw new Error(`Failed to fetch recipes: ${recipeError.message}`);
+      }
+
+      // Filter out already-processed recipes
+      const processedSet = new Set(processedIds || []);
+      recipes = (unprocessedRecipes || []).filter((r: any) => !processedSet.has(r.id));
+      
+      console.log(`Found ${recipes.length} unprocessed recipes out of ${unprocessedRecipes?.length} total`);
+    }
 
     if (recipesError) {
       throw new Error(`Failed to fetch recipes: ${recipesError.message}`);
