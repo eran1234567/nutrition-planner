@@ -145,7 +145,7 @@ async function fetchPage(offset: number): Promise<PageData> {
     const safeRecipes = (recipes ?? []) as any[];
     const ids = safeRecipes.map((r) => r.id).filter(Boolean);
 
-    const [nutritionRes, tagsRes] = ids.length
+    const [nutritionRes, tagsRes, ingredientsRes] = ids.length
       ? await Promise.all([
           supabase
             .from('recipe_nutrition')
@@ -155,8 +155,12 @@ async function fetchPage(offset: number): Promise<PageData> {
             .from('recipe_tags')
             .select('recipe_id, tag_type, tag_value')
             .in('recipe_id', ids),
+          supabase
+            .from('recipe_ingredients')
+            .select('recipe_id, name, normalized_name')
+            .in('recipe_id', ids),
         ])
-      : [{ data: [], error: null }, { data: [], error: null }];
+      : [{ data: [], error: null }, { data: [], error: null }, { data: [], error: null }];
 
     const nutritionById = new Map<string, GlobalRecipe['nutrition']>();
     (nutritionRes.data || []).forEach((n: any) => {
@@ -179,6 +183,22 @@ async function fetchPage(offset: number): Promise<PageData> {
       tagsById.set(t.recipe_id, list);
     });
 
+    // Map ingredients by recipe_id
+    const ingredientsById = new Map<string, GlobalRecipe['ingredients']>();
+    (ingredientsRes.data || []).forEach((ing: any) => {
+      if (!ing?.recipe_id) return;
+      const list = ingredientsById.get(ing.recipe_id) || [];
+      list.push({
+        name: ing.name || '',
+        quantity: null,
+        unit: null,
+        normalized_name: ing.normalized_name || null,
+        aisle: null,
+        order_index: null,
+      });
+      ingredientsById.set(ing.recipe_id, list);
+    });
+
     const mapped: GlobalRecipe[] = safeRecipes.map((r: any) => ({
       id: r.id,
       title: r.title,
@@ -196,7 +216,7 @@ async function fetchPage(offset: number): Promise<PageData> {
       is_budget_friendly: r.is_budget_friendly ?? null,
       scope: r.scope ?? 'global',
       nutrition: nutritionById.get(r.id) || undefined,
-      ingredients: [],
+      ingredients: ingredientsById.get(r.id) || [],
       steps: [],
       tags: tagsById.get(r.id) || [],
       isUserRecipe: false,
