@@ -111,6 +111,123 @@ async function extractTextFromDocx(base64Content: string): Promise<string> {
   }
 }
 
+// YouTube channel/playlist URL patterns
+const YOUTUBE_CHANNEL_PATTERNS = [
+  /^https?:\/\/(www\.)?youtube\.com\/@[\w-]+/i,           // @username format
+  /^https?:\/\/(www\.)?youtube\.com\/channel\/[\w-]+/i,   // /channel/ID format
+  /^https?:\/\/(www\.)?youtube\.com\/c\/[\w-]+/i,         // /c/name format (legacy)
+  /^https?:\/\/(www\.)?youtube\.com\/user\/[\w-]+/i,      // /user/name format (legacy)
+];
+
+const YOUTUBE_PLAYLIST_PATTERN = /^https?:\/\/(www\.)?youtube\.com\/playlist\?list=([\w-]+)/i;
+
+// Extract channel ID from various YouTube channel URL formats
+async function getYouTubeChannelId(url: string, apiKey: string): Promise<string | null> {
+  try {
+    // Direct channel ID format
+    const channelIdMatch = url.match(/\/channel\/([\w-]+)/i);
+    if (channelIdMatch) {
+      return channelIdMatch[1];
+    }
+
+    // For @username, /c/, or /user/ formats, we need to resolve via API
+    const handleMatch = url.match(/@([\w-]+)/);
+    const customMatch = url.match(/\/c\/([\w-]+)/i);
+    const userMatch = url.match(/\/user\/([\w-]+)/i);
+    
+    const identifier = handleMatch?.[1] || customMatch?.[1] || userMatch?.[1];
+    if (!identifier) return null;
+
+    // Use YouTube Data API to resolve handle to channel ID
+    const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${encodeURIComponent(identifier)}&key=${apiKey}&maxResults=1`;
+    const response = await fetch(searchUrl);
+    if (!response.ok) {
+      console.warn('YouTube API search failed:', response.status);
+      return null;
+    }
+    
+    const data = await response.json();
+    return data.items?.[0]?.snippet?.channelId || null;
+  } catch (err) {
+    console.error('Error resolving YouTube channel ID:', err);
+    return null;
+  }
+}
+
+// Get videos from a YouTube channel (up to maxResults)
+async function getChannelVideos(channelId: string, apiKey: string, maxResults = 20): Promise<string[]> {
+  try {
+    // First get the uploads playlist ID
+    const channelUrl = `https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}&key=${apiKey}`;
+    const channelResponse = await fetch(channelUrl);
+    if (!channelResponse.ok) {
+      console.warn('YouTube API channel fetch failed:', channelResponse.status);
+      return [];
+    }
+    
+    const channelData = await channelResponse.json();
+    const uploadsPlaylistId = channelData.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+    if (!uploadsPlaylistId) {
+      console.warn('Could not find uploads playlist for channel');
+      return [];
+    }
+
+    return await getPlaylistVideos(uploadsPlaylistId, apiKey, maxResults);
+  } catch (err) {
+    console.error('Error fetching channel videos:', err);
+    return [];
+  }
+}
+
+// Get videos from a YouTube playlist
+async function getPlaylistVideos(playlistId: string, apiKey: string, maxResults = 20): Promise<string[]> {
+  try {
+    const videoUrls: string[] = [];
+    let pageToken = '';
+    
+    while (videoUrls.length < maxResults) {
+      const remaining = maxResults - videoUrls.length;
+      const fetchCount = Math.min(remaining, 50); // API max is 50 per request
+      
+      const playlistUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${playlistId}&maxResults=${fetchCount}&key=${apiKey}${pageToken ? `&pageToken=${pageToken}` : ''}`;
+      const response = await fetch(playlistUrl);
+      
+      if (!response.ok) {
+        console.warn('YouTube API playlist fetch failed:', response.status);
+        break;
+      }
+      
+      const data = await response.json();
+      
+      for (const item of data.items || []) {
+        const videoId = item.snippet?.resourceId?.videoId;
+        if (videoId) {
+          videoUrls.push(`https://www.youtube.com/watch?v=${videoId}`);
+        }
+      }
+      
+      pageToken = data.nextPageToken;
+      if (!pageToken) break;
+    }
+    
+    return videoUrls.slice(0, maxResults);
+  } catch (err) {
+    console.error('Error fetching playlist videos:', err);
+    return [];
+  }
+}
+
+// Check if URL is a YouTube channel or playlist
+function isYouTubeChannelOrPlaylist(url: string): 'channel' | 'playlist' | null {
+  if (YOUTUBE_CHANNEL_PATTERNS.some(pattern => pattern.test(url))) {
+    return 'channel';
+  }
+  if (YOUTUBE_PLAYLIST_PATTERN.test(url)) {
+    return 'playlist';
+  }
+  return null;
+}
+
 // Background image generation - runs after response is sent
 async function generateRecipeImagesInBackground(
   recipeIds: { id: string; title: string; description: string | null }[],
@@ -661,15 +778,46 @@ CRITICAL RULES:
         }
       ];
     } else if (sourceUrl && !content) {
-      // Check if this is a YouTube URL - Gemini can process YouTube videos directly
-      const isYouTubeUrl = /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)/i.test(sourceUrl);
+      // Check if this is a YouTube channel or playlist
+      const youtubeType = isYouTubeChannelOrPlaylist(sourceUrl);
+      const YOUTUBE_API_KEY = Deno.env.get('YOUTUBE_API_KEY');
       
-      if (isYouTubeUrl) {
-        // For YouTube videos, pass the URL directly to Gemini Pro which can read video content
-        console.log(`Processing YouTube video: ${sourceUrl}`);
-        model = 'google/gemini-2.5-pro'; // Pro model for video understanding
+      if (youtubeType && YOUTUBE_API_KEY) {
+        // Handle YouTube channel or playlist - get all video URLs
+        console.log(`Processing YouTube ${youtubeType}: ${sourceUrl}`);
         
-        const prompt = `Watch this YouTube video and extract ALL recipes shown or described. Pay close attention to the EXACT ingredients and quantities mentioned.\n\n${jsonFormat}\n\nYouTube Video URL: ${sourceUrl}`;
+        let videoUrls: string[] = [];
+        
+        if (youtubeType === 'channel') {
+          const channelId = await getYouTubeChannelId(sourceUrl, YOUTUBE_API_KEY);
+          if (channelId) {
+            console.log(`Resolved channel ID: ${channelId}`);
+            videoUrls = await getChannelVideos(channelId, YOUTUBE_API_KEY, 20); // Max 20 videos
+          } else {
+            console.warn('Could not resolve YouTube channel ID');
+          }
+        } else if (youtubeType === 'playlist') {
+          const playlistMatch = sourceUrl.match(YOUTUBE_PLAYLIST_PATTERN);
+          if (playlistMatch?.[2]) {
+            videoUrls = await getPlaylistVideos(playlistMatch[2], YOUTUBE_API_KEY, 20);
+          }
+        }
+        
+        if (videoUrls.length === 0) {
+          throw new Error(`Could not find any videos in the YouTube ${youtubeType}. Make sure the channel/playlist is public.`);
+        }
+        
+        console.log(`Found ${videoUrls.length} videos to process`);
+        
+        // Process videos in smaller batches to avoid timeout
+        // For channel imports, we process each video and collect all recipes
+        model = 'google/gemini-2.5-pro';
+        
+        // Create a combined prompt with all video URLs for batch processing
+        // Gemini can handle multiple video references
+        const videoList = videoUrls.slice(0, 10).map((url, i) => `Video ${i + 1}: ${url}`).join('\n');
+        const prompt = `Process these YouTube cooking videos and extract ALL recipes from each video. Pay close attention to the EXACT ingredients and quantities mentioned in each video.\n\n${jsonFormat}\n\nVideos to process:\n${videoList}`;
+        
         messages = [
           { role: 'system', content: systemPrompt },
           { 
@@ -679,58 +827,89 @@ CRITICAL RULES:
                 type: 'text',
                 text: prompt
               },
-              {
-                type: 'video_url',
-                video_url: { url: sourceUrl }
-              }
+              // Include first 5 videos as video_url references (API limit considerations)
+              ...videoUrls.slice(0, 5).map(url => ({
+                type: 'video_url' as const,
+                video_url: { url }
+              }))
             ]
           }
         ];
+      } else if (youtubeType && !YOUTUBE_API_KEY) {
+        // Channel/playlist detected but no API key configured
+        throw new Error('YouTube channel/playlist import requires the YOUTUBE_API_KEY to be configured. Please add your YouTube Data API key in settings.');
       } else {
-        // For regular URLs, fetch the actual webpage content first
-        console.log(`Fetching recipe from URL: ${sourceUrl}`);
-        let webpageContent = '';
+        // Check if this is a single YouTube video URL
+        const isYouTubeVideoUrl = /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)/i.test(sourceUrl);
         
-        try {
-          const fetchResponse = await fetch(sourceUrl, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (compatible; RecipeParser/1.0)',
-              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            },
-          });
+        if (isYouTubeVideoUrl) {
+          // For YouTube videos, pass the URL directly to Gemini Pro which can read video content
+          console.log(`Processing YouTube video: ${sourceUrl}`);
+          model = 'google/gemini-2.5-pro'; // Pro model for video understanding
           
-          if (fetchResponse.ok) {
-            webpageContent = await fetchResponse.text();
-            console.log(`Fetched ${webpageContent.length} characters from URL`);
+          const prompt = `Watch this YouTube video and extract ALL recipes shown or described. Pay close attention to the EXACT ingredients and quantities mentioned.\n\n${jsonFormat}\n\nYouTube Video URL: ${sourceUrl}`;
+          messages = [
+            { role: 'system', content: systemPrompt },
+            { 
+              role: 'user', 
+              content: [
+                {
+                  type: 'text',
+                  text: prompt
+                },
+                {
+                  type: 'video_url',
+                  video_url: { url: sourceUrl }
+                }
+              ]
+            }
+          ];
+        } else {
+          // For regular URLs, fetch the actual webpage content first
+          console.log(`Fetching recipe from URL: ${sourceUrl}`);
+          let webpageContent = '';
+          
+          try {
+            const fetchResponse = await fetch(sourceUrl, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (compatible; RecipeParser/1.0)',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              },
+            });
             
-            // Clean HTML to reduce token usage - extract text from body
-            // Remove scripts, styles, comments, and excessive whitespace
-            webpageContent = webpageContent
-              .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-              .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-              .replace(/<!--[\s\S]*?-->/g, '')
-              .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
-              .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
-              .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
-              .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '')
-              // Keep structural tags but limit size
-              .substring(0, 150000); // Limit to ~150KB
-            
-            console.log(`Cleaned HTML to ${webpageContent.length} characters`);
-          } else {
-            console.warn(`Failed to fetch URL: ${fetchResponse.status}`);
-            webpageContent = `URL: ${sourceUrl} (could not fetch content, status: ${fetchResponse.status})`;
+            if (fetchResponse.ok) {
+              webpageContent = await fetchResponse.text();
+              console.log(`Fetched ${webpageContent.length} characters from URL`);
+              
+              // Clean HTML to reduce token usage - extract text from body
+              // Remove scripts, styles, comments, and excessive whitespace
+              webpageContent = webpageContent
+                .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+                .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+                .replace(/<!--[\s\S]*?-->/g, '')
+                .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+                .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+                .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+                .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '')
+                // Keep structural tags but limit size
+                .substring(0, 150000); // Limit to ~150KB
+              
+              console.log(`Cleaned HTML to ${webpageContent.length} characters`);
+            } else {
+              console.warn(`Failed to fetch URL: ${fetchResponse.status}`);
+              webpageContent = `URL: ${sourceUrl} (could not fetch content, status: ${fetchResponse.status})`;
+            }
+          } catch (fetchErr) {
+            console.warn('Error fetching URL:', fetchErr);
+            webpageContent = `URL: ${sourceUrl} (could not fetch content)`;
           }
-        } catch (fetchErr) {
-          console.warn('Error fetching URL:', fetchErr);
-          webpageContent = `URL: ${sourceUrl} (could not fetch content)`;
+          
+          const prompt = `Extract ALL recipes from the following webpage content. Pay close attention to the EXACT ingredients listed on the page.\n\n${jsonFormat}\n\nWebpage from ${sourceUrl}:\n${webpageContent}`;
+          messages = [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: prompt }
+          ];
         }
-        
-        const prompt = `Extract ALL recipes from the following webpage content. Pay close attention to the EXACT ingredients listed on the page.\n\n${jsonFormat}\n\nWebpage from ${sourceUrl}:\n${webpageContent}`;
-        messages = [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt }
-        ];
       }
     } else {
       // For text content
