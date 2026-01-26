@@ -661,50 +661,77 @@ CRITICAL RULES:
         }
       ];
     } else if (sourceUrl && !content) {
-      // For URLs, fetch the actual webpage content first
-      console.log(`Fetching recipe from URL: ${sourceUrl}`);
-      let webpageContent = '';
+      // Check if this is a YouTube URL - Gemini can process YouTube videos directly
+      const isYouTubeUrl = /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)/i.test(sourceUrl);
       
-      try {
-        const fetchResponse = await fetch(sourceUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; RecipeParser/1.0)',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          },
-        });
+      if (isYouTubeUrl) {
+        // For YouTube videos, pass the URL directly to Gemini Pro which can read video content
+        console.log(`Processing YouTube video: ${sourceUrl}`);
+        model = 'google/gemini-2.5-pro'; // Pro model for video understanding
         
-        if (fetchResponse.ok) {
-          webpageContent = await fetchResponse.text();
-          console.log(`Fetched ${webpageContent.length} characters from URL`);
+        const prompt = `Watch this YouTube video and extract ALL recipes shown or described. Pay close attention to the EXACT ingredients and quantities mentioned.\n\n${jsonFormat}\n\nYouTube Video URL: ${sourceUrl}`;
+        messages = [
+          { role: 'system', content: systemPrompt },
+          { 
+            role: 'user', 
+            content: [
+              {
+                type: 'text',
+                text: prompt
+              },
+              {
+                type: 'video_url',
+                video_url: { url: sourceUrl }
+              }
+            ]
+          }
+        ];
+      } else {
+        // For regular URLs, fetch the actual webpage content first
+        console.log(`Fetching recipe from URL: ${sourceUrl}`);
+        let webpageContent = '';
+        
+        try {
+          const fetchResponse = await fetch(sourceUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (compatible; RecipeParser/1.0)',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            },
+          });
           
-          // Clean HTML to reduce token usage - extract text from body
-          // Remove scripts, styles, comments, and excessive whitespace
-          webpageContent = webpageContent
-            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-            .replace(/<!--[\s\S]*?-->/g, '')
-            .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
-            .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
-            .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
-            .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '')
-            // Keep structural tags but limit size
-            .substring(0, 150000); // Limit to ~150KB
-          
-          console.log(`Cleaned HTML to ${webpageContent.length} characters`);
-        } else {
-          console.warn(`Failed to fetch URL: ${fetchResponse.status}`);
-          webpageContent = `URL: ${sourceUrl} (could not fetch content, status: ${fetchResponse.status})`;
+          if (fetchResponse.ok) {
+            webpageContent = await fetchResponse.text();
+            console.log(`Fetched ${webpageContent.length} characters from URL`);
+            
+            // Clean HTML to reduce token usage - extract text from body
+            // Remove scripts, styles, comments, and excessive whitespace
+            webpageContent = webpageContent
+              .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+              .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+              .replace(/<!--[\s\S]*?-->/g, '')
+              .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+              .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+              .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+              .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '')
+              // Keep structural tags but limit size
+              .substring(0, 150000); // Limit to ~150KB
+            
+            console.log(`Cleaned HTML to ${webpageContent.length} characters`);
+          } else {
+            console.warn(`Failed to fetch URL: ${fetchResponse.status}`);
+            webpageContent = `URL: ${sourceUrl} (could not fetch content, status: ${fetchResponse.status})`;
+          }
+        } catch (fetchErr) {
+          console.warn('Error fetching URL:', fetchErr);
+          webpageContent = `URL: ${sourceUrl} (could not fetch content)`;
         }
-      } catch (fetchErr) {
-        console.warn('Error fetching URL:', fetchErr);
-        webpageContent = `URL: ${sourceUrl} (could not fetch content)`;
+        
+        const prompt = `Extract ALL recipes from the following webpage content. Pay close attention to the EXACT ingredients listed on the page.\n\n${jsonFormat}\n\nWebpage from ${sourceUrl}:\n${webpageContent}`;
+        messages = [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: prompt }
+        ];
       }
-      
-      const prompt = `Extract ALL recipes from the following webpage content. Pay close attention to the EXACT ingredients listed on the page.\n\n${jsonFormat}\n\nWebpage from ${sourceUrl}:\n${webpageContent}`;
-      messages = [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt }
-      ];
     } else {
       // For text content
       const prompt = `Extract ALL recipes from the following content.\n\n${jsonFormat}\n\nContent:\n${content || 'No content provided'}`;
