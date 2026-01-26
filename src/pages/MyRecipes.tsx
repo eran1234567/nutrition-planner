@@ -185,7 +185,7 @@ const MyRecipes = () => {
       const { data, error } = await supabase.functions.invoke('parse-recipe', {
         body: { 
           uploadId, 
-          content: content || sourceUrl,
+          content,
           sourceUrl,
           isImage: isImage || false
         },
