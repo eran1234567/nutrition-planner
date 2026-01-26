@@ -27,6 +27,21 @@ import { BottomNav } from '@/components/layout/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useYouTubeImport } from '@/hooks/useYouTubeImport';
+import { YouTubeImportProgress } from '@/components/recipe/YouTubeImportProgress';
+
+// YouTube channel/playlist detection patterns
+const YOUTUBE_CHANNEL_PATTERNS = [
+  /^https?:\/\/(www\.)?youtube\.com\/@[\w-]+/i,
+  /^https?:\/\/(www\.)?youtube\.com\/channel\/[\w-]+/i,
+  /^https?:\/\/(www\.)?youtube\.com\/c\/[\w-]+/i,
+  /^https?:\/\/(www\.)?youtube\.com\/user\/[\w-]+/i,
+];
+const YOUTUBE_PLAYLIST_PATTERN = /^https?:\/\/(www\.)?youtube\.com\/playlist\?list=/i;
+
+function isYouTubeChannelOrPlaylist(url: string): boolean {
+  return YOUTUBE_CHANNEL_PATTERNS.some(p => p.test(url)) || YOUTUBE_PLAYLIST_PATTERN.test(url);
+}
 
 interface UploadedItem {
   id: string;
@@ -49,6 +64,15 @@ const MyRecipes = () => {
   const [uploads, setUploads] = useState<UploadedItem[]>([]);
   const [showLinkInput, setShowLinkInput] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
+  
+  // YouTube channel/playlist import hook
+  const { 
+    activeJob, 
+    isStarting: isStartingChannelImport, 
+    startChannelImport, 
+    progress: channelProgress,
+    cancelImport 
+  } = useYouTubeImport();
 
   // Load existing uploads from database
   const loadUploads = useCallback(async () => {
@@ -306,7 +330,15 @@ const MyRecipes = () => {
       return;
     }
     
-    // Save to database
+    // Check if this is a YouTube channel or playlist - use background processing
+    if (isYouTubeChannelOrPlaylist(linkUrl)) {
+      setLinkUrl('');
+      setShowLinkInput(false);
+      await startChannelImport(linkUrl);
+      return;
+    }
+    
+    // Save to database for single video/regular URLs
     if (user) {
       try {
         const { data: uploadData, error } = await supabase.from('uploads').insert({
@@ -628,6 +660,20 @@ const MyRecipes = () => {
           </Button>
         </div>
       </div>
+
+      {/* YouTube Channel Import Progress */}
+      {activeJob && (
+        <YouTubeImportProgress
+          channelName={activeJob.channel_name}
+          totalVideos={activeJob.total_videos}
+          processedVideos={activeJob.processed_videos}
+          recipesCreated={activeJob.recipes_created}
+          status={activeJob.status}
+          progress={channelProgress}
+          onCancel={cancelImport}
+          onDismiss={() => cancelImport()}
+        />
+      )}
 
       <BottomNav />
     </div>

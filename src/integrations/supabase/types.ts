@@ -813,6 +813,54 @@ export type Database = {
           },
         ]
       }
+      youtube_import_jobs: {
+        Row: {
+          channel_name: string | null
+          channel_url: string
+          created_at: string
+          current_batch: number
+          error_message: string | null
+          id: string
+          owner_user_id: string
+          processed_videos: number
+          recipes_created: number
+          status: string
+          total_videos: number
+          updated_at: string
+          video_urls: string[] | null
+        }
+        Insert: {
+          channel_name?: string | null
+          channel_url: string
+          created_at?: string
+          current_batch?: number
+          error_message?: string | null
+          id?: string
+          owner_user_id: string
+          processed_videos?: number
+          recipes_created?: number
+          status?: string
+          total_videos?: number
+          updated_at?: string
+          video_urls?: string[] | null
+        }
+        Update: {
+          channel_name?: string | null
+          channel_url?: string
+          created_at?: string
+          current_batch?: number
+          error_message?: string | null
+          id?: string
+          owner_user_id?: string
+          processed_videos?: number
+          recipes_created?: number
+          status?: string
+          total_videos?: number
+          updated_at?: string
+          video_urls?: string[] | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

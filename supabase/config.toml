@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.regenerate-recipes]
 verify_jwt = false
+
+[functions.process-youtube-channel]
+verify_jwt = false
