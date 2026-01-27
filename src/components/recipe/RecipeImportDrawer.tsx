@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Upload, Link, Camera, PenLine, Plus, X } from 'lucide-react';
@@ -35,6 +35,7 @@ export function RecipeImportDrawer({
   
   const [showLinkInput, setShowLinkInput] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
 
   const { 
     importFromUrl, 
@@ -42,6 +43,47 @@ export function RecipeImportDrawer({
     importProgress,
     isYouTubeChannelOrPlaylist 
   } = useRecipeImport();
+
+  // Drag and drop handlers
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDragging(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set to false if we're leaving the drop zone entirely
+    if (e.currentTarget === e.target) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+
+    for (const file of files) {
+      const result = await importFromFile(file);
+      if (result.success) {
+        onImportComplete?.();
+        onOpenChange(false);
+        break; // Close after first successful import
+      }
+    }
+  }, [importFromFile, onImportComplete, onOpenChange]);
 
   const addOptions = [
     { icon: Upload, label: t('recipes.uploadFile', 'Upload file'), desc: t('recipes.uploadFileDesc', 'PDF, image, or doc'), action: 'upload' },
@@ -117,7 +159,35 @@ export function RecipeImportDrawer({
           onOpenChange(true);
         }
       }}>
-        <DrawerContent className="pb-8">
+        <DrawerContent 
+          className="pb-8"
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
+          {/* Drag overlay */}
+          <AnimatePresence>
+            {isDragging && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 z-50 flex items-center justify-center bg-primary/10 backdrop-blur-sm rounded-t-[10px] border-2 border-dashed border-primary"
+              >
+                <div className="text-center">
+                  <Upload className="w-12 h-12 text-primary mx-auto mb-2" />
+                  <p className="text-lg font-medium text-primary">
+                    {t('recipes.dropToUpload', 'Drop files to upload')}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {t('recipes.supportedFormats', 'Images, PDFs, or documents')}
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          
           <DrawerHeader className="pb-2">
             <DrawerTitle>
               {importProgress 
