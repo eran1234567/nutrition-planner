@@ -52,6 +52,7 @@ interface UploadedItem {
   status: 'pending' | 'parsing' | 'parsed' | 'failed';
   createdAt: Date;
   recipeCount?: number;
+  errorMessage?: string | null;
 }
 
 const MyRecipes = () => {
@@ -74,6 +75,22 @@ const MyRecipes = () => {
     cancelImport 
   } = useYouTubeImport();
 
+  const formatUploadError = useCallback((raw?: string | null) => {
+    const msg = (raw || '').trim();
+    if (!msg) return null;
+
+    // Make common backend errors user-friendly.
+    if (/\b429\b/.test(msg) || /resource exhausted/i.test(msg) || /quota/i.test(msg) || /rate limit/i.test(msg)) {
+      return t(
+        'myRecipes.quotaExceeded',
+        'AI quota/rate limit reached. Please try again later or increase your AI key quota/billing.'
+      );
+    }
+
+    // Keep other errors but shorten very long ones.
+    return msg.length > 160 ? `${msg.slice(0, 157)}…` : msg;
+  }, [t]);
+
   // Load existing uploads from database
   const loadUploads = useCallback(async () => {
     if (!user) return;
@@ -86,6 +103,7 @@ const MyRecipes = () => {
         file_type,
         source_url,
         status,
+        error_message,
         created_at,
         upload_recipe_links(count)
       `)
@@ -107,6 +125,7 @@ const MyRecipes = () => {
         status: u.status as UploadedItem['status'],
         createdAt: new Date(u.created_at || Date.now()),
         recipeCount: (u.upload_recipe_links as any)?.[0]?.count || 0,
+        errorMessage: (u as any).error_message ?? null,
       })));
     }
   }, [user]);
@@ -148,6 +167,7 @@ const MyRecipes = () => {
                   ...u, 
                   status: updatedUpload.status as UploadedItem['status'],
                   recipeCount,
+                  errorMessage: updatedUpload.error_message ?? u.errorMessage ?? null,
                   // Update the name if it was renamed (single recipe case)
                   name: updatedUpload.file_name || u.name,
                 } 
@@ -161,8 +181,14 @@ const MyRecipes = () => {
               { duration: 5000 }
             );
           } else if (updatedUpload.status === 'failed') {
+            const friendly = formatUploadError(updatedUpload.error_message);
             toast.error(
-              t('myRecipes.parseFailed', `Failed to parse "${updatedUpload.file_name || 'file'}"`),
+              friendly
+                ? t(
+                    'myRecipes.parseFailedWithReason',
+                    `Failed to parse "${updatedUpload.file_name || 'file'}": ${friendly}`
+                  )
+                : t('myRecipes.parseFailed', `Failed to parse "${updatedUpload.file_name || 'file'}"`),
               { duration: 5000 }
             );
           }
@@ -173,7 +199,7 @@ const MyRecipes = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, t]);
+  }, [user, t, formatUploadError]);
 
   const triggerParsing = async (uploadId: string, content?: string, sourceUrl?: string, isImage?: boolean) => {
     try {
@@ -196,6 +222,7 @@ const MyRecipes = () => {
         setUploads(prev => prev.map(u => 
           u.id === uploadId ? { ...u, status: 'failed' as const } : u
         ));
+        // The backend usually writes a detailed error_message to the upload row; realtime will update it.
         toast.error(t('myRecipes.parseError', 'Failed to parse recipe'));
         return;
       }
@@ -209,7 +236,7 @@ const MyRecipes = () => {
         setUploads(prev => prev.map(u => 
           u.id === uploadId ? { ...u, status: 'failed' as const } : u
         ));
-        toast.error(data?.error || t('myRecipes.parseError', 'Failed to parse recipe'));
+        toast.error(formatUploadError(data?.error) || t('myRecipes.parseError', 'Failed to parse recipe'));
       }
     } catch (error) {
       if (import.meta.env.DEV) console.error('Parse error:', error);
@@ -609,6 +636,11 @@ const MyRecipes = () => {
                         {upload.status === 'failed' && t('myRecipes.statusFailed', 'Failed')}
                       </p>
                     </div>
+                    {upload.status === 'failed' && formatUploadError(upload.errorMessage) && (
+                      <p className="mt-1 text-xs text-destructive leading-snug">
+                        {formatUploadError(upload.errorMessage)}
+                      </p>
+                    )}
                   </div>
                   {upload.status === 'failed' && (
                     <Button
