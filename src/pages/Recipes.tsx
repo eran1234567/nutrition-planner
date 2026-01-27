@@ -265,6 +265,16 @@ export default function Recipes() {
   const [isRenaming, setIsRenaming] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
 
+  // Helper to format API quota/rate-limit errors into friendly messages
+  const formatApiError = useCallback((raw?: string | null) => {
+    const msg = (raw || '').trim();
+    if (!msg) return null;
+    if (/\b429\b/.test(msg) || /resource exhausted/i.test(msg) || /quota/i.test(msg) || /rate limit/i.test(msg)) {
+      return t('myRecipes.quotaExceeded', 'AI quota/rate limit reached. Please try again later or increase your AI key quota/billing.');
+    }
+    return msg.length > 160 ? `${msg.slice(0, 157)}…` : msg;
+  }, [t]);
+
   // URL-based filter state
   const searchQuery = searchParams.get('q') || '';
   const selectedTime = searchParams.get('time');
@@ -609,7 +619,7 @@ export default function Recipes() {
             toast.success(t('myRecipes.parseSuccess', `Found ${data.count} recipe(s)!`));
             await fetchUserRecipes();
           } else {
-            toast.error(data?.error || t('myRecipes.parseError', 'Failed to parse recipe'));
+            toast.error(formatApiError(data?.error) || t('myRecipes.parseError', 'Failed to parse recipe'));
           }
 
           // Close drawer after short delay
@@ -686,7 +696,7 @@ export default function Recipes() {
         toast.success(t('myRecipes.parseSuccess', `Found ${data.count} recipe(s)!`));
         await fetchUserRecipes();
       } else {
-        toast.error(data?.error || t('myRecipes.parseError', 'Failed to parse recipe'));
+        toast.error(formatApiError(data?.error) || t('myRecipes.parseError', 'Failed to parse recipe'));
       }
 
       // Close drawer after short delay
