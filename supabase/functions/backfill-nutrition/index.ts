@@ -1,13 +1,11 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.21.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-lovable-internal-seed',
 };
-
-const LOVABLE_API_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -28,9 +26,14 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')!;
+    const geminiApiKey = Deno.env.get('GOOGLE_AI_STUDIO_GEMINI_API_KEY')!;
+
+    if (!geminiApiKey) {
+      throw new Error('GOOGLE_AI_STUDIO_GEMINI_API_KEY not configured');
+    }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const genAI = new GoogleGenerativeAI(geminiApiKey);
 
     // Find recipes missing extended nutrition data - direct SQL-like query
     const { data: recipesToBackfill, error: fetchError } = await supabase
@@ -67,6 +70,7 @@ serve(async (req) => {
     console.log(`Found ${recipesToBackfill.length} recipes to backfill`);
 
     const results: Array<{ id: string; title: string; status: string; data?: any }> = [];
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     for (const nutritionRow of recipesToBackfill) {
       const recipe = nutritionRow.recipes as any;
@@ -86,43 +90,20 @@ serve(async (req) => {
         console.log(`Processing: ${recipe.title}`);
 
         // Use AI to estimate missing nutrition values
-        const aiResponse = await fetch(LOVABLE_API_URL, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${lovableApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.5-flash-lite',
-            messages: [
-              {
-                role: 'system',
-                content: `You are a nutrition expert. Given a recipe and its ingredients, estimate TOTAL values for the ENTIRE recipe (not per serving). Return ONLY a JSON object:
-{"sugar_g": <number>, "saturated_fat_g": <number>, "cholesterol_mg": <number>}
+        const prompt = `You are a nutrition expert. Given a recipe and its ingredients, estimate TOTAL values for the ENTIRE recipe (not per serving). Return ONLY a JSON object:
+{"sugar_g": <number>, "saturated_fat_g": <number>, "cholesterol_mg": <number|}
 
 Examples:
 - 1 tbsp sugar = 12g sugar
 - 1 egg = 186mg cholesterol, 1.6g saturated fat
 - Vegan = 0 cholesterol
-No explanation, just JSON.`
-              },
-              {
-                role: 'user',
-                content: `${recipe.title}: ${ingredientList}`
-              }
-            ],
-            temperature: 0.1,
-          }),
-        });
+No explanation, just JSON.
 
-        if (!aiResponse.ok) {
-          const errorText = await aiResponse.text();
-          console.error(`AI error for ${recipe.title}:`, errorText);
-          throw new Error(`AI API error: ${errorText}`);
-        }
+Recipe: ${recipe.title}
+Ingredients: ${ingredientList}`;
 
-        const aiData = await aiResponse.json();
-        const content = aiData.choices?.[0]?.message?.content || '';
+        const result = await model.generateContent(prompt);
+        const content = result.response.text() || '';
         
         console.log(`AI response for ${recipe.title}:`, content);
 

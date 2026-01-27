@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.21.0";
 import JSZip from 'https://esm.sh/jszip@3.10.1';
 
 // Declare EdgeRuntime for background tasks
@@ -10,8 +11,6 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-const LOVABLE_API_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 
 // Magic bytes for file type validation
 const MAGIC_BYTES = {
@@ -233,9 +232,10 @@ async function generateRecipeImagesInBackground(
   recipeIds: { id: string; title: string; description: string | null }[],
   supabaseUrl: string,
   supabaseServiceKey: string,
-  lovableApiKey: string
+  geminiApiKey: string
 ) {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const genAI = new GoogleGenerativeAI(geminiApiKey);
   
   // Generate images in parallel (max 3 at a time to avoid rate limits)
   const batchSize = 3;
@@ -245,38 +245,35 @@ async function generateRecipeImagesInBackground(
       try {
         console.log(`Generating image for recipe: ${recipe.title}`);
         
-        // Image prompt following strict guidelines:
-        // - Show final plated dish only
-        // - Match ingredients, portions, and cooking method
-        // - No extra garnish, props, or text
-        // - Realistic, home-cooked appearance
+        // Image prompt following strict guidelines
         const imagePrompt = `Professional food photography of a home-cooked ${recipe.title}. ${recipe.description || ''}
 Final plated dish only. Realistic home-cooked appearance. Match the actual ingredients and portions from the recipe.
 No text, no extra garnish or props not in the recipe. Natural lighting, overhead or 45-degree angle, clean simple background, appetizing presentation.
 16:9 aspect ratio, high-quality food photography style.`;
 
-        const imageResponse = await fetch(LOVABLE_API_URL, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${lovableApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.5-flash-image-preview',
-            messages: [{ role: 'user', content: imagePrompt }],
-            modalities: ['image', 'text']
-          }),
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp-image-generation' });
+        const result = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: imagePrompt }] }],
+          generationConfig: {
+            responseModalities: ['image', 'text'],
+          } as any,
         });
 
-        if (imageResponse.ok) {
-          const imageData = await imageResponse.json();
-          const generatedImageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-          
-          if (generatedImageUrl) {
+        const response = result.response;
+        const parts = response.candidates?.[0]?.content?.parts || [];
+        
+        for (const part of parts) {
+          if ((part as any).inlineData) {
+            const imageData = (part as any).inlineData;
+            const base64Data = imageData.data;
+            const mimeType = imageData.mimeType || 'image/png';
+            const generatedImageUrl = `data:${mimeType};base64,${base64Data}`;
+            
             await supabase.from('recipes').update({
               image_url: generatedImageUrl
             }).eq('id', recipe.id);
             console.log(`Image saved for: ${recipe.title}`);
+            break;
           }
         }
       } catch (err) {
@@ -293,10 +290,12 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
+    const GEMINI_API_KEY = Deno.env.get('GOOGLE_AI_STUDIO_GEMINI_API_KEY');
+    if (!GEMINI_API_KEY) {
+      throw new Error('GOOGLE_AI_STUDIO_GEMINI_API_KEY not configured');
     }
+
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -310,9 +309,7 @@ serve(async (req) => {
     const { uploadId, content, sourceUrl, fileType, isImage, title, filters, seedGlobal, _seedKey } = body;
     
     // Check for admin seeding access via _seedKey
-    // The _seedKey must match the LOVABLE_API_KEY environment variable
-    // When called from the Lovable curl tool, it receives the actual key value
-    const isAdminSeed = _seedKey && _seedKey === LOVABLE_API_KEY;
+    const isAdminSeed = _seedKey && _seedKey === GEMINI_API_KEY;
     
     // Also allow internal seeding via special header (for Lovable agent calls)
     const internalSeedHeader = req.headers.get('X-Lovable-Internal-Seed');
@@ -509,7 +506,6 @@ serve(async (req) => {
     }
 
     // UNIFIED COMPREHENSIVE SYSTEM PROMPT
-    // This is the single source of truth for ALL recipe generation in the app
     const systemPrompt = `You are an AI expert in:
 - Nutrition science and metabolic health
 - Professional cooking and recipe engineering
@@ -724,66 +720,51 @@ CRITICAL RULES:
 8. MINIMIZE sodium by default (< 600mg unless health filter requires lower)
 9. If no recipes found, return: { "recipes": [], "error": "Could not extract recipe information" }`;
 
-    // Build messages based on whether we have an image, document, or text
-    let messages: any[] = [];
-    let model = 'google/gemini-2.5-flash'; // Default to flash for text
+    // Build prompt and call Gemini
+    let promptText = '';
+    let imageParts: any[] = [];
+    let modelName = 'gemini-2.0-flash'; // Default to flash for text
     
     if (isImage && content && content.startsWith('data:image/')) {
       // For images, use vision capabilities
-      model = 'google/gemini-2.5-pro';
-      messages = [
-        { role: 'system', content: systemPrompt },
-        { 
-          role: 'user', 
-          content: [
-            {
-              type: 'image_url',
-              image_url: { url: content }
-            },
-            {
-              type: 'text',
-              text: `Extract ALL recipe information from this image.\n\n${jsonFormat}`
-            }
-          ]
+      modelName = 'gemini-2.0-flash';
+      const mimeMatch = content.match(/^data:(image\/[^;]+);base64,/);
+      const mimeType = mimeMatch?.[1] || 'image/jpeg';
+      const base64Data = content.replace(/^data:image\/[^;]+;base64,/, '');
+      
+      imageParts = [{
+        inlineData: {
+          mimeType,
+          data: base64Data
         }
-      ];
+      }];
+      promptText = `${systemPrompt}\n\nExtract ALL recipe information from this image.\n\n${jsonFormat}`;
     } else if (isDocx && content) {
-      // For DOCX files, extract text first (Gemini doesn't support DOCX MIME type)
+      // For DOCX files, extract text first
       console.log('Extracting text from DOCX file...');
       const extractedText = await extractTextFromDocx(content);
       console.log(`Extracted text preview: ${extractedText.substring(0, 500)}...`);
       
-      const prompt = `Extract ALL recipes from the following document content.\n\n${jsonFormat}\n\nDocument content:\n${extractedText}`;
-      messages = [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt }
-      ];
+      promptText = `${systemPrompt}\n\nExtract ALL recipes from the following document content.\n\n${jsonFormat}\n\nDocument content:\n${extractedText}`;
     } else if (isPdf && content) {
-      // For PDFs, use vision capabilities (Gemini supports PDF)
-      model = 'google/gemini-2.5-pro';
-      messages = [
-        { role: 'system', content: systemPrompt },
-        { 
-          role: 'user', 
-          content: [
-            {
-              type: 'image_url',
-              image_url: { url: content }
-            },
-            {
-              type: 'text',
-              text: `This is a PDF document containing recipes. Extract ALL recipes from it.\n\n${jsonFormat}`
-            }
-          ]
+      // For PDFs, extract base64 and send to Gemini
+      modelName = 'gemini-2.0-flash';
+      const base64Data = content.replace(/^data:application\/pdf;base64,/, '');
+      
+      imageParts = [{
+        inlineData: {
+          mimeType: 'application/pdf',
+          data: base64Data
         }
-      ];
+      }];
+      promptText = `${systemPrompt}\n\nThis is a PDF document containing recipes. Extract ALL recipes from it.\n\n${jsonFormat}`;
     } else if (sourceUrl && !content) {
       // Check if this is a YouTube channel or playlist
       const youtubeType = isYouTubeChannelOrPlaylist(sourceUrl);
       const YOUTUBE_API_KEY = Deno.env.get('YOUTUBE_API_KEY');
       
       if (youtubeType && YOUTUBE_API_KEY) {
-        // Handle YouTube channel or playlist - get all video URLs
+        // Handle YouTube channel or playlist
         console.log(`Processing YouTube ${youtubeType}: ${sourceUrl}`);
         
         let videoUrls: string[] = [];
@@ -792,7 +773,7 @@ CRITICAL RULES:
           const channelId = await getYouTubeChannelId(sourceUrl, YOUTUBE_API_KEY);
           if (channelId) {
             console.log(`Resolved channel ID: ${channelId}`);
-            videoUrls = await getChannelVideos(channelId, YOUTUBE_API_KEY, 20); // Max 20 videos
+            videoUrls = await getChannelVideos(channelId, YOUTUBE_API_KEY, 20);
           } else {
             console.warn('Could not resolve YouTube channel ID');
           }
@@ -809,61 +790,17 @@ CRITICAL RULES:
         
         console.log(`Found ${videoUrls.length} videos to process`);
         
-        // Process videos in smaller batches to avoid timeout
-        // For channel imports, we process each video and collect all recipes
-        model = 'google/gemini-2.5-pro';
-        
-        // Create a combined prompt with all video URLs for batch processing
-        // Gemini can handle multiple video references
         const videoList = videoUrls.slice(0, 10).map((url, i) => `Video ${i + 1}: ${url}`).join('\n');
-        const prompt = `Process these YouTube cooking videos and extract ALL recipes from each video. Pay close attention to the EXACT ingredients and quantities mentioned in each video.\n\n${jsonFormat}\n\nVideos to process:\n${videoList}`;
-        
-        messages = [
-          { role: 'system', content: systemPrompt },
-          { 
-            role: 'user', 
-            content: [
-              {
-                type: 'text',
-                text: prompt
-              },
-              // Include first 5 videos as video_url references (API limit considerations)
-              ...videoUrls.slice(0, 5).map(url => ({
-                type: 'video_url' as const,
-                video_url: { url }
-              }))
-            ]
-          }
-        ];
+        promptText = `${systemPrompt}\n\nProcess these YouTube cooking videos and extract ALL recipes from each video. Pay close attention to the EXACT ingredients and quantities mentioned in each video.\n\n${jsonFormat}\n\nVideos to process:\n${videoList}`;
       } else if (youtubeType && !YOUTUBE_API_KEY) {
-        // Channel/playlist detected but no API key configured
-        throw new Error('YouTube channel/playlist import requires the YOUTUBE_API_KEY to be configured. Please add your YouTube Data API key in settings.');
+        throw new Error('YouTube channel/playlist import requires the YOUTUBE_API_KEY to be configured.');
       } else {
         // Check if this is a single YouTube video URL
         const isYouTubeVideoUrl = /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)/i.test(sourceUrl);
         
         if (isYouTubeVideoUrl) {
-          // For YouTube videos, pass the URL directly to Gemini Pro which can read video content
           console.log(`Processing YouTube video: ${sourceUrl}`);
-          model = 'google/gemini-2.5-pro'; // Pro model for video understanding
-          
-          const prompt = `Watch this YouTube video and extract ALL recipes shown or described. Pay close attention to the EXACT ingredients and quantities mentioned.\n\n${jsonFormat}\n\nYouTube Video URL: ${sourceUrl}`;
-          messages = [
-            { role: 'system', content: systemPrompt },
-            { 
-              role: 'user', 
-              content: [
-                {
-                  type: 'text',
-                  text: prompt
-                },
-                {
-                  type: 'video_url',
-                  video_url: { url: sourceUrl }
-                }
-              ]
-            }
-          ];
+          promptText = `${systemPrompt}\n\nWatch this YouTube video and extract ALL recipes shown or described. Pay close attention to the EXACT ingredients and quantities mentioned.\n\n${jsonFormat}\n\nYouTube Video URL: ${sourceUrl}`;
         } else {
           // For regular URLs, fetch the actual webpage content first
           console.log(`Fetching recipe from URL: ${sourceUrl}`);
@@ -881,8 +818,7 @@ CRITICAL RULES:
               webpageContent = await fetchResponse.text();
               console.log(`Fetched ${webpageContent.length} characters from URL`);
               
-              // Clean HTML to reduce token usage - extract text from body
-              // Remove scripts, styles, comments, and excessive whitespace
+              // Clean HTML to reduce token usage
               webpageContent = webpageContent
                 .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
                 .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
@@ -891,8 +827,7 @@ CRITICAL RULES:
                 .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
                 .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
                 .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '')
-                // Keep structural tags but limit size
-                .substring(0, 150000); // Limit to ~150KB
+                .substring(0, 150000);
               
               console.log(`Cleaned HTML to ${webpageContent.length} characters`);
             } else {
@@ -904,63 +839,36 @@ CRITICAL RULES:
             webpageContent = `URL: ${sourceUrl} (could not fetch content)`;
           }
           
-          const prompt = `Extract ALL recipes from the following webpage content. Pay close attention to the EXACT ingredients listed on the page.\n\n${jsonFormat}\n\nWebpage from ${sourceUrl}:\n${webpageContent}`;
-          messages = [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: prompt }
-          ];
+          promptText = `${systemPrompt}\n\nExtract ALL recipes from the following webpage content. Pay close attention to the EXACT ingredients listed on the page.\n\n${jsonFormat}\n\nWebpage from ${sourceUrl}:\n${webpageContent}`;
         }
       }
     } else {
       // For text content
-      const prompt = `Extract ALL recipes from the following content.\n\n${jsonFormat}\n\nContent:\n${content || 'No content provided'}`;
-      messages = [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt }
-      ];
+      promptText = `${systemPrompt}\n\nExtract ALL recipes from the following content.\n\n${jsonFormat}\n\nContent:\n${content || 'No content provided'}`;
     }
     
-    console.log(`Calling AI with model: ${model}`);
+    console.log(`Calling Gemini with model: ${modelName}`);
     const aiStartTime = Date.now();
     
-    // Create AbortController for timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55s timeout (edge functions have 60s limit)
+    const model = genAI.getGenerativeModel({ model: modelName });
     
-    let aiResponse;
+    let result;
     try {
-      aiResponse = await fetch(LOVABLE_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          temperature: 0.3,
-        }),
-        signal: controller.signal,
-      });
+      if (imageParts.length > 0) {
+        result = await model.generateContent([promptText, ...imageParts]);
+      } else {
+        result = await model.generateContent(promptText);
+      }
     } catch (fetchError) {
-      clearTimeout(timeoutId);
       if (fetchError instanceof Error && fetchError.name === 'AbortError') {
         throw new Error('AI request timed out. Please try with a smaller file or simpler recipe.');
       }
       throw fetchError;
     }
-    clearTimeout(timeoutId);
 
     console.log(`AI response received in ${Date.now() - aiStartTime}ms`);
 
-    if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
-      console.error('AI API error:', errorText);
-      throw new Error(`AI API error: ${aiResponse.status}`);
-    }
-
-    const aiData = await aiResponse.json();
-    const aiContent = aiData.choices?.[0]?.message?.content;
+    const aiContent = result.response.text();
     
     if (!aiContent) {
       throw new Error('No response from AI');
@@ -987,7 +895,6 @@ CRITICAL RULES:
     let ownerUserId: string | null = null;
     
     if (seedGlobal) {
-      // Global recipes have no owner
       ownerUserId = null;
       console.log('Seed global mode: creating global recipes with no owner');
     } else {
@@ -1044,7 +951,6 @@ CRITICAL RULES:
       const validDifficulties = ['easy', 'medium', 'hard'];
       const sanitizedDifficulty = validDifficulties.includes(recipe.difficulty) ? recipe.difficulty : 'medium';
 
-      // Insert recipe with enhanced fields
       const sanitizedServingSize = typeof recipe.serving_size === 'string'
         ? recipe.serving_size.trim().substring(0, 100)
         : null;
@@ -1133,7 +1039,6 @@ CRITICAL RULES:
       // Tags - combine general tags, diet_tags, and health_tags
       const allTags: { recipe_id: string; tag_type: string; tag_value: string }[] = [];
       
-      // General tags (meal type, quick, etc.)
       if (Array.isArray(recipe.tags)) {
         recipe.tags
           .filter((tag: any) => typeof tag === 'string' && tag.trim())
@@ -1147,7 +1052,6 @@ CRITICAL RULES:
           });
       }
       
-      // Diet tags (keto, paleo, vegan, etc.)
       if (Array.isArray(recipe.diet_tags)) {
         recipe.diet_tags
           .filter((tag: any) => typeof tag === 'string' && tag.trim())
@@ -1161,7 +1065,6 @@ CRITICAL RULES:
           });
       }
       
-      // Health tags (low-sodium, heart-healthy, etc.)
       if (Array.isArray(recipe.health_tags)) {
         recipe.health_tags
           .filter((tag: any) => typeof tag === 'string' && tag.trim())
@@ -1217,7 +1120,7 @@ CRITICAL RULES:
     // Generate images in background AFTER returning response
     if (createdRecipes.length > 0) {
       EdgeRuntime.waitUntil(
-        generateRecipeImagesInBackground(createdRecipes, supabaseUrl, supabaseServiceKey, LOVABLE_API_KEY)
+        generateRecipeImagesInBackground(createdRecipes, supabaseUrl, supabaseServiceKey, GEMINI_API_KEY)
       );
     }
 

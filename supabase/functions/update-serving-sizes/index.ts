@@ -1,13 +1,11 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.21.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-lovable-internal',
 };
-
-const LOVABLE_API_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -24,14 +22,15 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
+    const GEMINI_API_KEY = Deno.env.get('GOOGLE_AI_STUDIO_GEMINI_API_KEY');
+    if (!GEMINI_API_KEY) {
+      throw new Error('GOOGLE_AI_STUDIO_GEMINI_API_KEY not configured');
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
     const { limit = 20 } = await req.json().catch(() => ({}));
 
@@ -66,6 +65,7 @@ serve(async (req) => {
     console.log(`Processing ${recipes.length} recipes for serving_size calculation`);
 
     const results: { id: string; title: string; serving_size: string | null; error?: string }[] = [];
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     // Process in batches of 5 to avoid rate limits
     const batchSize = 5;
@@ -113,30 +113,8 @@ Examples:
 - "12 oz smoothie"
 - "1 bowl (2 cups)"`;
 
-
-
-          const aiResponse = await fetch(LOVABLE_API_URL, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: 'google/gemini-2.5-flash',
-              messages: [
-                { role: 'system', content: 'You are a nutrition assistant. Respond with ONLY the serving size description, nothing else.' },
-                { role: 'user', content: prompt }
-              ],
-              temperature: 0.2,
-            }),
-          });
-
-          if (!aiResponse.ok) {
-            throw new Error(`AI API error: ${aiResponse.status}`);
-          }
-
-          const aiData = await aiResponse.json();
-          let servingSize = aiData.choices?.[0]?.message?.content?.trim();
+          const result = await model.generateContent(prompt);
+          let servingSize = result.response.text()?.trim();
 
           if (servingSize) {
             // Clean up the response

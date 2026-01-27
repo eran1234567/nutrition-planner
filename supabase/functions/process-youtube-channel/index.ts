@@ -1,4 +1,3 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -6,8 +5,6 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-const LOVABLE_API_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 
 // YouTube channel/playlist URL patterns
 const YOUTUBE_CHANNEL_PATTERNS = [
@@ -155,13 +152,9 @@ serve(async (req) => {
 
   try {
     const YOUTUBE_API_KEY = Deno.env.get('YOUTUBE_API_KEY');
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
     if (!YOUTUBE_API_KEY) {
       throw new Error('YOUTUBE_API_KEY not configured');
-    }
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY not configured');
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
