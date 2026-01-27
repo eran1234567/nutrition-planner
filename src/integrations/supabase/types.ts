@@ -827,6 +827,7 @@ export type Database = {
           status: string
           total_videos: number
           updated_at: string
+          upload_id: string | null
           video_urls: string[] | null
         }
         Insert: {
@@ -842,6 +843,7 @@ export type Database = {
           status?: string
           total_videos?: number
           updated_at?: string
+          upload_id?: string | null
           video_urls?: string[] | null
         }
         Update: {
@@ -857,9 +859,18 @@ export type Database = {
           status?: string
           total_videos?: number
           updated_at?: string
+          upload_id?: string | null
           video_urls?: string[] | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "youtube_import_jobs_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "uploads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
