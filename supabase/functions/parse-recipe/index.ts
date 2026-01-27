@@ -664,6 +664,41 @@ If extracting from external content:
 - Never copy raw content blindly
 
 ═══════════════════════════════════════════════════════════════
+YOUTUBE VIDEO RECIPE GROUPING (CRITICAL)
+═══════════════════════════════════════════════════════════════
+SCOPE: Analyze each video individually. NEVER combine recipes from different videos.
+
+For a SINGLE video, apply the "Is it a Meal?" test to decide grouping:
+
+1. ONE MAIN DISH WITH PARTS → SINGLE RECIPE CARD
+   If the video teaches one cohesive meal with multiple components (e.g., 'Main Protein', 'Sauce', 'Side Dish'),
+   combine them into ONE recipe card. Use step headings to organize sections.
+   Example: "Grilled Chicken with Chimichurri and Roasted Potatoes" = 1 recipe card
+   Test: "Is the sauce meant to go ON the chicken?" → Yes → Merge into one recipe.
+
+2. MULTIPLE DISTINCT DISHES → SEPARATE RECIPE CARDS
+   If the video teaches multiple unrelated dishes (e.g., '5 Meal Prep Ideas', '3 Ways to Cook Eggs', 'Weekly Menu'),
+   keep them as SEPARATE recipe cards.
+   Example: "5 Easy Weeknight Dinners" = 5 separate recipe cards
+   Test: "Would you eat these on the same plate at the same time?" → No → Separate cards.
+
+THE "IS IT A MEAL?" TEST:
+Before creating a new recipe card, ask: "Is this item meant to be eaten together with the previous item on the same plate?"
+- If YES → Merge them into one recipe card with sections
+- If NO → Start a new recipe card
+
+Examples of MERGING (single card):
+- Steak + compound butter + side vegetables
+- Pasta + sauce made in the same video
+- Fish + salsa or sauce topping
+- Protein + accompanying grain/starch + vegetable
+
+Examples of SEPARATING (multiple cards):
+- "3 Healthy Breakfast Ideas" → 3 cards
+- "Meal Prep Sunday: Chicken, Rice Bowls, and Overnight Oats" → 3 cards
+- "Appetizer + Main Course + Dessert dinner party menu" → 3 cards
+
+═══════════════════════════════════════════════════════════════
 TONE AND BEHAVIOR
 ═══════════════════════════════════════════════════════════════
 - Direct and precise
