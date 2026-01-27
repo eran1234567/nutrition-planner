@@ -244,13 +244,6 @@ function extractVideoId(url: string): string | null {
 async function fetchYouTubeTranscript(videoId: string): Promise<{ text: string; title: string }> {
   console.log(`[Transcript] Fetching transcript for video ID: ${videoId}`);
   
-  // Method 1: Try YouTube's timedtext API (works for auto-generated captions)
-  const captionUrls = [
-    `https://www.youtube.com/api/timedtext?lang=en&v=${videoId}`,
-    `https://www.youtube.com/api/timedtext?lang=en-US&v=${videoId}`,
-    `https://www.youtube.com/api/timedtext?lang=en&v=${videoId}&kind=asr`, // Auto-generated
-  ];
-  
   let transcript = '';
   let videoTitle = '';
   
@@ -267,101 +260,150 @@ async function fetchYouTubeTranscript(videoId: string): Promise<{ text: string; 
     console.warn('[Transcript] Could not fetch video title from oEmbed');
   }
   
-  // Try to get transcript from timedtext API
-  for (const captionUrl of captionUrls) {
-    try {
-      const resp = await fetch(captionUrl);
-      if (resp.ok) {
-        const xml = await resp.text();
-        if (xml && xml.length > 100) {
-          // Parse XML transcript - extract text from <text> tags
-          const textMatches = xml.match(/<text[^>]*>([^<]*)<\/text>/g);
-          if (textMatches && textMatches.length > 0) {
-            transcript = textMatches
-              .map(match => {
-                const content = match.replace(/<text[^>]*>/, '').replace(/<\/text>/, '');
-                // Decode HTML entities
-                return content
-                  .replace(/&amp;/g, '&')
-                  .replace(/&lt;/g, '<')
-                  .replace(/&gt;/g, '>')
-                  .replace(/&quot;/g, '"')
-                  .replace(/&#39;/g, "'")
-                  .replace(/\n/g, ' ')
-                  .trim();
-              })
-              .join(' ');
-            console.log(`[Transcript] Got transcript from timedtext API: ${transcript.length} chars`);
-            break;
-          }
-        }
-      }
-    } catch (e) {
-      console.warn(`[Transcript] timedtext fetch failed:`, e);
-    }
-  }
-  
-  // Method 2: If timedtext failed, try scraping the watch page for captions data
-  if (!transcript || transcript.length < 50) {
-    try {
-      console.log('[Transcript] Trying watch page scrape method...');
-      const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
-      const resp = await fetch(watchUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept-Language': 'en-US,en;q=0.9',
-        },
-      });
+  // Method 1: Fetch the watch page and extract ytInitialPlayerResponse which contains captionTracks
+  try {
+    console.log('[Transcript] Fetching watch page to extract captionTracks...');
+    const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const resp = await fetch(watchUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+    });
+    
+    if (resp.ok) {
+      const html = await resp.text();
       
-      if (resp.ok) {
-        const html = await resp.text();
-        
-        // Extract title from page if we don't have it
-        if (!videoTitle) {
-          const titleMatch = html.match(/<title>([^<]+)<\/title>/);
-          if (titleMatch) {
-            videoTitle = titleMatch[1].replace(' - YouTube', '').trim();
-          }
+      // Extract title from page if we don't have it
+      if (!videoTitle) {
+        const titleMatch = html.match(/<title>([^<]+)<\/title>/);
+        if (titleMatch) {
+          videoTitle = titleMatch[1].replace(' - YouTube', '').trim();
         }
-        
-        // Look for captions player response data
-        const captionMatch = html.match(/"captions":\s*(\{[^}]+\})/);
-        if (captionMatch) {
-          console.log('[Transcript] Found captions data in page');
-        }
-        
-        // Look for transcript data embedded in the page
-        const transcriptMatch = html.match(/"transcriptBodyRenderer":\s*\{[^}]*"cueGroups":\s*(\[[^\]]+\])/);
-        if (transcriptMatch) {
-          try {
-            const cueGroups = JSON.parse(transcriptMatch[1]);
-            transcript = cueGroups
-              .map((cue: any) => cue?.transcriptCueRenderer?.cue?.runs?.[0]?.text || '')
-              .filter(Boolean)
-              .join(' ');
-            console.log(`[Transcript] Extracted from page cueGroups: ${transcript.length} chars`);
-          } catch (e) {
-            console.warn('[Transcript] Failed to parse cueGroups');
-          }
-        }
-        
-        // If still no transcript, try to extract description as fallback context
-        if (!transcript || transcript.length < 50) {
-          const descMatch = html.match(/"description":\s*\{"simpleText":\s*"([^"]+)"\}/);
-          if (descMatch) {
-            const description = descMatch[1]
-              .replace(/\\n/g, ' ')
-              .replace(/\\"/g, '"');
-            if (description.length > 100) {
-              transcript = `[Video Description] ${description}`;
-              console.log(`[Transcript] Using video description as fallback: ${transcript.length} chars`);
+      }
+      
+      // Extract ytInitialPlayerResponse which contains captions data
+      const playerResponseMatch = html.match(/ytInitialPlayerResponse\s*=\s*({.+?});(?:\s*var\s|\s*<\/script>)/s);
+      if (playerResponseMatch) {
+        try {
+          const playerResponse = JSON.parse(playerResponseMatch[1]);
+          const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks;
+          
+          if (captionTracks && captionTracks.length > 0) {
+            console.log(`[Transcript] Found ${captionTracks.length} caption tracks`);
+            
+            // Prefer English captions, fall back to first available
+            let captionTrack = captionTracks.find((t: any) => 
+              t.languageCode === 'en' || t.languageCode?.startsWith('en')
+            );
+            if (!captionTrack) {
+              captionTrack = captionTracks[0];
+              console.log(`[Transcript] Using fallback caption track: ${captionTrack.languageCode}`);
+            } else {
+              console.log(`[Transcript] Using English caption track`);
             }
+            
+            // Fetch the caption XML from baseUrl
+            if (captionTrack.baseUrl) {
+              console.log(`[Transcript] Fetching captions from baseUrl...`);
+              const captionResp = await fetch(captionTrack.baseUrl);
+              if (captionResp.ok) {
+                const captionXml = await captionResp.text();
+                // Parse XML transcript - extract text from <text> tags
+                const textMatches = captionXml.match(/<text[^>]*>([^<]*)<\/text>/g);
+                if (textMatches && textMatches.length > 0) {
+                  transcript = textMatches
+                    .map(match => {
+                      const content = match.replace(/<text[^>]*>/, '').replace(/<\/text>/, '');
+                      // Decode HTML entities
+                      return content
+                        .replace(/&amp;/g, '&')
+                        .replace(/&lt;/g, '<')
+                        .replace(/&gt;/g, '>')
+                        .replace(/&quot;/g, '"')
+                        .replace(/&#39;/g, "'")
+                        .replace(/&nbsp;/g, ' ')
+                        .replace(/\n/g, ' ')
+                        .trim();
+                    })
+                    .filter(Boolean)
+                    .join(' ');
+                  console.log(`[Transcript] Extracted ${transcript.length} chars from captionTracks baseUrl`);
+                }
+              }
+            }
+          } else {
+            console.log('[Transcript] No captionTracks found in playerResponse');
+          }
+        } catch (parseErr) {
+          console.warn('[Transcript] Failed to parse playerResponse JSON:', parseErr);
+        }
+      } else {
+        console.log('[Transcript] Could not find ytInitialPlayerResponse in page');
+      }
+      
+      // Method 2: If captionTracks failed, try to extract from timedtext API
+      if (!transcript || transcript.length < 50) {
+        console.log('[Transcript] Trying timedtext API fallback...');
+        const captionUrls = [
+          `https://www.youtube.com/api/timedtext?lang=en&v=${videoId}`,
+          `https://www.youtube.com/api/timedtext?lang=en-US&v=${videoId}`,
+          `https://www.youtube.com/api/timedtext?lang=en&v=${videoId}&kind=asr`,
+        ];
+        
+        for (const captionUrl of captionUrls) {
+          try {
+            const captionResp = await fetch(captionUrl);
+            if (captionResp.ok) {
+              const xml = await captionResp.text();
+              if (xml && xml.length > 100) {
+                const textMatches = xml.match(/<text[^>]*>([^<]*)<\/text>/g);
+                if (textMatches && textMatches.length > 0) {
+                  transcript = textMatches
+                    .map(match => {
+                      const content = match.replace(/<text[^>]*>/, '').replace(/<\/text>/, '');
+                      return content
+                        .replace(/&amp;/g, '&')
+                        .replace(/&lt;/g, '<')
+                        .replace(/&gt;/g, '>')
+                        .replace(/&quot;/g, '"')
+                        .replace(/&#39;/g, "'")
+                        .replace(/\n/g, ' ')
+                        .trim();
+                    })
+                    .join(' ');
+                  console.log(`[Transcript] Got ${transcript.length} chars from timedtext API`);
+                  break;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn(`[Transcript] timedtext fetch failed:`, e);
           }
         }
       }
-    } catch (e) {
-      console.warn('[Transcript] Watch page scrape failed:', e);
+      
+      // Method 3: Fall back to video description if no transcript
+      if (!transcript || transcript.length < 50) {
+        console.log('[Transcript] Trying video description fallback...');
+        // Try to extract structured description from playerResponse
+        const descMatch = html.match(/"description":\s*\{"simpleText":\s*"([^"]+)"\}/);
+        const shortDescMatch = html.match(/"shortDescription":\s*"([^"]+)"/);
+        
+        const descText = descMatch?.[1] || shortDescMatch?.[1];
+        if (descText && descText.length > 100) {
+          const description = descText
+            .replace(/\\n/g, ' ')
+            .replace(/\\"/g, '"')
+            .replace(/\\u0026/g, '&');
+          transcript = `[Video Description] ${description}`;
+          console.log(`[Transcript] Using video description: ${transcript.length} chars`);
+        }
+      }
     }
+  } catch (e) {
+    console.error('[Transcript] Watch page fetch failed:', e);
   }
   
   return { text: transcript, title: videoTitle };
