@@ -432,16 +432,12 @@ export default function Recipes() {
       return;
     }
     
-    // Note: We don't use .select() after update because once is_deleted=true,
-    // the RLS SELECT policy blocks the row from being returned
-    const { error } = await supabase
-      .from('recipes')
-      .update({ is_deleted: true, deleted_at: new Date().toISOString() })
-      .eq('id', recipeToDelete.id)
-      .eq('owner_user_id', user.id); // Ensure we only update recipes we own
+    const { data, error } = await supabase.functions.invoke('delete-recipe', {
+      body: { recipeId: recipeToDelete.id },
+    });
 
-    if (error) {
-      if (import.meta.env.DEV) console.error('Delete recipe error:', error);
+    if (error || !data?.success) {
+      if (import.meta.env.DEV) console.error('Delete recipe error:', error || data);
       toast.error(t('recipes.deleteError', 'Failed to delete recipe'));
     } else {
       setUserRecipes(prev => prev.filter(r => r.id !== recipeToDelete.id));
