@@ -241,23 +241,48 @@ function extractVideoId(url: string): string | null {
 }
 
 // Fetch YouTube video transcript using multiple methods
-async function fetchYouTubeTranscript(videoId: string): Promise<{ text: string; title: string }> {
+async function fetchYouTubeTranscript(videoId: string, youtubeApiKey?: string): Promise<{ text: string; title: string }> {
   console.log(`[Transcript] Fetching transcript for video ID: ${videoId}`);
   
   let transcript = '';
   let videoTitle = '';
+  let videoDescription = '';
   
-  // First, get video info from oEmbed
-  try {
-    const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
-    const oembedResp = await fetch(oembedUrl);
-    if (oembedResp.ok) {
-      const oembedData = await oembedResp.json();
-      videoTitle = oembedData.title || '';
-      console.log(`[Transcript] Video title: ${videoTitle}`);
+  // First, use YouTube Data API to get video title and description (most reliable)
+  if (youtubeApiKey) {
+    try {
+      const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${youtubeApiKey}`;
+      const apiResp = await fetch(apiUrl);
+      if (apiResp.ok) {
+        const apiData = await apiResp.json();
+        const snippet = apiData.items?.[0]?.snippet;
+        if (snippet) {
+          videoTitle = snippet.title || '';
+          videoDescription = snippet.description || '';
+          console.log(`[Transcript] Got title from API: ${videoTitle}`);
+          console.log(`[Transcript] Got description from API: ${videoDescription.length} chars`);
+        }
+      } else {
+        console.log(`[Transcript] YouTube API call failed: ${apiResp.status}`);
+      }
+    } catch (e) {
+      console.warn('[Transcript] YouTube API error:', e);
     }
-  } catch (e) {
-    console.warn('[Transcript] Could not fetch video title from oEmbed');
+  }
+  
+  // Fallback: get video info from oEmbed if API didn't work
+  if (!videoTitle) {
+    try {
+      const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+      const oembedResp = await fetch(oembedUrl);
+      if (oembedResp.ok) {
+        const oembedData = await oembedResp.json();
+        videoTitle = oembedData.title || '';
+        console.log(`[Transcript] Video title from oEmbed: ${videoTitle}`);
+      }
+    } catch (e) {
+      console.warn('[Transcript] Could not fetch video title from oEmbed');
+    }
   }
   
   // Method 1: Fetch the watch page and extract ytInitialPlayerResponse which contains captionTracks
@@ -340,7 +365,7 @@ async function fetchYouTubeTranscript(videoId: string): Promise<{ text: string; 
           
           // Fetch the caption XML from baseUrl
           if (captionTrack.baseUrl) {
-            console.log(`[Transcript] Fetching captions from baseUrl: ${captionTrack.baseUrl.substring(0, 100)}...`);
+            console.log(`[Transcript] Fetching captions from baseUrl...`);
             const captionResp = await fetch(captionTrack.baseUrl);
             if (captionResp.ok) {
               const captionXml = await captionResp.text();
@@ -371,19 +396,10 @@ async function fetchYouTubeTranscript(videoId: string): Promise<{ text: string; 
             }
           }
         } else {
-          console.log('[Transcript] No captionTracks in playerResponse - checking if captions exist...');
-          // Log what we found in captions section
-          if (playerResponse?.captions) {
-            console.log('[Transcript] Captions object exists:', JSON.stringify(playerResponse.captions).substring(0, 200));
-          } else {
-            console.log('[Transcript] No captions object in playerResponse');
-          }
+          console.log('[Transcript] No captionTracks in playerResponse');
         }
       } else {
         console.log('[Transcript] Could not extract playerResponse from page');
-        // Log a snippet to debug what we're getting
-        const snippet = html.substring(0, 500);
-        console.log(`[Transcript] Page snippet: ${snippet.replace(/\s+/g, ' ').substring(0, 200)}...`);
       }
       
       // Method 2: If captionTracks failed, try to extract from timedtext API
@@ -426,37 +442,19 @@ async function fetchYouTubeTranscript(videoId: string): Promise<{ text: string; 
           }
         }
       }
-      
-      // Method 3: Fall back to video description if no transcript
-      if (!transcript || transcript.length < 50) {
-        console.log('[Transcript] Trying video description fallback...');
-        // Try to extract structured description from page
-        const descPatterns = [
-          /"description":\s*\{"simpleText":\s*"([^"]+)"\}/,
-          /"shortDescription":\s*"([^"]+)"/,
-          /"description":\s*"([^"]+)"/,
-        ];
-        
-        for (const pattern of descPatterns) {
-          const match = html.match(pattern);
-          if (match && match[1] && match[1].length > 100) {
-            const description = match[1]
-              .replace(/\\n/g, '\n')
-              .replace(/\\"/g, '"')
-              .replace(/\\u0026/g, '&')
-              .replace(/\\u003c/g, '<')
-              .replace(/\\u003e/g, '>');
-            transcript = `[Video Description] ${description}`;
-            console.log(`[Transcript] Using video description: ${transcript.length} chars`);
-            break;
-          }
-        }
-      }
     } else {
       console.log(`[Transcript] Watch page fetch failed: ${resp.status}`);
     }
   } catch (e) {
     console.error('[Transcript] Watch page fetch error:', e);
+  }
+  
+  // Method 3: Fall back to video description if no transcript
+  // Use the description we got from YouTube API (most reliable)
+  if ((!transcript || transcript.length < 50) && videoDescription && videoDescription.length > 50) {
+    console.log(`[Transcript] Using video description as fallback: ${videoDescription.length} chars`);
+    transcript = `[Video Title: ${videoTitle}]\n\n[Video Description]\n${videoDescription}`;
+    console.log(`[Transcript] Final fallback content: ${transcript.length} chars`);
   }
   
   return { text: transcript, title: videoTitle };
@@ -1091,16 +1089,16 @@ CRITICAL RULES:
           
           console.log(`[YouTube] Processing single video: ${sourceUrl} (ID: ${videoId})`);
           
-          // Fetch transcript
-          const { text: transcript, title: videoTitle } = await fetchYouTubeTranscript(videoId);
+          // Fetch transcript (pass YouTube API key for description fallback)
+          const { text: transcript, title: videoTitle } = await fetchYouTubeTranscript(videoId, YOUTUBE_API_KEY);
           
           // Log first 100 chars for debugging
           console.log(`[YouTube] Transcript preview (first 100 chars): "${transcript.substring(0, 100)}"`);
           console.log(`[YouTube] Transcript length: ${transcript.length} chars`);
           
-          // Validate transcript is not empty
+          // Validate transcript/description is not empty
           if (!transcript || transcript.length < MIN_TRANSCRIPT_LENGTH) {
-            const errorMsg = `Could not retrieve video transcript. The video may not have captions enabled, or they may be in a non-English language. Transcript length: ${transcript?.length || 0} chars.`;
+            const errorMsg = `Could not retrieve video content. The video may not have captions or a description with recipe information. Content length: ${transcript?.length || 0} chars.`;
             console.error(`[YouTube] ${errorMsg}`);
             throw new Error(errorMsg);
           }
