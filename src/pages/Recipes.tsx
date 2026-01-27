@@ -12,6 +12,8 @@ import { MultiSelectDropdown } from '@/components/discover/MultiSelectDropdown';
 import { supabase } from '@/integrations/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import { useYouTubeImport } from '@/hooks/useYouTubeImport';
+import { YouTubeImportProgress } from '@/components/recipe/YouTubeImportProgress';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +38,19 @@ import {
 } from '@/components/ui/drawer';
 import { Input } from '@/components/ui/input';
 import { getHealthBadges, meetsHealthConsideration } from '@/lib/nutrition/healthDetection';
+
+// YouTube channel/playlist detection patterns (same as MyRecipes)
+const YOUTUBE_CHANNEL_PATTERNS = [
+  /^https?:\/\/(www\.)?youtube\.com\/@[\w-]+/i,
+  /^https?:\/\/(www\.)?youtube\.com\/channel\/[\w-]+/i,
+  /^https?:\/\/(www\.)?youtube\.com\/c\/[\w-]+/i,
+  /^https?:\/\/(www\.)?youtube\.com\/user\/[\w-]+/i,
+];
+const YOUTUBE_PLAYLIST_PATTERN = /^https?:\/\/(www\.)?youtube\.com\/playlist\?list=/i;
+
+function isYouTubeChannelOrPlaylist(url: string): boolean {
+  return YOUTUBE_CHANNEL_PATTERNS.some(p => p.test(url)) || YOUTUBE_PLAYLIST_PATTERN.test(url);
+}
 
 // Filter options (same as Discover page)
 const timeFilterOptions = [
@@ -265,6 +280,15 @@ export default function Recipes() {
   const [isRenaming, setIsRenaming] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
 
+  // YouTube channel/playlist import hook (same as MyRecipes)
+  const { 
+    activeJob, 
+    isStarting: isStartingChannelImport, 
+    startChannelImport, 
+    progress: channelProgress,
+    cancelImport 
+  } = useYouTubeImport();
+
   // Helper to format API quota/rate-limit errors into friendly messages
   const formatApiError = useCallback((raw?: string | null) => {
     const msg = (raw || '').trim();
@@ -421,6 +445,13 @@ export default function Recipes() {
   useEffect(() => {
     fetchUserRecipes();
   }, []);
+
+  // Refetch recipes when YouTube channel import completes
+  useEffect(() => {
+    if (activeJob?.status === 'completed') {
+      fetchUserRecipes();
+    }
+  }, [activeJob?.status]);
 
   const handleDeleteClick = (recipe: UserRecipe) => {
     setRecipeToDelete(recipe);
@@ -678,6 +709,16 @@ export default function Recipes() {
       return;
     }
 
+    // Check if this is a YouTube channel or playlist - use background processing (same as MyRecipes)
+    if (isYouTubeChannelOrPlaylist(linkUrl)) {
+      setLinkUrl('');
+      setShowLinkInput(false);
+      setShowAddDrawer(false);
+      await startChannelImport(linkUrl);
+      return;
+    }
+
+    // Single video or regular URL - process inline
     try {
       const { data: uploadData, error } = await supabase.from('uploads').insert({
         owner_user_id: user.id,
@@ -784,6 +825,20 @@ export default function Recipes() {
         capture="environment"
         className="hidden"
       />
+
+      {/* YouTube Channel Import Progress (same as MyRecipes) */}
+      {activeJob && (
+        <YouTubeImportProgress
+          channelName={activeJob.channel_name}
+          totalVideos={activeJob.total_videos}
+          processedVideos={activeJob.processed_videos}
+          recipesCreated={activeJob.recipes_created}
+          status={activeJob.status}
+          progress={channelProgress}
+          onCancel={cancelImport}
+          onDismiss={() => cancelImport()}
+        />
+      )}
 
       <div className="page-container">
         <PageHeader
