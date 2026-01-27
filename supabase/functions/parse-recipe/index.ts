@@ -227,6 +227,149 @@ function isYouTubeChannelOrPlaylist(url: string): 'channel' | 'playlist' | null 
   return null;
 }
 
+// Extract video ID from YouTube URL
+function extractVideoId(url: string): string | null {
+  // Handle youtube.com/watch?v=VIDEO_ID
+  const watchMatch = url.match(/[?&]v=([^&]+)/);
+  if (watchMatch) return watchMatch[1];
+  
+  // Handle youtu.be/VIDEO_ID
+  const shortMatch = url.match(/youtu\.be\/([^?&]+)/);
+  if (shortMatch) return shortMatch[1];
+  
+  return null;
+}
+
+// Fetch YouTube video transcript using multiple methods
+async function fetchYouTubeTranscript(videoId: string): Promise<{ text: string; title: string }> {
+  console.log(`[Transcript] Fetching transcript for video ID: ${videoId}`);
+  
+  // Method 1: Try YouTube's timedtext API (works for auto-generated captions)
+  const captionUrls = [
+    `https://www.youtube.com/api/timedtext?lang=en&v=${videoId}`,
+    `https://www.youtube.com/api/timedtext?lang=en-US&v=${videoId}`,
+    `https://www.youtube.com/api/timedtext?lang=en&v=${videoId}&kind=asr`, // Auto-generated
+  ];
+  
+  let transcript = '';
+  let videoTitle = '';
+  
+  // First, get video info from oEmbed
+  try {
+    const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+    const oembedResp = await fetch(oembedUrl);
+    if (oembedResp.ok) {
+      const oembedData = await oembedResp.json();
+      videoTitle = oembedData.title || '';
+      console.log(`[Transcript] Video title: ${videoTitle}`);
+    }
+  } catch (e) {
+    console.warn('[Transcript] Could not fetch video title from oEmbed');
+  }
+  
+  // Try to get transcript from timedtext API
+  for (const captionUrl of captionUrls) {
+    try {
+      const resp = await fetch(captionUrl);
+      if (resp.ok) {
+        const xml = await resp.text();
+        if (xml && xml.length > 100) {
+          // Parse XML transcript - extract text from <text> tags
+          const textMatches = xml.match(/<text[^>]*>([^<]*)<\/text>/g);
+          if (textMatches && textMatches.length > 0) {
+            transcript = textMatches
+              .map(match => {
+                const content = match.replace(/<text[^>]*>/, '').replace(/<\/text>/, '');
+                // Decode HTML entities
+                return content
+                  .replace(/&amp;/g, '&')
+                  .replace(/&lt;/g, '<')
+                  .replace(/&gt;/g, '>')
+                  .replace(/&quot;/g, '"')
+                  .replace(/&#39;/g, "'")
+                  .replace(/\n/g, ' ')
+                  .trim();
+              })
+              .join(' ');
+            console.log(`[Transcript] Got transcript from timedtext API: ${transcript.length} chars`);
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(`[Transcript] timedtext fetch failed:`, e);
+    }
+  }
+  
+  // Method 2: If timedtext failed, try scraping the watch page for captions data
+  if (!transcript || transcript.length < 50) {
+    try {
+      console.log('[Transcript] Trying watch page scrape method...');
+      const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+      const resp = await fetch(watchUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+      });
+      
+      if (resp.ok) {
+        const html = await resp.text();
+        
+        // Extract title from page if we don't have it
+        if (!videoTitle) {
+          const titleMatch = html.match(/<title>([^<]+)<\/title>/);
+          if (titleMatch) {
+            videoTitle = titleMatch[1].replace(' - YouTube', '').trim();
+          }
+        }
+        
+        // Look for captions player response data
+        const captionMatch = html.match(/"captions":\s*(\{[^}]+\})/);
+        if (captionMatch) {
+          console.log('[Transcript] Found captions data in page');
+        }
+        
+        // Look for transcript data embedded in the page
+        const transcriptMatch = html.match(/"transcriptBodyRenderer":\s*\{[^}]*"cueGroups":\s*(\[[^\]]+\])/);
+        if (transcriptMatch) {
+          try {
+            const cueGroups = JSON.parse(transcriptMatch[1]);
+            transcript = cueGroups
+              .map((cue: any) => cue?.transcriptCueRenderer?.cue?.runs?.[0]?.text || '')
+              .filter(Boolean)
+              .join(' ');
+            console.log(`[Transcript] Extracted from page cueGroups: ${transcript.length} chars`);
+          } catch (e) {
+            console.warn('[Transcript] Failed to parse cueGroups');
+          }
+        }
+        
+        // If still no transcript, try to extract description as fallback context
+        if (!transcript || transcript.length < 50) {
+          const descMatch = html.match(/"description":\s*\{"simpleText":\s*"([^"]+)"\}/);
+          if (descMatch) {
+            const description = descMatch[1]
+              .replace(/\\n/g, ' ')
+              .replace(/\\"/g, '"');
+            if (description.length > 100) {
+              transcript = `[Video Description] ${description}`;
+              console.log(`[Transcript] Using video description as fallback: ${transcript.length} chars`);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[Transcript] Watch page scrape failed:', e);
+    }
+  }
+  
+  return { text: transcript, title: videoTitle };
+}
+
+// Minimum transcript length to proceed with recipe extraction
+const MIN_TRANSCRIPT_LENGTH = 50;
+
 // Background image generation - runs after response is sent
 async function generateRecipeImagesInBackground(
   recipeIds: { id: string; title: string; description: string | null }[],
@@ -845,8 +988,44 @@ CRITICAL RULES:
         const isYouTubeVideoUrl = /^https?:\/\/(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)/i.test(sourceUrl);
         
         if (isYouTubeVideoUrl) {
-          console.log(`Processing YouTube video: ${sourceUrl}`);
-          promptText = `${systemPrompt}\n\nWatch this YouTube video and extract ALL recipes shown or described. Pay close attention to the EXACT ingredients and quantities mentioned.\n\n${jsonFormat}\n\nYouTube Video URL: ${sourceUrl}`;
+          // Extract video ID and fetch transcript
+          const videoId = extractVideoId(sourceUrl);
+          if (!videoId) {
+            throw new Error('Could not extract video ID from YouTube URL');
+          }
+          
+          console.log(`[YouTube] Processing single video: ${sourceUrl} (ID: ${videoId})`);
+          
+          // Fetch transcript
+          const { text: transcript, title: videoTitle } = await fetchYouTubeTranscript(videoId);
+          
+          // Log first 100 chars for debugging
+          console.log(`[YouTube] Transcript preview (first 100 chars): "${transcript.substring(0, 100)}"`);
+          console.log(`[YouTube] Transcript length: ${transcript.length} chars`);
+          
+          // Validate transcript is not empty
+          if (!transcript || transcript.length < MIN_TRANSCRIPT_LENGTH) {
+            const errorMsg = `Could not retrieve video transcript. The video may not have captions enabled, or they may be in a non-English language. Transcript length: ${transcript?.length || 0} chars.`;
+            console.error(`[YouTube] ${errorMsg}`);
+            throw new Error(errorMsg);
+          }
+          
+          promptText = `${systemPrompt}
+
+═══════════════════════════════════════════════════════════════
+YOUTUBE VIDEO CONTEXT
+═══════════════════════════════════════════════════════════════
+Video Title: ${videoTitle || 'Unknown'}
+Video URL: ${sourceUrl}
+
+IMPORTANT: Extract recipes ONLY from this specific video's transcript below.
+Do NOT invent or hallucinate recipes. If no recipe is clearly described in the transcript, return:
+{ "recipes": [], "error": "No recipe found in video transcript" }
+
+${jsonFormat}
+
+VIDEO TRANSCRIPT:
+${transcript}`;
         } else {
           // For regular URLs, fetch the actual webpage content first
           console.log(`Fetching recipe from URL: ${sourceUrl}`);
