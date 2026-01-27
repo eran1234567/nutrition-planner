@@ -28,7 +28,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useRecipeImport, isYouTubeChannelOrPlaylist } from '@/hooks/useRecipeImport';
-import { YouTubeImportProgress } from '@/components/recipe/YouTubeImportProgress';
+
 
 interface UploadedItem {
   id: string;
@@ -558,6 +558,98 @@ const MyRecipes = () => {
           )}
         </AnimatePresence>
 
+        {/* YouTube Channel/Playlist Import Progress - Inline */}
+        <AnimatePresence>
+          {activeJob && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 space-y-3"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
+                    {activeJob.status === 'completed' ? (
+                      <CheckCircle className="w-5 h-5 text-green-500" />
+                    ) : activeJob.status === 'failed' ? (
+                      <XCircle className="w-5 h-5 text-destructive" />
+                    ) : (
+                      <Youtube className="w-5 h-5 text-red-500" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm text-foreground">
+                      {activeJob.status === 'completed' 
+                        ? t('myRecipes.importComplete', 'Import Complete') 
+                        : activeJob.status === 'failed' 
+                          ? t('myRecipes.importFailed', 'Import Failed')
+                          : t('myRecipes.importingRecipes', 'Importing Recipes')}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+                      {activeJob.channel_name || t('myRecipes.youtubeChannel', 'YouTube Channel')}
+                    </p>
+                  </div>
+                </div>
+                {(activeJob.status === 'completed' || activeJob.status === 'failed') && (
+                  <Button variant="ghost" size="icon" onClick={cancelImport}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+
+              {/* Progress bar */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    {activeJob.status === 'completed' 
+                      ? t('myRecipes.completed', 'Completed')
+                      : t('myRecipes.processingVideo', 'Processing video {{current}} of {{total}}', {
+                          current: activeJob.processed_videos,
+                          total: activeJob.total_videos
+                        })}
+                  </span>
+                  <span className="font-medium">{channelProgress}%</span>
+                </div>
+                <Progress 
+                  value={channelProgress} 
+                  className={`h-2 ${activeJob.status === 'completed' ? '[&>div]:bg-green-500' : activeJob.status === 'failed' ? '[&>div]:bg-destructive' : ''}`}
+                />
+              </div>
+
+              {/* Stats */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div>
+                    <p className="text-2xl font-bold text-primary">{activeJob.recipes_created}</p>
+                    <p className="text-xs text-muted-foreground">{t('myRecipes.recipesCreated', 'Recipes created')}</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-muted-foreground">{activeJob.processed_videos}</p>
+                    <p className="text-xs text-muted-foreground">{t('myRecipes.videosProcessed', 'Videos processed')}</p>
+                  </div>
+                </div>
+                {activeJob.status === 'processing' && (
+                  <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                )}
+              </div>
+
+              {/* Cancel button for in-progress */}
+              {activeJob.status === 'processing' && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full"
+                  onClick={cancelImport}
+                >
+                  {t('myRecipes.cancelImport', 'Cancel Import')}
+                </Button>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Hidden file inputs */}
         <input
           ref={fileInputRef}
@@ -687,19 +779,6 @@ const MyRecipes = () => {
         </div>
       </div>
 
-      {/* YouTube Channel Import Progress */}
-      {activeJob && (
-        <YouTubeImportProgress
-          channelName={activeJob.channel_name}
-          totalVideos={activeJob.total_videos}
-          processedVideos={activeJob.processed_videos}
-          recipesCreated={activeJob.recipes_created}
-          status={activeJob.status}
-          progress={channelProgress}
-          onCancel={cancelImport}
-          onDismiss={() => cancelImport()}
-        />
-      )}
 
       <BottomNav />
     </div>
