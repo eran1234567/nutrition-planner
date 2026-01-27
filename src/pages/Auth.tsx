@@ -80,8 +80,8 @@ const Auth = () => {
             setError(error.message);
           }
         } else {
-          // Navigate to plan page (shows Nutrition Goals modal) after successful signup
-          navigate('/plan', { replace: true });
+          // Navigate back to where user came from (or default to discover)
+          navigate(from, { replace: true });
         }
       } else {
         const { error } = await signIn(email, password);
