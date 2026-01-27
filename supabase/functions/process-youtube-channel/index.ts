@@ -341,6 +341,7 @@ serve(async (req) => {
 
       let recipesCreated = 0;
       let fatalError: string | null = null;
+      let videosProcessedInBatch = 0;
 
       // Process each video in this batch
       for (const videoUrl of batchVideos) {
@@ -394,6 +395,17 @@ serve(async (req) => {
           console.error(`Error processing video ${videoUrl}:`, err);
         }
 
+        // Update progress after EACH video so UI shows incremental updates
+        videosProcessedInBatch++;
+        const currentProcessedCount = startIdx + videosProcessedInBatch;
+        await supabase
+          .from('youtube_import_jobs')
+          .update({
+            processed_videos: currentProcessedCount,
+            recipes_created: job.recipes_created + recipesCreated,
+          })
+          .eq('id', jobId);
+
         if (fatalError) break;
       }
 
@@ -428,8 +440,8 @@ serve(async (req) => {
         );
       }
 
-      // Update job progress
-      const newProcessedCount = endIdx;
+      // Update job progress (final update for this batch - mainly for current_batch counter and status)
+      const newProcessedCount = startIdx + videosProcessedInBatch;
       const newRecipesCount = job.recipes_created + recipesCreated;
       const isComplete = newProcessedCount >= videoUrls.length;
 
