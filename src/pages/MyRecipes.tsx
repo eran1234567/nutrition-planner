@@ -222,8 +222,11 @@ const MyRecipes = () => {
         setUploads(prev => prev.map(u => 
           u.id === uploadId ? { ...u, status: 'failed' as const } : u
         ));
-        // The backend usually writes a detailed error_message to the upload row; realtime will update it.
-        toast.error(t('myRecipes.parseError', 'Failed to parse recipe'));
+        // Extract error message from FunctionsHttpError or use context message
+        const errMsg = (error as any)?.context?.body 
+          ? await (error as any).context.json().then((b: any) => b?.error).catch(() => null)
+          : error.message;
+        toast.error(formatUploadError(errMsg) || t('myRecipes.parseError', 'Failed to parse recipe'));
         return;
       }
 
