@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Plus, Upload, Link, Camera, PenLine, BookOpen, Loader2, Trash2, Pencil, Search, Clock, UtensilsCrossed, ChefHat, Sparkles, AlertTriangle, HeartPulse } from 'lucide-react';
-import { Progress } from '@/components/ui/progress';
+import { Plus, Loader2, Trash2, Pencil, Search, Clock, UtensilsCrossed, ChefHat, Sparkles, AlertTriangle, HeartPulse, BookOpen, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
@@ -14,6 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useRecipeImport } from '@/hooks/useRecipeImport';
 import { YouTubeImportProgress } from '@/components/recipe/YouTubeImportProgress';
+import { RecipeImportDrawer } from '@/components/recipe/RecipeImportDrawer';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,12 +30,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-} from '@/components/ui/drawer';
 import { Input } from '@/components/ui/input';
 import { getHealthBadges, meetsHealthConsideration } from '@/lib/nutrition/healthDetection';
 
@@ -248,11 +242,7 @@ export default function Recipes() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [showAddDrawer, setShowAddDrawer] = useState(false);
-  const [showLinkInput, setShowLinkInput] = useState(false);
-  const [linkUrl, setLinkUrl] = useState('');
   const [userRecipes, setUserRecipes] = useState<UserRecipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -267,17 +257,8 @@ export default function Recipes() {
   const [isRenaming, setIsRenaming] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
 
-  // Unified recipe import hook (single source of truth)
-  const { 
-    importFromUrl, 
-    importFromFile, 
-    isImporting, 
-    importProgress,
-    youtubeImport,
-    isYouTubeChannelOrPlaylist 
-  } = useRecipeImport();
-
-  // Destructure YouTube import for convenience
+  // Unified recipe import hook (for YouTube progress only)
+  const { youtubeImport } = useRecipeImport();
   const { activeJob, progress: channelProgress, cancelImport } = youtubeImport;
 
   // URL-based filter state
@@ -416,12 +397,6 @@ export default function Recipes() {
     });
   }, [userRecipes, searchQuery, selectedTime, selectedMealType, selectedDietType, blockedTerms, selectedHealthConsiderations]);
 
-  const addOptions = [
-    { icon: Upload, label: 'Upload file', desc: 'PDF, image, or doc', action: 'upload' },
-    { icon: Link, label: 'Paste link', desc: 'From any website', action: 'link' },
-    { icon: Camera, label: 'Take photo', desc: 'Snap a recipe', action: 'camera' },
-    { icon: PenLine, label: 'Create manually', desc: 'Write your own', action: 'manual' },
-  ];
 
   useEffect(() => {
     fetchUserRecipes();
@@ -546,60 +521,6 @@ export default function Recipes() {
     setNewRecipeName('');
   };
 
-  const handleAddOption = (action: string) => {
-    switch (action) {
-      case 'upload':
-        fileInputRef.current?.click();
-        setShowAddDrawer(false);
-        break;
-      case 'link':
-        // Keep drawer open, show link input inside it
-        setShowLinkInput(true);
-        break;
-      case 'camera':
-        cameraInputRef.current?.click();
-        setShowAddDrawer(false);
-        break;
-      case 'manual':
-        navigate('/recipe/new');
-        setShowAddDrawer(false);
-        break;
-    }
-  };
-
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    for (const file of Array.from(files)) {
-      const result = await importFromFile(file);
-      if (result.success) {
-        await fetchUserRecipes();
-        setShowAddDrawer(false);
-      }
-    }
-    
-    if (event.target) event.target.value = '';
-  };
-
-  const handleAddLink = async () => {
-    if (!linkUrl.trim()) return;
-    
-    const urlToImport = linkUrl;
-    setLinkUrl('');
-    setShowLinkInput(false);
-    
-    // For YouTube channels/playlists, close drawer and let background processing handle it
-    if (isYouTubeChannelOrPlaylist(urlToImport)) {
-      setShowAddDrawer(false);
-    }
-    
-    const result = await importFromUrl(urlToImport);
-    if (result.success && !isYouTubeChannelOrPlaylist(urlToImport)) {
-      await fetchUserRecipes();
-      setShowAddDrawer(false);
-    }
-  };
 
   const fetchUserRecipes = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -639,23 +560,6 @@ export default function Recipes() {
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Hidden file inputs */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileSelect}
-        accept="image/*,.pdf,.doc,.docx,.txt"
-        multiple
-        className="hidden"
-      />
-      <input
-        type="file"
-        ref={cameraInputRef}
-        onChange={handleFileSelect}
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-      />
 
       {/* YouTube Channel Import Progress (same as MyRecipes) */}
       {activeJob && (
@@ -906,75 +810,12 @@ export default function Recipes() {
         </div>
       )}
 
-      {/* Add Recipe Drawer */}
-      <Drawer open={showAddDrawer} onOpenChange={(open) => {
-        setShowAddDrawer(open);
-        if (!open) {
-          setShowLinkInput(false);
-          setLinkUrl('');
-        }
-      }}>
-        <DrawerContent className="pb-8">
-          <DrawerHeader className="pb-2">
-            <DrawerTitle>
-              {importProgress 
-                ? t('recipes.processing', 'Processing Recipe')
-                : t('recipes.addRecipe', 'Add Recipe')
-              }
-            </DrawerTitle>
-          </DrawerHeader>
-          <div className="px-4">
-            {importProgress ? (
-              <div className="space-y-3 py-4">
-                <p className="text-sm text-muted-foreground truncate">{importProgress.name}</p>
-                <Progress value={importProgress.progress} className="h-2" />
-                <p className="text-xs text-muted-foreground text-center">
-                  {importProgress.progress < 100 
-                    ? t('recipes.parsingRecipe', 'Parsing recipe...') 
-                    : t('recipes.parsingComplete', 'Complete!')}
-                </p>
-              </div>
-            ) : showLinkInput ? (
-              <div className="space-y-3 py-2">
-                <Input
-                  type="url"
-                  placeholder="https://..."
-                  value={linkUrl}
-                  onChange={(e) => setLinkUrl(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddLink()}
-                  autoFocus
-                />
-                <div className="flex gap-2">
-                  <Button onClick={handleAddLink} disabled={!linkUrl.trim()} className="flex-1">
-                    {t('common.add', 'Add')}
-                  </Button>
-                  <Button variant="outline" onClick={() => { setShowLinkInput(false); setLinkUrl(''); }}>
-                    {t('common.cancel', 'Cancel')}
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2 py-2">
-                {addOptions.map((option) => (
-                  <button
-                    key={option.label}
-                    onClick={() => handleAddOption(option.action)}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-muted hover:bg-secondary transition-colors text-left"
-                  >
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <option.icon className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm">{option.label}</p>
-                      <p className="text-xs text-muted-foreground">{option.desc}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </DrawerContent>
-      </Drawer>
+      {/* Add Recipe Drawer - Unified Component */}
+      <RecipeImportDrawer
+        open={showAddDrawer}
+        onOpenChange={setShowAddDrawer}
+        onImportComplete={fetchUserRecipes}
+      />
 
       <BottomNav />
 
