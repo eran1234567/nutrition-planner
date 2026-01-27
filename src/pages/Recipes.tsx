@@ -468,17 +468,36 @@ export default function Recipes() {
       return;
     }
 
-    const { error } = await supabase
-      .from('recipes')
-      .update({ is_deleted: true, deleted_at: new Date().toISOString() })
-      .eq('owner_user_id', user.id)
-      .eq('is_deleted', false);
+    try {
+      // Delete each recipe using the edge function to bypass RLS issues
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const recipe of userRecipes) {
+        const { data, error } = await supabase.functions.invoke('delete-recipe', {
+          body: { recipeId: recipe.id },
+        });
+        
+        if (error || !data?.success) {
+          failCount++;
+        } else {
+          successCount++;
+        }
+      }
 
-    if (error) {
+      if (failCount === 0) {
+        setUserRecipes([]);
+        toast.success(t('recipes.deleteAllSuccess', 'All recipes deleted'));
+      } else if (successCount > 0) {
+        // Partial success - refresh list
+        await fetchUserRecipes();
+        toast.success(t('recipes.deletePartialSuccess', `Deleted ${successCount} recipes, ${failCount} failed`));
+      } else {
+        toast.error(t('recipes.deleteAllError', 'Failed to delete all recipes'));
+      }
+    } catch (error) {
+      if (import.meta.env.DEV) console.error('Delete all error:', error);
       toast.error(t('recipes.deleteAllError', 'Failed to delete all recipes'));
-    } else {
-      setUserRecipes([]);
-      toast.success(t('recipes.deleteAllSuccess', 'All recipes deleted'));
     }
 
     setIsDeletingAll(false);
