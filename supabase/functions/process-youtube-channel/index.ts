@@ -224,7 +224,28 @@ serve(async (req) => {
 
       console.log(`Found ${videoUrls.length} videos`);
 
-      // Create job record
+      // Create an upload record so user can manage/delete this source
+      const displayName = channelName || (youtubeType === 'playlist' ? 'YouTube Playlist' : 'YouTube Channel');
+      const { data: uploadData, error: uploadError } = await supabase
+        .from('uploads')
+        .insert({
+          owner_user_id: userId,
+          source_url: channelUrl,
+          file_name: displayName,
+          status: 'parsing',
+          scope: 'private',
+        })
+        .select()
+        .single();
+
+      if (uploadError) {
+        console.warn('Failed to create upload record:', uploadError.message);
+        // Continue anyway - the job will still work, just won't be deletable as a source
+      }
+
+      const uploadId = uploadData?.id || null;
+
+      // Create job record with upload_id reference
       const { data: job, error: jobError } = await supabase
         .from('youtube_import_jobs')
         .insert({
@@ -234,6 +255,7 @@ serve(async (req) => {
           total_videos: videoUrls.length,
           video_urls: videoUrls,
           status: 'processing',
+          upload_id: uploadId,
         })
         .select()
         .single();
@@ -244,12 +266,13 @@ serve(async (req) => {
 
       // Start processing first batch immediately (background will continue)
       // Edge function will timeout, but we'll process in batches
-      console.log(`Created job ${job.id}, starting batch processing...`);
+      console.log(`Created job ${job.id} with upload ${uploadId}, starting batch processing...`);
 
       return new Response(
         JSON.stringify({
           success: true,
           jobId: job.id,
+          uploadId,
           totalVideos: videoUrls.length,
           channelName,
           message: `Started importing ${videoUrls.length} videos from ${channelName || 'channel'}`,
@@ -294,11 +317,19 @@ serve(async (req) => {
       const batchVideos = videoUrls.slice(startIdx, endIdx);
 
       if (batchVideos.length === 0) {
-        // All done
+        // All done - update job and upload status
         await supabase
           .from('youtube_import_jobs')
           .update({ status: 'completed' })
           .eq('id', jobId);
+
+        // Update upload status to 'parsed'
+        if (job.upload_id) {
+          await supabase
+            .from('uploads')
+            .update({ status: 'parsed' })
+            .eq('id', job.upload_id);
+        }
 
         return new Response(
           JSON.stringify({ success: true, status: 'completed', recipesCreated: job.recipes_created }),
@@ -316,7 +347,7 @@ serve(async (req) => {
         try {
           console.log(`Processing video: ${videoUrl}`);
           
-          // Call parse-recipe for this single video with batchMode flag to skip uploadId validation
+          // Call parse-recipe for this single video, passing uploadId to link recipes to the source
           const parseResponse = await fetch(`${supabaseUrl}/functions/v1/parse-recipe`, {
             method: 'POST',
             headers: {
@@ -325,6 +356,7 @@ serve(async (req) => {
             },
             body: JSON.stringify({
               sourceUrl: videoUrl,
+              uploadId: job.upload_id, // Link recipes to the channel/playlist upload source
               batchMode: true, // Skip uploadId validation for batch YouTube imports
             }),
           });
@@ -374,6 +406,14 @@ serve(async (req) => {
           })
           .eq('id', jobId);
 
+        // Update upload status to 'failed'
+        if (job.upload_id) {
+          await supabase
+            .from('uploads')
+            .update({ status: 'failed', error_message: fatalError })
+            .eq('id', job.upload_id);
+        }
+
         return new Response(
           JSON.stringify({
             success: true,
@@ -402,6 +442,14 @@ serve(async (req) => {
           status: isComplete ? 'completed' : 'processing',
         })
         .eq('id', jobId);
+
+      // Update upload status when complete
+      if (isComplete && job.upload_id) {
+        await supabase
+          .from('uploads')
+          .update({ status: 'parsed' })
+          .eq('id', job.upload_id);
+      }
 
       return new Response(
         JSON.stringify({
