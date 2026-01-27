@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface ImportJob {
@@ -25,7 +25,7 @@ export function useYouTubeImport(): UseYouTubeImportReturn {
   const [activeJob, setActiveJob] = useState<ImportJob | null>(null);
   const [isStarting, setIsStarting] = useState(false);
   const [processingInterval, setProcessingInterval] = useState<NodeJS.Timeout | null>(null);
-  
+  const isProcessingBatch = useRef(false); // Guard against concurrent batch processing
 
   // Calculate progress percentage
   const progress = activeJob 
@@ -66,14 +66,25 @@ export function useYouTubeImport(): UseYouTubeImportReturn {
         clearInterval(processingInterval);
         setProcessingInterval(null);
       }
+      isProcessingBatch.current = false;
       return;
     }
 
-    // Process a batch every 2 seconds
+    // Process a batch - with guard to prevent concurrent processing
     const processBatch = async () => {
+      // Skip if already processing a batch (prevents overlapping requests)
+      if (isProcessingBatch.current) {
+        return;
+      }
+      
+      isProcessingBatch.current = true;
+      
       try {
         const { data: session } = await supabase.auth.getSession();
-        if (!session?.session?.access_token) return;
+        if (!session?.session?.access_token) {
+          isProcessingBatch.current = false;
+          return;
+        }
 
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-youtube-channel`,
@@ -96,6 +107,8 @@ export function useYouTubeImport(): UseYouTubeImportReturn {
         }
       } catch (err) {
         console.error('Error processing batch:', err);
+      } finally {
+        isProcessingBatch.current = false;
       }
     };
 
@@ -106,6 +119,7 @@ export function useYouTubeImport(): UseYouTubeImportReturn {
 
     return () => {
       clearInterval(interval);
+      isProcessingBatch.current = false;
     };
   }, [activeJob?.id, activeJob?.status]);
 
