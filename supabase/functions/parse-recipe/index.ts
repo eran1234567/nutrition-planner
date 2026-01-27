@@ -969,7 +969,8 @@ Always respond with valid JSON only, no markdown code blocks or explanation.`;
       "prep_time": 15,
       "cook_time": 30,
       "total_time": 45,
-      "servings": 4,
+      "servings": 5,
+      "servings_source": "Exact quote or observation explaining where serving count came from (e.g., 'Chef said: makes 5 meals', 'Counted 5 containers in video', 'Meal prep context, defaulted to 5')",
       "serving_size": "Human-readable portion description (e.g., '1 bowl', '4 meatballs + 1.5 cups potatoes', '1 cup soup', '12 oz shake')",
       "difficulty": "easy|medium|hard",
       "cuisine": "American|Italian|Mexican|Asian|Mediterranean|Indian|Japanese|Thai|French|Greek|Brazilian",
@@ -1011,12 +1012,19 @@ CRITICAL RULES:
 1. Extract ALL recipes from the document
 2. Extract EVERY ingredient with exact quantities
 3. Calculate ACCURATE nutrition per serving (calories ±2%)
-4. Default to 4 servings for main dishes if not specified
+4. SERVINGS RULE (CRITICAL - DO NOT IGNORE):
+   - FIRST: If the chef explicitly states a number (e.g., "makes 5 bowls", "serves 3", "5 meals"), use THAT EXACT NUMBER
+   - SECOND: If the video shows containers being filled, COUNT them and use that number
+   - THIRD: If "meal prep" is mentioned but no number given, DEFAULT TO 5 (Mon-Fri work week)
+   - NEVER default to 4 unless the chef specifically says "family of 4" or "4 servings"
+   - DO NOT calculate servings from ingredient weight - LISTEN to the chef
 5. For countable items (meatballs, patties, etc), include units_info
 6. Only add diet_tags and health_tags if recipe FULLY complies with rules
 7. Include serving_size as a human-readable portion description
 8. MINIMIZE sodium by default (< 600mg unless health filter requires lower)
-9. If no recipes found, return: { "recipes": [], "error": "Could not extract recipe information" }`;
+9. If no recipes found, return: { "recipes": [], "error": "Could not extract recipe information" }
+10. Include "servings_source" field with the exact quote or observation that determined the serving count`;
+
 
     // Build prompt and call Gemini
     let promptText = '';
@@ -1273,8 +1281,12 @@ ${transcript}`;
         ? recipe.cuisine.trim().substring(0, 50)
         : null;
       
+      // Log serving source for debugging
+      const servingsSource = recipe.servings_source || 'Not specified';
+      console.log(`[SERVINGS DEBUG] Recipe "${recipe.title}": servings=${recipe.servings}, source="${servingsSource}"`);
+      
       const sanitizedServings = (typeof recipe.servings === 'number' && recipe.servings >= 1 && recipe.servings <= 100)
-        ? Math.round(recipe.servings) : 4;
+        ? Math.round(recipe.servings) : 5; // Default to 5 for meal prep (Mon-Fri)
       const sanitizedPrepTime = (typeof recipe.prep_time === 'number' && recipe.prep_time >= 0 && recipe.prep_time <= 1440)
         ? Math.round(recipe.prep_time) : null;
       const sanitizedCookTime = (typeof recipe.cook_time === 'number' && recipe.cook_time >= 0 && recipe.cook_time <= 1440)
