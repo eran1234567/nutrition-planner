@@ -13,12 +13,26 @@ interface ImportJob {
   created_at: string;
 }
 
+interface ImportJob {
+  id: string;
+  channel_url: string;
+  channel_name: string | null;
+  total_videos: number;
+  processed_videos: number;
+  recipes_created: number;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  error_message: string | null;
+  created_at: string;
+  upload_id: string | null;
+}
+
 interface UseYouTubeImportReturn {
   activeJob: ImportJob | null;
   isStarting: boolean;
   startChannelImport: (channelUrl: string) => Promise<void>;
   progress: number;
   cancelImport: () => void;
+  onJobComplete: (callback: () => void) => void;
 }
 
 export function useYouTubeImport(): UseYouTubeImportReturn {
@@ -26,11 +40,17 @@ export function useYouTubeImport(): UseYouTubeImportReturn {
   const [isStarting, setIsStarting] = useState(false);
   const [processingInterval, setProcessingInterval] = useState<NodeJS.Timeout | null>(null);
   const isProcessingBatch = useRef(false); // Guard against concurrent batch processing
+  const onCompleteCallbackRef = useRef<(() => void) | null>(null);
 
   // Calculate progress percentage
   const progress = activeJob 
     ? Math.round((activeJob.processed_videos / activeJob.total_videos) * 100) 
     : 0;
+
+  // Register callback for job completion
+  const onJobComplete = useCallback((callback: () => void) => {
+    onCompleteCallbackRef.current = callback;
+  }, []);
 
   // Subscribe to realtime updates for active job
   useEffect(() => {
@@ -49,7 +69,11 @@ export function useYouTubeImport(): UseYouTubeImportReturn {
         (payload) => {
           const updated = payload.new as ImportJob;
           setActiveJob(updated);
-          // Status is now shown inline in the UI - no toast needed
+          
+          // Trigger callback when job completes
+          if (updated.status === 'completed' || updated.status === 'failed') {
+            onCompleteCallbackRef.current?.();
+          }
         }
       )
       .subscribe();
@@ -209,5 +233,6 @@ export function useYouTubeImport(): UseYouTubeImportReturn {
     startChannelImport,
     progress,
     cancelImport,
+    onJobComplete,
   };
 }

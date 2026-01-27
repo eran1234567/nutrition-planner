@@ -66,7 +66,7 @@ const MyRecipes = () => {
   } = useRecipeImport();
 
   // Destructure YouTube import for convenience
-  const { activeJob, progress: channelProgress, cancelImport, startChannelImport } = youtubeImport;
+  const { activeJob, progress: channelProgress, cancelImport, startChannelImport, onJobComplete } = youtubeImport;
 
   // Load existing uploads from database
   const loadUploads = useCallback(async () => {
@@ -110,6 +110,14 @@ const MyRecipes = () => {
   useEffect(() => {
     loadUploads();
   }, [loadUploads]);
+  
+  // Register callback to reload uploads when YouTube job completes
+  useEffect(() => {
+    onJobComplete(() => {
+      // Reload uploads to show the newly created upload source
+      loadUploads();
+    });
+  }, [onJobComplete, loadUploads]);
 
   // Subscribe to realtime updates for uploads (both INSERT and UPDATE)
   useEffect(() => {
