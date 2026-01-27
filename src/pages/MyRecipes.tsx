@@ -107,12 +107,43 @@ const MyRecipes = () => {
     loadUploads();
   }, [loadUploads]);
 
-  // Subscribe to realtime updates for uploads
+  // Subscribe to realtime updates for uploads (both INSERT and UPDATE)
   useEffect(() => {
     if (!user) return;
 
     const channel = supabase
       .channel('upload-status-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'uploads',
+          filter: `owner_user_id=eq.${user.id}`,
+        },
+        async (payload) => {
+          const newUpload = payload.new as any;
+          
+          // Add the new upload to the list if not already present
+          setUploads(prev => {
+            if (prev.some(u => u.id === newUpload.id)) return prev;
+            
+            const uploadItem: UploadedItem = {
+              id: newUpload.id,
+              type: newUpload.source_url ? 'link' : 'file',
+              name: newUpload.file_name || (newUpload.source_url ? new URL(newUpload.source_url).hostname : 'Unknown'),
+              url: newUpload.source_url || undefined,
+              fileType: newUpload.file_type || undefined,
+              status: newUpload.status as UploadedItem['status'],
+              createdAt: new Date(newUpload.created_at || Date.now()),
+              recipeCount: 0,
+              errorMessage: newUpload.error_message ?? null,
+            };
+            
+            return [uploadItem, ...prev];
+          });
+        }
+      )
       .on(
         'postgres_changes',
         {
