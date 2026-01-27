@@ -1468,8 +1468,8 @@ ${transcript}`;
     }
 
     // Generate images in background AFTER returning response
-    // Skip image generation for batchMode imports to reduce API usage and avoid quota/rate-limit issues.
-    if (createdRecipes.length > 0 && !batchMode) {
+    // This runs for all imports including batch mode (YouTube channels/playlists)
+    if (createdRecipes.length > 0) {
       EdgeRuntime.waitUntil(
         generateRecipeImagesInBackground(createdRecipes, supabaseUrl, supabaseServiceKey, GEMINI_API_KEY)
       );
