@@ -258,6 +258,10 @@ export default function Recipes() {
   const [newRecipeName, setNewRecipeName] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
+  
+  // Image backfill state
+  const [isBackfillingImages, setIsBackfillingImages] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<{ success: number; failed: number } | null>(null);
 
   // Unified recipe import hook (for YouTube progress only)
   const { youtubeImport } = useRecipeImport();
@@ -530,6 +534,41 @@ export default function Recipes() {
     setNewRecipeName('');
   };
 
+  // Count recipes missing images
+  const recipesMissingImages = useMemo(() => {
+    return userRecipes.filter(r => !r.image_url).length;
+  }, [userRecipes]);
+
+  // Backfill missing images
+  const handleBackfillImages = async () => {
+    setIsBackfillingImages(true);
+    setBackfillResult(null);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('backfill-recipe-images', {
+        body: {}
+      });
+      
+      if (error) {
+        toast.error(t('recipes.backfillError', 'Failed to generate images'));
+        console.error('Backfill error:', error);
+      } else if (data?.success) {
+        setBackfillResult({ success: data.successCount, failed: data.failedCount });
+        if (data.successCount > 0) {
+          toast.success(t('recipes.backfillSuccess', `Generated ${data.successCount} image(s)!`));
+          // Refresh recipes to show new images
+          fetchUserRecipes();
+        } else {
+          toast.info(t('recipes.noMissingImages', 'No images to generate'));
+        }
+      }
+    } catch (err) {
+      console.error('Backfill error:', err);
+      toast.error(t('recipes.backfillError', 'Failed to generate images'));
+    } finally {
+      setIsBackfillingImages(false);
+    }
+  };
 
   const fetchUserRecipes = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -684,6 +723,69 @@ export default function Recipes() {
                   value={(deleteProgress.current / deleteProgress.total) * 100} 
                   className="h-2 [&>div]:bg-destructive" 
                 />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Missing Images Banner */}
+        <AnimatePresence>
+          {!loading && recipesMissingImages > 0 && !isBackfillingImages && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-4"
+            >
+              <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                    <Sparkles className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm text-amber-800 dark:text-amber-200">
+                      {t('recipes.missingImages', '{{count}} recipes missing photos', { count: recipesMissingImages })}
+                    </p>
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      {t('recipes.generateImagesHint', 'Generate AI photos for better presentation')}
+                    </p>
+                  </div>
+                </div>
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={handleBackfillImages}
+                  className="shrink-0 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50"
+                >
+                  <Sparkles className="w-4 h-4 mr-1" />
+                  {t('recipes.generateImages', 'Generate')}
+                </Button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Image Generation Progress */}
+        <AnimatePresence>
+          {isBackfillingImages && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-4"
+            >
+              <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                    <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm">{t('recipes.generatingImages', 'Generating Images...')}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t('recipes.pleaseWait', 'This may take a minute')}
+                    </p>
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}
