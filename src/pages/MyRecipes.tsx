@@ -174,6 +174,44 @@ const MyRecipes = () => {
     };
   }, [user, t, formatApiError]);
 
+  // Subscribe to realtime updates for upload_recipe_links to update recipe count in real-time
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('upload-recipe-links-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'upload_recipe_links',
+        },
+        async (payload) => {
+          const newLink = payload.new as any;
+          const uploadId = newLink.upload_id;
+          
+          // Fetch the updated count for this upload
+          const { count } = await supabase
+            .from('upload_recipe_links')
+            .select('*', { count: 'exact', head: true })
+            .eq('upload_id', uploadId);
+          
+          // Update the upload's recipe count in state
+          setUploads(prev => prev.map(u => 
+            u.id === uploadId 
+              ? { ...u, recipeCount: count || 0 }
+              : u
+          ));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
   const triggerParsing = async (uploadId: string, content?: string, sourceUrl?: string, isImage?: boolean) => {
     try {
       // Update local state to show parsing
