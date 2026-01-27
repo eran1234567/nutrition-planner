@@ -27,21 +27,8 @@ import { BottomNav } from '@/components/layout/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { useYouTubeImport } from '@/hooks/useYouTubeImport';
+import { useRecipeImport, isYouTubeChannelOrPlaylist } from '@/hooks/useRecipeImport';
 import { YouTubeImportProgress } from '@/components/recipe/YouTubeImportProgress';
-
-// YouTube channel/playlist detection patterns
-const YOUTUBE_CHANNEL_PATTERNS = [
-  /^https?:\/\/(www\.)?youtube\.com\/@[\w-]+/i,
-  /^https?:\/\/(www\.)?youtube\.com\/channel\/[\w-]+/i,
-  /^https?:\/\/(www\.)?youtube\.com\/c\/[\w-]+/i,
-  /^https?:\/\/(www\.)?youtube\.com\/user\/[\w-]+/i,
-];
-const YOUTUBE_PLAYLIST_PATTERN = /^https?:\/\/(www\.)?youtube\.com\/playlist\?list=/i;
-
-function isYouTubeChannelOrPlaylist(url: string): boolean {
-  return YOUTUBE_CHANNEL_PATTERNS.some(p => p.test(url)) || YOUTUBE_PLAYLIST_PATTERN.test(url);
-}
 
 interface UploadedItem {
   id: string;
@@ -66,30 +53,16 @@ const MyRecipes = () => {
   const [showLinkInput, setShowLinkInput] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   
-  // YouTube channel/playlist import hook
+  // Unified recipe import hook
   const { 
-    activeJob, 
-    isStarting: isStartingChannelImport, 
-    startChannelImport, 
-    progress: channelProgress,
-    cancelImport 
-  } = useYouTubeImport();
+    importFromUrl, 
+    importFromFile, 
+    youtubeImport,
+    formatApiError 
+  } = useRecipeImport();
 
-  const formatUploadError = useCallback((raw?: string | null) => {
-    const msg = (raw || '').trim();
-    if (!msg) return null;
-
-    // Make common backend errors user-friendly.
-    if (/\b429\b/.test(msg) || /resource exhausted/i.test(msg) || /quota/i.test(msg) || /rate limit/i.test(msg)) {
-      return t(
-        'myRecipes.quotaExceeded',
-        'AI quota/rate limit reached. Please try again later or increase your AI key quota/billing.'
-      );
-    }
-
-    // Keep other errors but shorten very long ones.
-    return msg.length > 160 ? `${msg.slice(0, 157)}…` : msg;
-  }, [t]);
+  // Destructure YouTube import for convenience
+  const { activeJob, progress: channelProgress, cancelImport, startChannelImport } = youtubeImport;
 
   // Load existing uploads from database
   const loadUploads = useCallback(async () => {
@@ -181,7 +154,7 @@ const MyRecipes = () => {
               { duration: 5000 }
             );
           } else if (updatedUpload.status === 'failed') {
-            const friendly = formatUploadError(updatedUpload.error_message);
+            const friendly = formatApiError(updatedUpload.error_message);
             toast.error(
               friendly
                 ? t(
@@ -199,7 +172,7 @@ const MyRecipes = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, t, formatUploadError]);
+  }, [user, t, formatApiError]);
 
   const triggerParsing = async (uploadId: string, content?: string, sourceUrl?: string, isImage?: boolean) => {
     try {
@@ -226,7 +199,7 @@ const MyRecipes = () => {
         const errMsg = (error as any)?.context?.body 
           ? await (error as any).context.json().then((b: any) => b?.error).catch(() => null)
           : error.message;
-        toast.error(formatUploadError(errMsg) || t('myRecipes.parseError', 'Failed to parse recipe'));
+        toast.error(formatApiError(errMsg) || t('myRecipes.parseError', 'Failed to parse recipe'));
         return;
       }
 
@@ -239,7 +212,7 @@ const MyRecipes = () => {
         setUploads(prev => prev.map(u => 
           u.id === uploadId ? { ...u, status: 'failed' as const } : u
         ));
-        toast.error(formatUploadError(data?.error) || t('myRecipes.parseError', 'Failed to parse recipe'));
+        toast.error(formatApiError(data?.error) || t('myRecipes.parseError', 'Failed to parse recipe'));
       }
     } catch (error) {
       if (import.meta.env.DEV) console.error('Parse error:', error);
@@ -657,9 +630,9 @@ const MyRecipes = () => {
                         {upload.status === 'failed' && t('myRecipes.statusFailed', 'Failed')}
                       </p>
                     </div>
-                    {upload.status === 'failed' && formatUploadError(upload.errorMessage) && (
+                    {upload.status === 'failed' && formatApiError(upload.errorMessage) && (
                       <p className="mt-1 text-xs text-destructive leading-snug">
-                        {formatUploadError(upload.errorMessage)}
+                        {formatApiError(upload.errorMessage)}
                       </p>
                     )}
                   </div>
