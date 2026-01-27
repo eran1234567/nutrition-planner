@@ -1239,6 +1239,10 @@ ${transcript}`;
     if (seedGlobal) {
       ownerUserId = null;
       console.log('Seed global mode: creating global recipes with no owner');
+    } else if (batchMode) {
+      // In batchMode (YouTube bulk imports), skip upload lookup and use authenticated user directly
+      ownerUserId = userId;
+      console.log(`Batch mode: using authenticated user ${userId} as owner`);
     } else {
       // Get the upload to find owner
       const { data: upload } = await supabase
