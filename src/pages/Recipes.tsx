@@ -12,7 +12,7 @@ import { MultiSelectDropdown } from '@/components/discover/MultiSelectDropdown';
 import { supabase } from '@/integrations/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { useYouTubeImport } from '@/hooks/useYouTubeImport';
+import { useRecipeImport } from '@/hooks/useRecipeImport';
 import { YouTubeImportProgress } from '@/components/recipe/YouTubeImportProgress';
 import {
   AlertDialog,
@@ -38,19 +38,6 @@ import {
 } from '@/components/ui/drawer';
 import { Input } from '@/components/ui/input';
 import { getHealthBadges, meetsHealthConsideration } from '@/lib/nutrition/healthDetection';
-
-// YouTube channel/playlist detection patterns (same as MyRecipes)
-const YOUTUBE_CHANNEL_PATTERNS = [
-  /^https?:\/\/(www\.)?youtube\.com\/@[\w-]+/i,
-  /^https?:\/\/(www\.)?youtube\.com\/channel\/[\w-]+/i,
-  /^https?:\/\/(www\.)?youtube\.com\/c\/[\w-]+/i,
-  /^https?:\/\/(www\.)?youtube\.com\/user\/[\w-]+/i,
-];
-const YOUTUBE_PLAYLIST_PATTERN = /^https?:\/\/(www\.)?youtube\.com\/playlist\?list=/i;
-
-function isYouTubeChannelOrPlaylist(url: string): boolean {
-  return YOUTUBE_CHANNEL_PATTERNS.some(p => p.test(url)) || YOUTUBE_PLAYLIST_PATTERN.test(url);
-}
 
 // Filter options (same as Discover page)
 const timeFilterOptions = [
@@ -273,31 +260,25 @@ export default function Recipes() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
-  const [processingUpload, setProcessingUpload] = useState<{ name: string; progress: number } | null>(null);
+  
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [recipeToRename, setRecipeToRename] = useState<UserRecipe | null>(null);
   const [newRecipeName, setNewRecipeName] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
 
-  // YouTube channel/playlist import hook (same as MyRecipes)
+  // Unified recipe import hook (single source of truth)
   const { 
-    activeJob, 
-    isStarting: isStartingChannelImport, 
-    startChannelImport, 
-    progress: channelProgress,
-    cancelImport 
-  } = useYouTubeImport();
+    importFromUrl, 
+    importFromFile, 
+    isImporting, 
+    importProgress,
+    youtubeImport,
+    isYouTubeChannelOrPlaylist 
+  } = useRecipeImport();
 
-  // Helper to format API quota/rate-limit errors into friendly messages
-  const formatApiError = useCallback((raw?: string | null) => {
-    const msg = (raw || '').trim();
-    if (!msg) return null;
-    if (/\b429\b/.test(msg) || /resource exhausted/i.test(msg) || /quota/i.test(msg) || /rate limit/i.test(msg)) {
-      return t('myRecipes.quotaExceeded', 'AI quota/rate limit reached. Please try again later or increase your AI key quota/billing.');
-    }
-    return msg.length > 160 ? `${msg.slice(0, 157)}…` : msg;
-  }, [t]);
+  // Destructure YouTube import for convenience
+  const { activeJob, progress: channelProgress, cancelImport } = youtubeImport;
 
   // URL-based filter state
   const searchQuery = searchParams.get('q') || '';
@@ -590,102 +571,11 @@ export default function Recipes() {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      toast.error(t('common.loginRequired', 'Please log in'));
-      return;
-    }
-
     for (const file of Array.from(files)) {
-      const isImage = file.type.startsWith('image/');
-      const isDocument = file.type === 'application/pdf' || 
-                         file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-                         file.type === 'application/msword' ||
-                         file.name.endsWith('.docx') || 
-                         file.name.endsWith('.doc') || 
-                         file.name.endsWith('.pdf');
-      const isText = file.type.startsWith('text/') || file.type === 'application/json';
-
-      let fileContent = '';
-      if (isImage || isDocument) {
-        fileContent = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-      } else if (isText) {
-        fileContent = await file.text();
-      }
-
-      let mimeType = file.type;
-      if (!mimeType || mimeType === 'application/octet-stream') {
-        const ext = file.name.toLowerCase().split('.').pop();
-        const mimeMap: Record<string, string> = {
-          'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'doc': 'application/msword',
-          'pdf': 'application/pdf',
-          'txt': 'text/plain',
-          'jpg': 'image/jpeg',
-          'jpeg': 'image/jpeg',
-          'png': 'image/png',
-          'gif': 'image/gif',
-          'webp': 'image/webp',
-        };
-        mimeType = mimeMap[ext || ''] || 'application/octet-stream';
-      }
-
-      try {
-        const { data: uploadData, error } = await supabase.from('uploads').insert({
-          owner_user_id: user.id,
-          file_name: file.name,
-          file_type: mimeType,
-          status: 'pending',
-          scope: 'private'
-        }).select().single();
-
-        if (error) throw error;
-
-        // Keep drawer open to show progress
-        setProcessingUpload({ name: file.name, progress: 10 });
-
-        if (fileContent) {
-          // Simulate progress
-          const progressInterval = setInterval(() => {
-            setProcessingUpload(prev => prev ? { ...prev, progress: Math.min(prev.progress + 15, 85) } : null);
-          }, 800);
-
-          const { data } = await supabase.functions.invoke('parse-recipe', {
-            body: { 
-              uploadId: uploadData.id, 
-              content: fileContent,
-              isImage: isImage
-            },
-          });
-
-          clearInterval(progressInterval);
-          setProcessingUpload(prev => prev ? { ...prev, progress: 100 } : null);
-
-          if (data?.success) {
-            toast.success(t('myRecipes.parseSuccess', `Found ${data.count} recipe(s)!`));
-            await fetchUserRecipes();
-          } else {
-            toast.error(formatApiError(data?.error) || t('myRecipes.parseError', 'Failed to parse recipe'));
-          }
-
-          // Close drawer after short delay
-          setTimeout(() => {
-            setProcessingUpload(null);
-            setShowAddDrawer(false);
-          }, 500);
-        } else {
-          toast.error(t('myRecipes.unsupportedFile', 'Unsupported file type'));
-          await supabase.from('uploads').update({ status: 'failed', error_message: 'Unsupported file type' }).eq('id', uploadData.id);
-          setProcessingUpload(null);
-        }
-      } catch (error) {
-        if (import.meta.env.DEV) console.error('File upload error:', error);
-        toast.error(t('myRecipes.uploadError', 'Failed to save file'));
-        setProcessingUpload(null);
+      const result = await importFromFile(file);
+      if (result.success) {
+        await fetchUserRecipes();
+        setShowAddDrawer(false);
       }
     }
     
@@ -695,78 +585,19 @@ export default function Recipes() {
   const handleAddLink = async () => {
     if (!linkUrl.trim()) return;
     
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(linkUrl);
-    } catch {
-      toast.error(t('myRecipes.invalidUrl', 'Please enter a valid URL'));
-      return;
-    }
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      toast.error(t('common.loginRequired', 'Please log in'));
-      return;
-    }
-
-    // Check if this is a YouTube channel or playlist - use background processing (same as MyRecipes)
-    if (isYouTubeChannelOrPlaylist(linkUrl)) {
-      setLinkUrl('');
-      setShowLinkInput(false);
+    const urlToImport = linkUrl;
+    setLinkUrl('');
+    setShowLinkInput(false);
+    
+    // For YouTube channels/playlists, close drawer and let background processing handle it
+    if (isYouTubeChannelOrPlaylist(urlToImport)) {
       setShowAddDrawer(false);
-      await startChannelImport(linkUrl);
-      return;
     }
-
-    // Single video or regular URL - process inline
-    try {
-      const { data: uploadData, error } = await supabase.from('uploads').insert({
-        owner_user_id: user.id,
-        source_url: linkUrl,
-        file_name: parsedUrl.hostname,
-        status: 'pending',
-        scope: 'private'
-      }).select().single();
-
-      if (error) throw error;
-
-      const urlToProcess = linkUrl;
-      setLinkUrl('');
-      setShowLinkInput(false);
-      
-      // Keep drawer open to show progress
-      setProcessingUpload({ name: parsedUrl.hostname, progress: 10 });
-
-      // Simulate progress
-      const progressInterval = setInterval(() => {
-        setProcessingUpload(prev => prev ? { ...prev, progress: Math.min(prev.progress + 15, 85) } : null);
-      }, 800);
-
-      const { data } = await supabase.functions.invoke('parse-recipe', {
-        body: { 
-          uploadId: uploadData.id, 
-          sourceUrl: urlToProcess
-        },
-      });
-
-      clearInterval(progressInterval);
-      setProcessingUpload(prev => prev ? { ...prev, progress: 100 } : null);
-
-      if (data?.success) {
-        toast.success(t('myRecipes.parseSuccess', `Found ${data.count} recipe(s)!`));
-        await fetchUserRecipes();
-      } else {
-        toast.error(formatApiError(data?.error) || t('myRecipes.parseError', 'Failed to parse recipe'));
-      }
-
-      // Close drawer after short delay
-      setTimeout(() => {
-        setProcessingUpload(null);
-        setShowAddDrawer(false);
-      }, 500);
-    } catch (error) {
-      toast.error(t('myRecipes.linkError', 'Failed to save link'));
-      setProcessingUpload(null);
+    
+    const result = await importFromUrl(urlToImport);
+    if (result.success && !isYouTubeChannelOrPlaylist(urlToImport)) {
+      await fetchUserRecipes();
+      setShowAddDrawer(false);
     }
   };
 
@@ -1086,19 +917,19 @@ export default function Recipes() {
         <DrawerContent className="pb-8">
           <DrawerHeader className="pb-2">
             <DrawerTitle>
-              {processingUpload 
+              {importProgress 
                 ? t('recipes.processing', 'Processing Recipe')
                 : t('recipes.addRecipe', 'Add Recipe')
               }
             </DrawerTitle>
           </DrawerHeader>
           <div className="px-4">
-            {processingUpload ? (
+            {importProgress ? (
               <div className="space-y-3 py-4">
-                <p className="text-sm text-muted-foreground truncate">{processingUpload.name}</p>
-                <Progress value={processingUpload.progress} className="h-2" />
+                <p className="text-sm text-muted-foreground truncate">{importProgress.name}</p>
+                <Progress value={importProgress.progress} className="h-2" />
                 <p className="text-xs text-muted-foreground text-center">
-                  {processingUpload.progress < 100 
+                  {importProgress.progress < 100 
                     ? t('recipes.parsingRecipe', 'Parsing recipe...') 
                     : t('recipes.parsingComplete', 'Complete!')}
                 </p>
