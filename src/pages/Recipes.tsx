@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Plus, Loader2, Trash2, Pencil, Search, Clock, UtensilsCrossed, ChefHat, Sparkles, AlertTriangle, HeartPulse, BookOpen, Upload } from 'lucide-react';
+import { Plus, Loader2, Trash2, Pencil, Search, Clock, UtensilsCrossed, ChefHat, Sparkles, AlertTriangle, HeartPulse, BookOpen, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import { getHealthBadges, meetsHealthConsideration } from '@/lib/nutrition/healthDetection';
 
 // Filter options (same as Discover page)
@@ -250,6 +251,7 @@ export default function Recipes() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [deleteProgress, setDeleteProgress] = useState({ current: 0, total: 0 });
   
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [recipeToRename, setRecipeToRename] = useState<UserRecipe | null>(null);
@@ -448,10 +450,13 @@ export default function Recipes() {
 
   const handleDeleteAllConfirm = async () => {
     setIsDeletingAll(true);
+    setDeleteProgress({ current: 0, total: userRecipes.length });
+    
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       toast.error(t('common.error', 'An error occurred'));
       setIsDeletingAll(false);
+      setDeleteProgress({ current: 0, total: 0 });
       return;
     }
 
@@ -460,7 +465,10 @@ export default function Recipes() {
       let successCount = 0;
       let failCount = 0;
       
-      for (const recipe of userRecipes) {
+      for (let i = 0; i < userRecipes.length; i++) {
+        const recipe = userRecipes[i];
+        setDeleteProgress({ current: i + 1, total: userRecipes.length });
+        
         const { data, error } = await supabase.functions.invoke('delete-recipe', {
           body: { recipeId: recipe.id },
         });
@@ -488,6 +496,7 @@ export default function Recipes() {
     }
 
     setIsDeletingAll(false);
+    setDeleteProgress({ current: 0, total: 0 });
     setDeleteAllDialogOpen(false);
   };
 
@@ -644,6 +653,41 @@ export default function Recipes() {
             icon={<HeartPulse className="w-3 h-3" />}
           />
         </div>
+
+        {/* Delete All Progress Bar */}
+        <AnimatePresence>
+          {isDeletingAll && deleteProgress.total > 0 && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mb-4"
+            >
+              <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/20 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-destructive/20 flex items-center justify-center">
+                      <Trash2 className="w-5 h-5 text-destructive" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">Deleting Recipes</p>
+                      <p className="text-xs text-muted-foreground">
+                        {deleteProgress.current} of {deleteProgress.total} deleted
+                      </p>
+                    </div>
+                  </div>
+                  <span className="font-medium text-sm">
+                    {Math.round((deleteProgress.current / deleteProgress.total) * 100)}%
+                  </span>
+                </div>
+                <Progress 
+                  value={(deleteProgress.current / deleteProgress.total) * 100} 
+                  className="h-2 [&>div]:bg-destructive" 
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Recipe count */}
         {!loading && userRecipes.length > 0 && (
