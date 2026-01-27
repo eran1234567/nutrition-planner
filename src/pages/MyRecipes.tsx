@@ -406,10 +406,28 @@ const MyRecipes = () => {
 
   const handleRemoveUpload = async (id: string) => {
     try {
+      // First, get all recipes linked to this upload
+      const { data: links } = await supabase
+        .from('upload_recipe_links')
+        .select('recipe_id')
+        .eq('upload_id', id);
+
+      // Soft-delete each linked recipe
+      if (links && links.length > 0) {
+        const recipeIds = links.map(link => link.recipe_id);
+        for (const recipeId of recipeIds) {
+          await supabase.functions.invoke('delete-recipe', {
+            body: { recipeId },
+          });
+        }
+      }
+
+      // Now delete the upload (will cascade delete upload_recipe_links due to FK)
       await supabase.from('uploads').delete().eq('id', id);
       setUploads(prev => prev.filter(u => u.id !== id));
       toast.success(t('myRecipes.removed', 'Item removed'));
     } catch (error) {
+      if (import.meta.env.DEV) console.error('Remove upload error:', error);
       toast.error(t('myRecipes.removeError', 'Failed to remove item'));
     }
   };
