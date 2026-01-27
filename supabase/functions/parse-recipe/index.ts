@@ -844,11 +844,27 @@ If macros are NOT provided:
 - Snacks: 150-300 kcal, 5-15g protein per serving
 
 ═══════════════════════════════════════════════════════════════
-SERVINGS AND MEAL PREP RULES
+SERVINGS AND MEAL PREP RULES (CRITICAL HIERARCHY)
 ═══════════════════════════════════════════════════════════════
-- Never assume servings unless clearly stated
-- Default to 4 servings for main dishes, 1 serving for snacks
-- Every recipe MUST define serving size explicitly
+This app is for MEAL PREP users who cook for the work week (Mon-Fri).
+Apply this hierarchy to determine servings:
+
+1. FIRST, LISTEN: If the chef EXPLICITLY states a number (e.g., "makes 5 bowls",
+   "serves 3", "feeds 6"), use THAT EXACT NUMBER. Do not override.
+
+2. SECOND, COUNT CONTAINERS: If the video shows the chef laying out a specific
+   number of Tupperware containers (e.g., 5 or 7 containers), COUNT them and
+   use that number as servings.
+
+3. THE MEAL PREP DEFAULT: If NO number is mentioned AND NO containers are
+   counted, default to 5 SERVINGS (representing a standard Mon-Fri work week).
+
+4. SNACKS: Default to 1 serving for snacks unless otherwise specified.
+
+5. DO NOT default to 4 servings unless the video specifically implies a
+   family dinner context (e.g., "dinner for the family", "feeds my family of 4").
+
+Every recipe MUST define serving size explicitly.
 
 SERVING SIZE DESCRIPTION (serving_size field):
 The serving_size field describes what ONE SERVING equals in terms of the COMPLETED DISH.
