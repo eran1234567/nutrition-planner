@@ -315,7 +315,7 @@ serve(async (req) => {
         try {
           console.log(`Processing video: ${videoUrl}`);
           
-          // Call parse-recipe for this single video
+          // Call parse-recipe for this single video with batchMode flag to skip uploadId validation
           const parseResponse = await fetch(`${supabaseUrl}/functions/v1/parse-recipe`, {
             method: 'POST',
             headers: {
@@ -324,6 +324,7 @@ serve(async (req) => {
             },
             body: JSON.stringify({
               sourceUrl: videoUrl,
+              batchMode: true, // Skip uploadId validation for batch YouTube imports
             }),
           });
 

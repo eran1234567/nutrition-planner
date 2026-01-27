@@ -306,7 +306,7 @@ serve(async (req) => {
     
     // Parse body first to check for _seedKey
     const body = await req.json();
-    const { uploadId, content, sourceUrl, fileType, isImage, title, filters, seedGlobal, _seedKey } = body;
+    const { uploadId, content, sourceUrl, fileType, isImage, title, filters, seedGlobal, _seedKey, batchMode } = body;
     
     // Check for admin seeding access via _seedKey
     const isAdminSeed = _seedKey && _seedKey === GEMINI_API_KEY;
@@ -374,9 +374,10 @@ serve(async (req) => {
 
     // ========== INPUT VALIDATION ==========
     
-    // 1. Validate uploadId format (UUID) - skip if seedGlobal mode
+    // 1. Validate uploadId format (UUID) - skip if seedGlobal mode OR batchMode (for YouTube bulk imports)
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!seedGlobal && (!uploadId || typeof uploadId !== 'string' || !uuidRegex.test(uploadId))) {
+    const skipUploadIdValidation = seedGlobal || batchMode === true;
+    if (!skipUploadIdValidation && (!uploadId || typeof uploadId !== 'string' || !uuidRegex.test(uploadId))) {
       console.error('Invalid upload ID format:', uploadId);
       return new Response(
         JSON.stringify({ success: false, error: 'Invalid upload ID format' }),
