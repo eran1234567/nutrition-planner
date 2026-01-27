@@ -53,6 +53,10 @@ const MyRecipes = () => {
   const [showLinkInput, setShowLinkInput] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   
+  // Delete progress tracking
+  const [deletingUploadId, setDeletingUploadId] = useState<string | null>(null);
+  const [deleteProgress, setDeleteProgress] = useState({ current: 0, total: 0 });
+  
   // Unified recipe import hook
   const { 
     importFromUrl, 
@@ -447,40 +451,43 @@ const MyRecipes = () => {
   };
 
   const handleRemoveUpload = async (id: string) => {
-    // Optimistic UI update - remove immediately for instant feedback
-    setUploads(prev => prev.filter(u => u.id !== id));
-    toast.success(t('myRecipes.removed', 'Item removed'));
-    
-    // Process deletion in background (don't block UI)
-    (async () => {
-      try {
-        // First, get all recipes linked to this upload
-        const { data: links } = await supabase
-          .from('upload_recipe_links')
-          .select('recipe_id')
-          .eq('upload_id', id);
+    try {
+      // First, get all recipes linked to this upload
+      const { data: links } = await supabase
+        .from('upload_recipe_links')
+        .select('recipe_id')
+        .eq('upload_id', id);
 
-        // Soft-delete all linked recipes in PARALLEL (not sequential)
-        if (links && links.length > 0) {
-          const recipeIds = links.map(link => link.recipe_id);
-          await Promise.all(
-            recipeIds.map(recipeId =>
-              supabase.functions.invoke('delete-recipe', {
-                body: { recipeId },
-              })
-            )
-          );
+      const recipeIds = links?.map(link => link.recipe_id) || [];
+      const totalRecipes = recipeIds.length;
+
+      // If there are recipes to delete, show progress
+      if (totalRecipes > 0) {
+        setDeletingUploadId(id);
+        setDeleteProgress({ current: 0, total: totalRecipes });
+
+        // Delete recipes one by one with progress updates
+        for (let i = 0; i < recipeIds.length; i++) {
+          await supabase.functions.invoke('delete-recipe', {
+            body: { recipeId: recipeIds[i] },
+          });
+          setDeleteProgress({ current: i + 1, total: totalRecipes });
         }
-
-        // Now delete the upload (will cascade delete upload_recipe_links due to FK)
-        await supabase.from('uploads').delete().eq('id', id);
-      } catch (error) {
-        if (import.meta.env.DEV) console.error('Remove upload error:', error);
-        // Reload uploads to restore state if background deletion failed
-        loadUploads();
-        toast.error(t('myRecipes.removeError', 'Failed to remove item'));
       }
-    })();
+
+      // Now delete the upload (will cascade delete upload_recipe_links due to FK)
+      await supabase.from('uploads').delete().eq('id', id);
+      
+      // Update UI
+      setUploads(prev => prev.filter(u => u.id !== id));
+      toast.success(t('myRecipes.removed', 'Item removed'));
+    } catch (error) {
+      if (import.meta.env.DEV) console.error('Remove upload error:', error);
+      toast.error(t('myRecipes.removeError', 'Failed to remove item'));
+    } finally {
+      setDeletingUploadId(null);
+      setDeleteProgress({ current: 0, total: 0 });
+    }
   };
 
   const handleRetryParsing = async (upload: UploadedItem) => {
@@ -815,14 +822,24 @@ const MyRecipes = () => {
                       {t('common.retry', 'Retry')}
                     </Button>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-muted-foreground hover:text-destructive"
-                    onClick={() => handleRemoveUpload(upload.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  {deletingUploadId === upload.id ? (
+                    <div className="flex items-center gap-2 min-w-[100px]">
+                      <Loader2 className="w-4 h-4 animate-spin text-destructive" />
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {deleteProgress.current}/{deleteProgress.total}
+                      </span>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => handleRemoveUpload(upload.id)}
+                      disabled={deletingUploadId !== null}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
                 </motion.div>
               ))}
             </div>
