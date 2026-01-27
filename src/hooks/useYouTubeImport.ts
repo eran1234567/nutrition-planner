@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
 
 interface ImportJob {
   id: string;
@@ -26,7 +25,7 @@ export function useYouTubeImport(): UseYouTubeImportReturn {
   const [activeJob, setActiveJob] = useState<ImportJob | null>(null);
   const [isStarting, setIsStarting] = useState(false);
   const [processingInterval, setProcessingInterval] = useState<NodeJS.Timeout | null>(null);
-  const { toast } = useToast();
+  
 
   // Calculate progress percentage
   const progress = activeJob 
@@ -50,19 +49,7 @@ export function useYouTubeImport(): UseYouTubeImportReturn {
         (payload) => {
           const updated = payload.new as ImportJob;
           setActiveJob(updated);
-          
-          if (updated.status === 'completed') {
-            toast({
-              title: 'Import Complete!',
-              description: `Created ${updated.recipes_created} recipes from ${updated.processed_videos} videos.`,
-            });
-          } else if (updated.status === 'failed') {
-            toast({
-              title: 'Import Failed',
-              description: updated.error_message || 'An error occurred during import.',
-              variant: 'destructive',
-            });
-          }
+          // Status is now shown inline in the UI - no toast needed
         }
       )
       .subscribe();
@@ -70,7 +57,7 @@ export function useYouTubeImport(): UseYouTubeImportReturn {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [activeJob?.id, toast]);
+  }, [activeJob?.id]);
 
   // Process batches while job is active
   useEffect(() => {
@@ -174,10 +161,7 @@ export function useYouTubeImport(): UseYouTubeImportReturn {
         throw new Error(result.error || 'Failed to start import');
       }
 
-      toast({
-        title: 'Import Started',
-        description: result.message,
-      });
+      // Status is shown inline - no toast needed
 
       // Fetch the created job
       const { data: job } = await supabase
@@ -190,15 +174,12 @@ export function useYouTubeImport(): UseYouTubeImportReturn {
         setActiveJob(job as ImportJob);
       }
     } catch (err) {
-      toast({
-        title: 'Import Failed',
-        description: err instanceof Error ? err.message : 'Unknown error',
-        variant: 'destructive',
-      });
+      // Error will be displayed inline via activeJob state
+      console.error('Import failed:', err);
     } finally {
       setIsStarting(false);
     }
-  }, [toast]);
+  }, []);
 
   const cancelImport = useCallback(() => {
     if (processingInterval) {
