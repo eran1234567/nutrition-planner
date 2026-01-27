@@ -309,6 +309,7 @@ serve(async (req) => {
       console.log(`Processing batch ${job.current_batch + 1}: videos ${startIdx + 1}-${endIdx} of ${videoUrls.length}`);
 
       let recipesCreated = 0;
+      let fatalError: string | null = null;
 
       // Process each video in this batch
       for (const videoUrl of batchVideos) {
@@ -330,16 +331,61 @@ serve(async (req) => {
 
           if (parseResponse.ok) {
             const result = await parseResponse.json();
-            if (result.success && result.savedRecipes) {
-              recipesCreated += result.savedRecipes.length;
-              console.log(`Created ${result.savedRecipes.length} recipes from video`);
+            const created = Array.isArray(result?.recipes)
+              ? result.recipes
+              : Array.isArray(result?.savedRecipes)
+                ? result.savedRecipes
+                : [];
+
+            if (result?.success && created.length > 0) {
+              recipesCreated += created.length;
+              console.log(`Created ${created.length} recipes from video`);
             }
           } else {
-            console.warn(`Failed to process video ${videoUrl}: ${parseResponse.status}`);
+            let errMsg = `HTTP ${parseResponse.status}`;
+            try {
+              const errJson = await parseResponse.json();
+              errMsg = errJson?.error || errJson?.message || JSON.stringify(errJson);
+            } catch {
+              // ignore JSON parse errors
+            }
+
+            console.warn(`Failed to process video ${videoUrl}: ${parseResponse.status} - ${errMsg}`);
+
+            // If Gemini is rate-limited / quota-exhausted, fail the whole job quickly with a clear message.
+            if (parseResponse.status === 429) {
+              fatalError = `Gemini quota/rate limit hit. Please enable billing / increase quota for your Gemini API key, then re-run the import. (${errMsg})`;
+              break;
+            }
           }
         } catch (err) {
           console.error(`Error processing video ${videoUrl}:`, err);
         }
+
+        if (fatalError) break;
+      }
+
+      if (fatalError) {
+        await supabase
+          .from('youtube_import_jobs')
+          .update({
+            status: 'failed',
+            error_message: fatalError,
+          })
+          .eq('id', jobId);
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            status: 'failed',
+            error: fatalError,
+            processedVideos: job.processed_videos,
+            totalVideos: videoUrls.length,
+            recipesCreated: job.recipes_created + recipesCreated,
+            hasMore: false,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
       // Update job progress

@@ -289,6 +289,11 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Capture request context for safe error handling (req body cannot be re-read in catch)
+  let uploadIdForError: string | undefined;
+  let seedGlobalForError = false;
+  let batchModeForError = false;
+
   try {
     const GEMINI_API_KEY = Deno.env.get('GOOGLE_AI_STUDIO_GEMINI_API_KEY');
     if (!GEMINI_API_KEY) {
@@ -307,6 +312,11 @@ serve(async (req) => {
     // Parse body first to check for _seedKey
     const body = await req.json();
     const { uploadId, content, sourceUrl, fileType, isImage, title, filters, seedGlobal, _seedKey, batchMode } = body;
+
+    // Save minimal context for catch-block
+    uploadIdForError = typeof uploadId === 'string' ? uploadId : undefined;
+    seedGlobalForError = seedGlobal === true;
+    batchModeForError = batchMode === true;
     
     // Check for admin seeding access via _seedKey
     const isAdminSeed = _seedKey && _seedKey === GEMINI_API_KEY;
@@ -1119,7 +1129,8 @@ CRITICAL RULES:
     }
 
     // Generate images in background AFTER returning response
-    if (createdRecipes.length > 0) {
+    // Skip image generation for batchMode imports to reduce API usage and avoid quota/rate-limit issues.
+    if (createdRecipes.length > 0 && !batchMode) {
       EdgeRuntime.waitUntil(
         generateRecipeImagesInBackground(createdRecipes, supabaseUrl, supabaseServiceKey, GEMINI_API_KEY)
       );
@@ -1137,17 +1148,24 @@ CRITICAL RULES:
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error parsing recipe:', errorMessage);
+
+    const isRateLimit =
+      /\[429\s/i.test(errorMessage) ||
+      /too many requests/i.test(errorMessage) ||
+      /quota exceeded/i.test(errorMessage);
+
+    const statusCode = isRateLimit ? 429 : 500;
     
     try {
-      const { uploadId } = await req.clone().json();
-      if (uploadId) {
+      // Only update upload status when this request actually had an uploadId (not batchMode YouTube imports)
+      if (!seedGlobalForError && uploadIdForError) {
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
         const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
         await supabase.from('uploads').update({
           status: 'failed',
           error_message: errorMessage,
-        }).eq('id', uploadId);
+        }).eq('id', uploadIdForError);
       }
     } catch (e) {
       console.error('Failed to update upload status:', e);
@@ -1155,7 +1173,7 @@ CRITICAL RULES:
 
     return new Response(
       JSON.stringify({ success: false, error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: statusCode, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
