@@ -221,7 +221,8 @@ serve(async (req) => {
         console.log(`✅ Scaled: ${recipe.title} -> ${toServings} servings, "${newServingSize}"`);
 
         // Small delay to avoid rate limits
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Longer delay to avoid rate limits
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
       } catch (error) {
         console.error(`❌ Failed ${recipe.title}:`, error);
