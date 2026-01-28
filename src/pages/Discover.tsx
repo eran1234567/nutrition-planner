@@ -307,23 +307,37 @@ export default function Discover() {
   const setSelectedTime = useCallback((value: string | null) => updateSearchParams('time', value), [updateSearchParams]);
   const setSelectedMealType = useCallback((value: string | null) => updateSearchParams('meal', value), [updateSearchParams]);
   const setSelectedCuisine = useCallback((value: string | null) => updateSearchParams('cuisine', value), [updateSearchParams]);
-  const setSelectedDietType = useCallback((value: string | null) => updateSearchParams('diet', value), [updateSearchParams]);
+  // Track if user has explicitly cleared the diet filter in this session
+  const [dietExplicitlyCleared, setDietExplicitlyCleared] = useState(false);
+  
+  const setSelectedDietType = useCallback((value: string | null) => {
+    if (value === null) {
+      setDietExplicitlyCleared(true);
+    }
+    updateSearchParams('diet', value);
+  }, [updateSearchParams]);
   const setSelectedAllergies = useCallback((value: string[]) => updateSearchParams('allergies', value), [updateSearchParams]);
   const setSelectedDislikes = useCallback((value: string[]) => updateSearchParams('dislikes', value), [updateSearchParams]);
   const setSelectedHealthConsiderations = useCallback((value: string[]) => updateSearchParams('health', value), [updateSearchParams]);
   const setRecipeSource = useCallback((value: 'all' | 'my' | 'app') => updateSearchParams('source', value === 'all' ? null : value), [updateSearchParams]);
 
   // Combine profile diet type with dropdown selection (dropdown takes priority)
-  const activeDietType = selectedDietType || (effectiveDietType === 'none' ? null : effectiveDietType);
+  // If user explicitly cleared the filter, don't auto-apply profile/calculator diet
+  const activeDietType = dietExplicitlyCleared 
+    ? selectedDietType 
+    : (selectedDietType || (effectiveDietType === 'none' ? null : effectiveDietType));
   const userDietType = (activeDietType || 'none').toLowerCase();
 
   // If the macro calculator selected a diet, sync it into the URL so the dropdown
   // is selected and the filter persists across refresh/share.
+  // Only do this once on initial load, not after user clears the filter.
+  const hasSyncedDiet = useRef(false);
   useEffect(() => {
-    if (!selectedDietType && calculatorDietType) {
+    if (!hasSyncedDiet.current && !selectedDietType && calculatorDietType && !dietExplicitlyCleared) {
+      hasSyncedDiet.current = true;
       updateSearchParams('diet', calculatorDietType);
     }
-  }, [selectedDietType, calculatorDietType, updateSearchParams]);
+  }, [selectedDietType, calculatorDietType, dietExplicitlyCleared, updateSearchParams]);
 
   const dietExclusions: Record<string, string[]> = {
     vegan: ['chicken', 'beef', 'pork', 'lamb', 'fish', 'salmon', 'tuna', 'shrimp', 'prawn', 'lobster', 'crab', 'shellfish', 'seafood', 'meat', 'bacon', 'ham', 'sausage', 'turkey', 'duck', 'veal', 'steak', 'egg', 'eggs', 'dairy', 'milk', 'cheese', 'butter', 'cream', 'yogurt', 'honey', 'cod', 'tilapia', 'halibut', 'mackerel', 'sardine', 'anchovy', 'trout', 'bass', 'snapper', 'mahi', 'swordfish', 'catfish', 'flounder', 'sole', 'haddock', 'perch', 'pike', 'scallop', 'mussel', 'clam', 'oyster', 'calamari', 'squid', 'octopus', 'crawfish', 'crayfish'],
