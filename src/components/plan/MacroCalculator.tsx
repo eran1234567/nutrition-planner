@@ -1141,7 +1141,7 @@ export function MacroCalculator({ open, onOpenChange, onApply }: MacroCalculator
                 <ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
                 Back
               </Button>
-              <Button size="sm" className="flex-1" onClick={handleApply} disabled={!!warning}>
+              <Button size="sm" className="flex-1" onClick={handleApply}>
                 Apply These
               </Button>
             </div>
