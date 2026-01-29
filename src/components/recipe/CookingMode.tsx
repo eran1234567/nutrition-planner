@@ -253,20 +253,42 @@ export function CookingMode({
           <div className="space-y-6">
             <h2 className="text-lg font-bold">Instructions</h2>
             
+            {/* Always show Main/Base ingredients at the top before any steps */}
+            {ingredientsBySection['Main'] && ingredientsBySection['Main'].length > 0 && (
+              <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg">
+                <h4 className="text-xs font-semibold text-primary uppercase tracking-wide mb-2">
+                  Gather These Ingredients
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {ingredientsBySection['Main'].map((ing, i) => (
+                    <span
+                      key={i}
+                      className="text-xs px-2 py-1 bg-background rounded-full border"
+                    >
+                      {ing.quantity && `${formatQuantity(ing.quantity * servingMultiplier)} `}
+                      {ing.unit && `${ing.unit} `}
+                      {ing.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            
             {steps.map((step) => {
               const isCompleted = completedSteps.has(step.step_number);
               
-              // Check if this step introduces a new ingredient section
+              // Check if this step introduces a new ingredient section (skip 'Main' as it's shown above)
               const introducesSection = step.introduces_section;
-              const sectionIngredients = introducesSection ? ingredientsBySection[introducesSection] : null;
+              const shouldShowSection = introducesSection && introducesSection !== 'Main';
+              const sectionIngredients = shouldShowSection ? ingredientsBySection[introducesSection] : null;
               
               return (
                 <div key={step.step_number}>
-                  {/* Contextual ingredients for this section */}
-                  {introducesSection && sectionIngredients && sectionIngredients.length > 0 && (
+                  {/* Contextual ingredients for this section (not Main) */}
+                  {shouldShowSection && sectionIngredients && sectionIngredients.length > 0 && (
                     <div className="mb-4 p-3 bg-primary/5 border border-primary/20 rounded-lg">
                       <h4 className="text-xs font-semibold text-primary uppercase tracking-wide mb-2">
-                        {introducesSection === 'Main' ? 'Gather These Ingredients' : `For the ${introducesSection}`}
+                        For the {introducesSection}
                       </h4>
                       <div className="flex flex-wrap gap-2">
                         {sectionIngredients.map((ing, i) => (
