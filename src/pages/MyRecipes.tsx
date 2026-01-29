@@ -18,7 +18,8 @@ import {
   ArrowLeft,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  PenLine
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useRecipeImport, isYouTubeChannelOrPlaylist } from '@/hooks/useRecipeImport';
+import { RecipeCreatorDrawer } from '@/components/recipe/RecipeCreatorDrawer';
 
 
 interface UploadedItem {
@@ -52,6 +54,7 @@ const MyRecipes = () => {
   const [uploads, setUploads] = useState<UploadedItem[]>([]);
   const [showLinkInput, setShowLinkInput] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
+  const [showCreator, setShowCreator] = useState(false);
   
   // Delete progress tracking
   const [deletingUploadId, setDeletingUploadId] = useState<string | null>(null);
@@ -562,32 +565,46 @@ const MyRecipes = () => {
 
       {/* Content */}
       <div className="px-4 py-6 space-y-6">
-        {/* Upload Options */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Upload Options - now includes Create */}
+        <div className="grid grid-cols-3 gap-3">
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowCreator(true)}
+            className="flex flex-col items-center justify-center p-4 rounded-2xl border-2 border-primary bg-primary/5 hover:bg-primary/10 transition-all"
+          >
+            <PenLine className="w-7 h-7 text-primary mb-2" />
+            <span className="text-sm font-medium text-foreground">
+              {t('myRecipes.createOwn', 'Create')}
+            </span>
+            <span className="text-xs text-muted-foreground mt-0.5">
+              {t('myRecipes.createHint', 'Your own recipe')}
+            </span>
+          </motion.button>
+
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => fileInputRef.current?.click()}
-            className="flex flex-col items-center justify-center p-6 rounded-2xl border-2 border-dashed border-border bg-card hover:border-primary hover:bg-primary/5 transition-all"
+            className="flex flex-col items-center justify-center p-4 rounded-2xl border-2 border-dashed border-border bg-card hover:border-primary hover:bg-primary/5 transition-all"
           >
-            <Upload className="w-8 h-8 text-primary mb-2" />
+            <Upload className="w-7 h-7 text-primary mb-2" />
             <span className="text-sm font-medium text-foreground">
-              {t('myRecipes.uploadFiles', 'Upload Files')}
+              {t('myRecipes.uploadFiles', 'Upload')}
             </span>
-            <span className="text-xs text-muted-foreground mt-1">
-              {t('myRecipes.filesHint', 'Photos, PDFs, screenshots')}
+            <span className="text-xs text-muted-foreground mt-0.5">
+              {t('myRecipes.filesHint', 'Photos, PDFs')}
             </span>
           </motion.button>
 
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => cameraInputRef.current?.click()}
-            className="flex flex-col items-center justify-center p-6 rounded-2xl border-2 border-dashed border-border bg-card hover:border-primary hover:bg-primary/5 transition-all"
+            className="flex flex-col items-center justify-center p-4 rounded-2xl border-2 border-dashed border-border bg-card hover:border-primary hover:bg-primary/5 transition-all"
           >
-            <Camera className="w-8 h-8 text-primary mb-2" />
+            <Camera className="w-7 h-7 text-primary mb-2" />
             <span className="text-sm font-medium text-foreground">
-              {t('myRecipes.takePhoto', 'Take Photo')}
+              {t('myRecipes.takePhoto', 'Photo')}
             </span>
-            <span className="text-xs text-muted-foreground mt-1">
+            <span className="text-xs text-muted-foreground mt-0.5">
               {t('myRecipes.cameraHint', 'Snap a recipe')}
             </span>
           </motion.button>
@@ -882,6 +899,14 @@ const MyRecipes = () => {
         </div>
       </div>
 
+      {/* Recipe Creator Drawer */}
+      <RecipeCreatorDrawer
+        open={showCreator}
+        onOpenChange={setShowCreator}
+        onSuccess={() => {
+          loadUploads();
+        }}
+      />
 
       <BottomNav />
     </div>
