@@ -438,7 +438,12 @@ export default function RecipeDetail() {
   };
 
   const handleSaveEdit = (updatedRecipe: Recipe) => {
+    // Update local cache immediately for fast UI feedback
     queryClient.setQueryData(['recipe', id], updatedRecipe);
+    // Also invalidate to ensure fresh data on next fetch
+    queryClient.invalidateQueries({ queryKey: ['recipe', id] });
+    queryClient.invalidateQueries({ queryKey: ['global-recipes'] });
+    queryClient.invalidateQueries({ queryKey: ['user-recipes'] });
     setIsEditing(false);
   };
 
