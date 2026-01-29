@@ -231,12 +231,30 @@ export default function RecipeDetail() {
     return sections;
   }, [adjustedIngredients]);
 
-  // Get ordered section keys (Main first, then alphabetically)
+  // Get ordered section keys based on first appearance in ingredient order.
+  // (Main first, then by earliest order_index, then alpha as a stable tie-breaker)
   const sectionOrder = useMemo(() => {
     const keys = Object.keys(ingredientsBySection);
+
+    const minOrderIndexFor = (section: string) => {
+      if (section === 'Main') return -1;
+      const items = ingredientsBySection[section] ?? [];
+      let min = Number.POSITIVE_INFINITY;
+      for (const ing of items) {
+        const oi = (ing as any).order_index;
+        if (typeof oi === 'number' && Number.isFinite(oi)) {
+          min = Math.min(min, oi);
+        }
+      }
+      return Number.isFinite(min) ? min : Number.POSITIVE_INFINITY;
+    };
+
     return keys.sort((a, b) => {
       if (a === 'Main') return -1;
       if (b === 'Main') return 1;
+      const aMin = minOrderIndexFor(a);
+      const bMin = minOrderIndexFor(b);
+      if (aMin !== bMin) return aMin - bMin;
       return a.localeCompare(b);
     });
   }, [ingredientsBySection]);
