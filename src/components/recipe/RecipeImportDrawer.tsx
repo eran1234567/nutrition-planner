@@ -13,6 +13,7 @@ import {
   DrawerTitle,
 } from '@/components/ui/drawer';
 import { useRecipeImport } from '@/hooks/useRecipeImport';
+import { RecipeCreatorDrawer } from './RecipeCreatorDrawer';
 
 interface RecipeImportDrawerProps {
   open: boolean;
@@ -36,6 +37,7 @@ export function RecipeImportDrawer({
   const [showLinkInput, setShowLinkInput] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [isDragging, setIsDragging] = useState(false);
+  const [showCreator, setShowCreator] = useState(false);
 
   const { 
     importFromUrl, 
@@ -96,6 +98,7 @@ export function RecipeImportDrawer({
     onOpenChange(false);
     setShowLinkInput(false);
     setLinkUrl('');
+    setShowCreator(false);
   };
 
   const handleAddOption = (action: string) => {
@@ -110,8 +113,8 @@ export function RecipeImportDrawer({
         cameraInputRef.current?.click();
         break;
       case 'manual':
-        navigate('/recipe/new');
-        handleClose();
+        // Open the recipe creator drawer instead of navigating
+        setShowCreator(true);
         break;
     }
   };
@@ -296,6 +299,22 @@ export function RecipeImportDrawer({
         capture="environment"
         className="hidden"
         onChange={handleFileSelect}
+      />
+
+      {/* Recipe Creator Drawer */}
+      <RecipeCreatorDrawer
+        open={showCreator}
+        onOpenChange={(open) => {
+          setShowCreator(open);
+          if (!open) {
+            // Optionally close the import drawer too after creation
+          }
+        }}
+        onSuccess={(recipeId) => {
+          onImportComplete?.();
+          handleClose();
+          navigate(`/recipe/${recipeId}`);
+        }}
       />
     </>
   );
