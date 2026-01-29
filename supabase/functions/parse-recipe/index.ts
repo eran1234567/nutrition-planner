@@ -678,7 +678,10 @@ Respond with ONLY valid JSON (no markdown, no backticks):
   "serving_size": "<description of one serving WITHOUT the prefix '1 serving ='>"
 }`;
 
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+      const model = genAI.getGenerativeModel({ 
+        model: 'gemini-2.0-flash',
+        generationConfig: { temperature: 0 }, // Deterministic output for consistent macros
+      });
       const result = await model.generateContent(nutritionPrompt);
       const aiContent = result.response.text();
       
@@ -1414,7 +1417,10 @@ ${transcript}`;
     console.log(`Calling Gemini with model: ${modelName}`);
     const aiStartTime = Date.now();
     
-    const model = genAI.getGenerativeModel({ model: modelName });
+    const model = genAI.getGenerativeModel({ 
+      model: modelName,
+      generationConfig: { temperature: 0 }, // Deterministic output for consistent macros
+    });
     
     let result;
     try {
