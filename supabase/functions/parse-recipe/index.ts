@@ -634,7 +634,7 @@ serve(async (req) => {
       // Extract original nutrition if provided for context
       const originalNutrition = body.originalNutrition || null;
       
-      const nutritionPrompt = `You are a certified nutritionist. Calculate ACCURATE macros for this recipe per serving.
+      const nutritionPrompt = `You are a certified nutritionist. Calculate ACCURATE macros for this recipe per serving AND generate a human-readable serving size description.
 
 CRITICAL RULES:
 1. Use USDA Food Database values as your reference
@@ -652,6 +652,12 @@ STANDARD CALORIE REFERENCES (use these!):
 - 1 medium avocado = 240 cal, 3g protein, 12g carbs, 22g fat
 - 100g chicken breast = 165 cal, 31g protein, 0g carbs, 3.6g fat
 
+SERVING SIZE DESCRIPTION RULES:
+- Describe what ONE serving looks like using discrete, countable portions
+- Use format: "1 serving = X eggs + Y slices bread with avocado"
+- Prioritize: countable pieces > volume measurements > weight
+- Examples: "2 meatballs + 1 cup pasta", "1 chicken breast + 1.5 cups rice"
+
 Recipe to analyze:
 ${content}
 
@@ -667,7 +673,8 @@ Respond with ONLY valid JSON (no markdown, no backticks):
     "sodium_mg": <integer>,
     "saturated_fat_g": <integer>,
     "cholesterol_mg": <integer>
-  }
+  },
+  "serving_size": "<human readable description of one serving>"
 }`;
 
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
@@ -683,11 +690,13 @@ Respond with ONLY valid JSON (no markdown, no backticks):
         const parsed = JSON.parse(cleanContent);
         
         console.log('AI nutrition result:', JSON.stringify(parsed.nutrition));
+        console.log('AI serving_size:', parsed.serving_size);
         
         return new Response(
           JSON.stringify({
             success: true,
             nutrition: parsed.nutrition || null,
+            serving_size: parsed.serving_size || null,
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
