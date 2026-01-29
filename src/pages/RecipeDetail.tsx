@@ -747,7 +747,7 @@ export default function RecipeDetail() {
                       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
                         {step.step_number}
                       </div>
-                      <p className="text-foreground pt-1">{step.instruction}</p>
+                      <p className="text-foreground pt-1" dangerouslySetInnerHTML={{ __html: step.instruction }} />
                     </li>
                   ))}
                 </ol>
