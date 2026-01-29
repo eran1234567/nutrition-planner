@@ -979,10 +979,43 @@ PORTION CONTROL
 - Main dish servings should be 400-600 kcal unless high-protein/athlete meal
 
 ═══════════════════════════════════════════════════════════════
+SMART ESTIMATION FOR VAGUE MEASUREMENTS (CRITICAL)
+═══════════════════════════════════════════════════════════════
+When extracting recipes from Reels, social posts, or informal sources:
+- If a recipe has vague measurements (e.g., "a splash," "some," "a pinch," "to taste,"
+  "a drizzle," "handful," "a bit"), use your culinary knowledge to provide REALISTIC
+  estimated numeric values and units based on:
+  - The weight/quantity of the main protein
+  - Total number of servings
+  - Typical culinary ratios for that cuisine/dish type
+- NEVER return null or empty values for ingredient quantities or units
+- ALWAYS provide a best-estimate for every ingredient to enable accurate macro calculation
+
+Common conversions for vague terms:
+- "a splash" → 1-2 tbsp (for liquids like soy sauce, vinegar)
+- "a drizzle" → 1-2 tbsp (for oils)
+- "a pinch" → 1/8 tsp
+- "to taste" (salt) → 1/4 tsp for 4 servings
+- "some" → estimate based on dish context
+- "handful" → 1/4 cup for leafy greens, 2 tbsp for nuts/seeds
+
+═══════════════════════════════════════════════════════════════
+INGREDIENT SECTIONS/CATEGORIES (MULTI-PART RECIPES)
+═══════════════════════════════════════════════════════════════
+For recipes with distinct parts (e.g., main dish + marinade + sauce + dressing):
+- Assign each ingredient a "section" field indicating its category
+- Common sections: "Main", "Marinade", "Sauce", "Dressing", "Topping", "Garnish",
+  "Spice Rub", "Glaze", "Filling", "Crust", "Batter"
+- For simple recipes with no distinct parts, use "Main" for all ingredients
+- This enables the UI to group and display ingredients under clear headings
+
+═══════════════════════════════════════════════════════════════
 EXTERNAL CONTENT INGESTION (URLs, images, documents)
 ═══════════════════════════════════════════════════════════════
 If extracting from external content:
 - Extract ingredients, cooking method, servings, and nutrition if available
+- Apply SMART ESTIMATION for any vague or missing measurements
+- Group ingredients by section if recipe has multiple parts
 - Reconstruct missing macros based on ingredients if unavoidable
 - Normalize into the standard output structure
 - Validate against filters, diet rules, allergies, dislikes, and health rules
@@ -1051,7 +1084,7 @@ Always respond with valid JSON only, no markdown code blocks or explanation.`;
       "is_meal_prep_friendly": true,
       "is_budget_friendly": true,
       "ingredients": [
-        { "name": "ingredient name", "quantity": 2, "unit": "cups", "aisle": "Produce|Meat|Dairy|Bakery|Canned Goods|Spices|Oils|Health Foods|Frozen|Beverages" }
+        { "name": "ingredient name", "quantity": 2, "unit": "cups", "aisle": "Produce|Meat|Dairy|Bakery|Canned Goods|Spices|Oils|Health Foods|Frozen|Beverages", "section": "Main|Marinade|Sauce|Dressing|Topping|Garnish|Spice Rub|Glaze|Filling" }
       ],
       "steps": [
         "Step 1 instruction with specific details",
@@ -1083,20 +1116,22 @@ Always respond with valid JSON only, no markdown code blocks or explanation.`;
 
 CRITICAL RULES:
 1. Extract ALL recipes from the document
-2. Extract EVERY ingredient with exact quantities
-3. Calculate ACCURATE nutrition per serving (calories ±2%)
-4. SERVINGS RULE (CRITICAL - DO NOT IGNORE):
+2. Extract EVERY ingredient with exact quantities - NEVER leave quantity or unit null
+3. If vague measurements found (e.g., "a splash", "some", "to taste"), ESTIMATE realistic values
+4. Calculate ACCURATE nutrition per serving (calories ±2%)
+5. SERVINGS RULE (CRITICAL - DO NOT IGNORE):
    - FIRST: If the chef explicitly states a number (e.g., "makes 5 bowls", "serves 3", "5 meals"), use THAT EXACT NUMBER
    - SECOND: If the video shows containers being filled, COUNT them and use that number
    - THIRD: If "meal prep" is mentioned but no number given, DEFAULT TO 5 (Mon-Fri work week)
    - NEVER default to 4 unless the chef specifically says "family of 4" or "4 servings"
    - DO NOT calculate servings from ingredient weight - LISTEN to the chef
-5. For countable items (meatballs, patties, etc), include units_info
-6. Only add diet_tags and health_tags if recipe FULLY complies with rules
-7. Include serving_size as a human-readable portion description
-8. MINIMIZE sodium by default (< 600mg unless health filter requires lower)
-9. If no recipes found, return: { "recipes": [], "error": "Could not extract recipe information" }
-10. Include "servings_source" field with the exact quote or observation that determined the serving count`;
+6. For countable items (meatballs, patties, etc), include units_info
+7. Only add diet_tags and health_tags if recipe FULLY complies with rules
+8. Include serving_size as a human-readable portion description
+9. MINIMIZE sodium by default (< 600mg unless health filter requires lower)
+10. If no recipes found, return: { "recipes": [], "error": "Could not extract recipe information" }
+11. Include "servings_source" field with the exact quote or observation that determined the serving count
+12. Assign each ingredient a "section" field (e.g., "Main", "Marinade", "Sauce") for multi-part recipes`;
 
 
     // Build prompt and call Gemini
