@@ -1436,6 +1436,11 @@ ${transcript}`;
         ? recipe.serving_size.trim().substring(0, 100)
         : null;
       
+      // Sanitize source_url for storage
+      const sanitizedSourceUrl = (typeof sourceUrl === 'string' && sourceUrl.trim())
+        ? sourceUrl.trim().substring(0, 2000)
+        : null;
+
       const { data: newRecipe, error: recipeError } = await supabase
         .from('recipes')
         .insert({
@@ -1453,6 +1458,7 @@ ${transcript}`;
           is_kid_friendly: typeof recipe.is_kid_friendly === 'boolean' ? recipe.is_kid_friendly : false,
           is_meal_prep_friendly: typeof recipe.is_meal_prep_friendly === 'boolean' ? recipe.is_meal_prep_friendly : false,
           is_budget_friendly: typeof recipe.is_budget_friendly === 'boolean' ? recipe.is_budget_friendly : false,
+          source_url: sanitizedSourceUrl,
         })
         .select()
         .single();

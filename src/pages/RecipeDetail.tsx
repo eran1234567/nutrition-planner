@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { motion } from 'framer-motion';
-import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Loader2, Pencil, Leaf, Fish, Drumstick, Sun, CalendarPlus, Trash2, Heart, Droplets, Activity, Globe, Pizza, UtensilsCrossed, Soup, Cherry } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Loader2, Pencil, Leaf, Fish, Drumstick, Sun, CalendarPlus, Trash2, Heart, Droplets, Activity, Globe, Pizza, UtensilsCrossed, Soup, Cherry, PlayCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -24,6 +24,8 @@ import {
 import { BottomNav } from '@/components/layout/BottomNav';
 import { RecipeEditor } from '@/components/recipe/RecipeEditor';
 import { AddToPlanModal } from '@/components/plan/AddToPlanModal';
+import { VideoHero } from '@/components/recipe/VideoHero';
+import { CookingMode } from '@/components/recipe/CookingMode';
 import { useRecipeById } from '@/hooks/useGlobalRecipes';
 import { useMealPlanStore } from '@/stores/mealPlanStore';
 import { useQueryClient } from '@tanstack/react-query';
@@ -113,6 +115,7 @@ export default function RecipeDetail() {
   const [isEditing, setIsEditing] = useState(false);
   const [showAddToPlanModal, setShowAddToPlanModal] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [showCookingMode, setShowCookingMode] = useState(false);
 
   // Get requested servings from URL (for coming from Plan page)
   // This is the actual number of servings needed, not a multiplier
@@ -460,25 +463,38 @@ export default function RecipeDetail() {
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      {/* Hero Image */}
-      <div className="relative h-72 overflow-hidden">
-        <img
-          src={recipe.image_url || '/placeholder.svg'}
-          alt={recipe.title}
-          className="w-full h-full object-cover"
+      {/* Cooking Mode Overlay */}
+      <AnimatePresence>
+        {showCookingMode && recipe && (
+          <CookingMode
+            title={recipe.title}
+            sourceUrl={recipe.source_url || null}
+            ingredients={adjustedIngredients}
+            steps={recipe.steps || []}
+            servingMultiplier={servingMultiplier}
+            onClose={() => setShowCookingMode(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Video/Image Hero */}
+      <div className="relative">
+        <VideoHero
+          sourceUrl={recipe.source_url || null}
+          imageUrl={recipe.image_url || null}
+          title={recipe.title}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
         
         {/* Back button */}
         <button
           onClick={() => navigate(-1)}
-          className="absolute top-4 left-4 w-10 h-10 rounded-full bg-card/90 backdrop-blur flex items-center justify-center"
+          className="absolute top-4 left-4 w-10 h-10 rounded-full bg-card/90 backdrop-blur flex items-center justify-center z-10"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
 
         {/* Edit and Add buttons */}
-        <div className="absolute top-4 right-4 flex gap-2">
+        <div className="absolute top-4 right-4 flex gap-2 z-10">
           {isUserRecipe && !isEditing && (
             <button
               onClick={() => setIsEditing(true)}
@@ -678,6 +694,19 @@ export default function RecipeDetail() {
               </div>
             </div>
           )}
+
+          {/* Start Cooking Button */}
+          {recipe.steps && recipe.steps.length > 0 && (
+            <Button
+              onClick={() => setShowCookingMode(true)}
+              className="w-full h-14 mb-6 text-lg font-semibold gradient-primary"
+              size="lg"
+            >
+              <PlayCircle className="w-6 h-6 mr-2" />
+              Start Cooking
+            </Button>
+          )}
+
 
           {/* Description */}
           {recipe.description && (

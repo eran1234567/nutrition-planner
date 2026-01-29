@@ -665,6 +665,7 @@ export type Database = {
           scope: Database["public"]["Enums"]["scope_type"] | null
           serving_size: string | null
           servings: number | null
+          source_url: string | null
           title: string
           total_time: number | null
           updated_at: string | null
@@ -689,6 +690,7 @@ export type Database = {
           scope?: Database["public"]["Enums"]["scope_type"] | null
           serving_size?: string | null
           servings?: number | null
+          source_url?: string | null
           title: string
           total_time?: number | null
           updated_at?: string | null
@@ -713,6 +715,7 @@ export type Database = {
           scope?: Database["public"]["Enums"]["scope_type"] | null
           serving_size?: string | null
           servings?: number | null
+          source_url?: string | null
           title?: string
           total_time?: number | null
           updated_at?: string | null
