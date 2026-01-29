@@ -620,12 +620,65 @@ serve(async (req) => {
     
     // Parse body first to check for _seedKey
     const body = await req.json();
-    const { uploadId, content, sourceUrl, fileType, isImage, title, filters, seedGlobal, _seedKey, batchMode } = body;
+    const { uploadId, content, sourceUrl, fileType, isImage, title, filters, seedGlobal, _seedKey, batchMode, nutritionOnly } = body;
 
     // Save minimal context for catch-block
     uploadIdForError = typeof uploadId === 'string' ? uploadId : undefined;
     seedGlobalForError = seedGlobal === true;
     batchModeForError = batchMode === true;
+    
+    // Handle nutritionOnly mode - just calculate nutrition from ingredients and return
+    if (nutritionOnly === true && content) {
+      console.log('Nutrition-only mode: calculating macros from ingredients');
+      
+      const nutritionPrompt = `You are a nutrition expert. Calculate accurate macros for this recipe based on the ingredients provided.
+
+Analyze the following recipe and calculate ACCURATE nutrition facts PER SERVING:
+- Use USDA/professional nutrition databases as reference
+- Account for cooking methods (oil absorption, water loss, etc.)
+- Be precise with portion calculations
+
+${content}
+
+Respond with ONLY this JSON structure (no markdown):
+{
+  "nutrition": {
+    "calories": <number>,
+    "protein_g": <number>,
+    "carbs_g": <number>,
+    "fat_g": <number>,
+    "fiber_g": <number>,
+    "sugar_g": <number>,
+    "sodium_mg": <number>,
+    "saturated_fat_g": <number>,
+    "cholesterol_mg": <number>
+  }
+}`;
+
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+      const result = await model.generateContent(nutritionPrompt);
+      const aiContent = result.response.text();
+      
+      if (!aiContent) {
+        throw new Error('No response from AI');
+      }
+      
+      try {
+        const cleanContent = aiContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const parsed = JSON.parse(cleanContent);
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            nutrition: parsed.nutrition || null,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (parseError) {
+        console.error('Failed to parse nutrition response:', parseError);
+        throw new Error('Failed to calculate nutrition');
+      }
+    }
     
     // Check for admin seeding access via _seedKey
     const isAdminSeed = _seedKey && _seedKey === GEMINI_API_KEY;

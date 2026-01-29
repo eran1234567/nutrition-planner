@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, GripVertical, Save, X, Loader2, Camera, Upload, ImageIcon } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Save, X, Loader2, Camera, Upload, ImageIcon, ChevronUp, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -213,10 +213,100 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
     ));
   };
 
-  const calculateNutrition = async (ingredientsList: EditableIngredient[]) => {
-    // Simple estimation based on ingredient count and quantities
-    // In a real app, you'd use a nutrition API
+  // Reorder steps (move up/down)
+  const moveStep = (index: number, direction: 'up' | 'down') => {
+    const visibleStepsList = steps.filter(s => !s.isDeleted);
+    const visibleIndex = visibleStepsList.findIndex(s => s === steps[index]);
+    
+    if (direction === 'up' && visibleIndex === 0) return;
+    if (direction === 'down' && visibleIndex === visibleStepsList.length - 1) return;
+    
+    const swapVisibleIndex = direction === 'up' ? visibleIndex - 1 : visibleIndex + 1;
+    const swapStep = visibleStepsList[swapVisibleIndex];
+    const swapOriginalIndex = steps.findIndex(s => s === swapStep);
+    
+    const newSteps = [...steps];
+    [newSteps[index], newSteps[swapOriginalIndex]] = [newSteps[swapOriginalIndex], newSteps[index]];
+    setSteps(newSteps);
+  };
+
+  const calculateNutritionViaAI = async (ingredientsList: EditableIngredient[], stepsList: EditableStep[]) => {
+    // Build a recipe text from the current ingredients and steps for AI parsing
     const activeIngredients = ingredientsList.filter(i => !i.isDeleted && i.name.trim());
+    const activeSteps = stepsList.filter(s => !s.isDeleted && s.instruction.trim());
+    
+    if (activeIngredients.length === 0) {
+      return null; // No ingredients to calculate
+    }
+    
+    // Build content string for the AI
+    let content = `${recipe.title}\n\nServings: ${recipe.servings || 1}\n\n`;
+    content += 'Ingredients:\n';
+    activeIngredients.forEach(ing => {
+      const qty = ing.quantity ? `${ing.quantity} ` : '';
+      const unit = ing.unit ? `${ing.unit} ` : '';
+      content += `- ${qty}${unit}${ing.name}\n`;
+    });
+    
+    if (activeSteps.length > 0) {
+      content += '\nInstructions:\n';
+      activeSteps.forEach((step, idx) => {
+        content += `${idx + 1}. ${step.instruction}\n`;
+      });
+    }
+    
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-recipe`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.session.access_token}`,
+          },
+          body: JSON.stringify({
+            content,
+            isImage: false,
+            nutritionOnly: true, // Signal we only need nutrition recalculation
+          }),
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to calculate nutrition');
+      }
+      
+      const result = await response.json();
+      
+      if (result.nutrition) {
+        return {
+          calories: Math.round(result.nutrition.calories || 0),
+          protein_g: Math.round(result.nutrition.protein_g || 0),
+          carbs_g: Math.round(result.nutrition.carbs_g || 0),
+          fat_g: Math.round(result.nutrition.fat_g || 0),
+          fiber_g: Math.round(result.nutrition.fiber_g || 0),
+          sugar_g: Math.round(result.nutrition.sugar_g || 0),
+          sodium_mg: Math.round(result.nutrition.sodium_mg || 0),
+          saturated_fat_g: Math.round(result.nutrition.saturated_fat_g || 0),
+          cholesterol_mg: Math.round(result.nutrition.cholesterol_mg || 0),
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      if (import.meta.env.DEV) console.error('AI nutrition calculation failed:', error);
+      // Fallback to basic estimation
+      return calculateNutritionFallback(activeIngredients);
+    }
+  };
+  
+  const calculateNutritionFallback = (activeIngredients: EditableIngredient[]) => {
+    // Simple estimation as a fallback
     const baseCaloriesPerIngredient = 50;
     const baseProteinPerIngredient = 3;
     const baseCarbsPerIngredient = 8;
@@ -235,11 +325,17 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
       totalFat += baseFatPerIngredient * qty;
     });
     
+    const servings = recipe.servings || 1;
     return {
-      calories: Math.round(totalCalories / (recipe.servings || 4)),
-      protein_g: Math.round(totalProtein / (recipe.servings || 4)),
-      carbs_g: Math.round(totalCarbs / (recipe.servings || 4)),
-      fat_g: Math.round(totalFat / (recipe.servings || 4)),
+      calories: Math.round(totalCalories / servings),
+      protein_g: Math.round(totalProtein / servings),
+      carbs_g: Math.round(totalCarbs / servings),
+      fat_g: Math.round(totalFat / servings),
+      fiber_g: 0,
+      sugar_g: 0,
+      sodium_mg: 0,
+      saturated_fat_g: 0,
+      cholesterol_mg: 0,
     };
   };
 
@@ -354,21 +450,23 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
         }
       }
 
-      // Recalculate and update nutrition
-      const newNutrition = await calculateNutrition(activeIngredients);
+      // Recalculate and update nutrition via AI
+      const newNutrition = await calculateNutritionViaAI(activeIngredients, activeSteps);
       
-      if (recipe.nutrition?.id) {
-        await supabase
-          .from('recipe_nutrition')
-          .update(newNutrition)
-          .eq('id', recipe.nutrition.id);
-      } else {
-        await supabase
-          .from('recipe_nutrition')
-          .insert({
-            recipe_id: recipe.id,
-            ...newNutrition,
-          });
+      if (newNutrition) {
+        if (recipe.nutrition?.id) {
+          await supabase
+            .from('recipe_nutrition')
+            .update(newNutrition)
+            .eq('id', recipe.nutrition.id);
+        } else {
+          await supabase
+            .from('recipe_nutrition')
+            .insert({
+              recipe_id: recipe.id,
+              ...newNutrition,
+            });
+        }
       }
 
       // Update recipe image_url if changed
@@ -564,11 +662,34 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
         <div className="space-y-3">
           {visibleSteps.map((step, idx) => {
             const originalIdx = steps.findIndex(s => s === step);
+            const isFirst = idx === 0;
+            const isLast = idx === visibleSteps.length - 1;
             return (
-              <div key={originalIdx} className="flex gap-3">
+              <div key={originalIdx} className="flex gap-2 items-start p-2 bg-muted rounded-lg">
+                {/* Reorder controls */}
+                <div className="flex flex-col gap-0.5 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => moveStep(originalIdx, 'up')}
+                    disabled={isFirst}
+                    className={`p-0.5 rounded ${isFirst ? 'text-muted-foreground/30' : 'text-muted-foreground hover:text-foreground hover:bg-background'}`}
+                  >
+                    <ChevronUp className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveStep(originalIdx, 'down')}
+                    disabled={isLast}
+                    className={`p-0.5 rounded ${isLast ? 'text-muted-foreground/30' : 'text-muted-foreground hover:text-foreground hover:bg-background'}`}
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </div>
+                {/* Step number */}
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
                   {idx + 1}
                 </div>
+                {/* Instruction textarea */}
                 <div className="flex-1 flex gap-2">
                   <Textarea
                     placeholder="Instruction..."
