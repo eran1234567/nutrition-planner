@@ -261,20 +261,29 @@ export function CookingMode({
                     ? 'Base'
                     : null;
 
+              // Find if Main/Base has an explicit introduces_section mapping
+              const mainIntroStepNum = mainSectionKey
+                ? steps.find(s => s.introduces_section === mainSectionKey)?.step_number ?? null
+                : null;
+
+              // Only fallback to Step 1 if Main wasn't explicitly introduced elsewhere
+              const shouldRenderMainAtTopFallback = !!mainSectionKey && mainIntroStepNum === null;
+
               const renderedSections = new Set<string>();
 
               return steps.map((step) => {
               const isCompleted = completedSteps.has(step.step_number);
 
-              // For Step 1: show introduced section first (e.g. Marinade), then Main/Base.
               const introducesSection = step.introduces_section as string | null | undefined;
               const stepNum = step.step_number;
 
               const sectionsToRender: string[] = [];
-              if (introducesSection && introducesSection !== mainSectionKey) {
+              // Add explicitly introduced section (e.g., Marinade, Main)
+              if (introducesSection) {
                 sectionsToRender.push(introducesSection);
               }
-              if (stepNum === 1 && mainSectionKey) {
+              // Legacy fallback: if Main has no explicit mapping, show it at step 1
+              if (shouldRenderMainAtTopFallback && stepNum === 1 && mainSectionKey && !sectionsToRender.includes(mainSectionKey)) {
                 sectionsToRender.push(mainSectionKey);
               }
               
