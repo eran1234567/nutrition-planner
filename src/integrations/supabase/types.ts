@@ -590,18 +590,21 @@ export type Database = {
         Row: {
           id: string
           instruction: string
+          introduces_section: string | null
           recipe_id: string
           step_number: number
         }
         Insert: {
           id?: string
           instruction: string
+          introduces_section?: string | null
           recipe_id: string
           step_number: number
         }
         Update: {
           id?: string
           instruction?: string
+          introduces_section?: string | null
           recipe_id?: string
           step_number?: number
         }
