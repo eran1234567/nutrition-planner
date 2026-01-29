@@ -14,6 +14,7 @@ interface Ingredient {
 interface Step {
   step_number: number;
   instruction: string;
+  introduces_section?: string | null;
 }
 
 interface CookingModeProps {
@@ -97,15 +98,8 @@ export function CookingMode({
     return sections;
   }, [ingredients]);
 
-  // Sort sections so 'Main' comes first
-  const sectionOrder = useMemo(() => {
-    const sections = Object.keys(ingredientsBySection);
-    return sections.sort((a, b) => {
-      if (a === 'Main') return -1;
-      if (b === 'Main') return 1;
-      return 0;
-    });
-  }, [ingredientsBySection]);
+  // Get all section names for the collapsible summary
+  const sectionNames = useMemo(() => Object.keys(ingredientsBySection), [ingredientsBySection]);
 
   // Get YouTube embed URL
   const youtubeVideoId = sourceUrl ? getYouTubeVideoId(sourceUrl) : null;
@@ -231,9 +225,9 @@ export function CookingMode({
               📝 All Ingredients ({ingredients.length})
             </summary>
             <div className="p-4 pt-0 space-y-4">
-              {sectionOrder.map((section) => (
+              {sectionNames.map((section) => (
                 <div key={section}>
-                  {sectionOrder.length > 1 && (
+                  {sectionNames.length > 1 && (
                     <h4 className="text-xs font-medium text-primary uppercase tracking-wide mb-2">
                       {section}
                     </h4>
@@ -259,45 +253,23 @@ export function CookingMode({
           <div className="space-y-6">
             <h2 className="text-lg font-bold">Instructions</h2>
             
-            {steps.map((step, idx) => {
+            {steps.map((step) => {
               const isCompleted = completedSteps.has(step.step_number);
               
-              // Show section ingredients before the first step that might use them
-              // For simplicity, show the matching section before step 1 for "Main",
-              // and other sections when they might be contextually relevant
-              const showSection = idx === 0 && sectionOrder.length > 0 ? sectionOrder[0] : null;
+              // Check if this step introduces a new ingredient section
+              const introducesSection = step.introduces_section;
+              const sectionIngredients = introducesSection ? ingredientsBySection[introducesSection] : null;
               
               return (
                 <div key={step.step_number}>
                   {/* Contextual ingredients for this section */}
-                  {showSection && ingredientsBySection[showSection] && (
+                  {introducesSection && sectionIngredients && sectionIngredients.length > 0 && (
                     <div className="mb-4 p-3 bg-primary/5 border border-primary/20 rounded-lg">
                       <h4 className="text-xs font-semibold text-primary uppercase tracking-wide mb-2">
-                        {showSection === 'Main' ? 'Gather These Ingredients' : `For the ${showSection}`}
+                        {introducesSection === 'Main' ? 'Gather These Ingredients' : `For the ${introducesSection}`}
                       </h4>
                       <div className="flex flex-wrap gap-2">
-                        {ingredientsBySection[showSection].map((ing, i) => (
-                          <span
-                            key={i}
-                            className="text-xs px-2 py-1 bg-background rounded-full border"
-                          >
-                            {ing.quantity && `${formatQuantity(ing.quantity * servingMultiplier)} `}
-                            {ing.unit && `${ing.unit} `}
-                            {ing.name}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Show other sections at relevant steps */}
-                  {idx > 0 && sectionOrder[idx] && ingredientsBySection[sectionOrder[idx]] && (
-                    <div className="mb-4 p-3 bg-accent/50 border border-accent rounded-lg">
-                      <h4 className="text-xs font-semibold text-primary uppercase tracking-wide mb-2">
-                        For the {sectionOrder[idx]}
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {ingredientsBySection[sectionOrder[idx]].map((ing, i) => (
+                        {sectionIngredients.map((ing, i) => (
                           <span
                             key={i}
                             className="text-xs px-2 py-1 bg-background rounded-full border"
@@ -315,7 +287,7 @@ export function CookingMode({
                   <motion.div
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: idx * 0.05 }}
+                    transition={{ delay: step.step_number * 0.05 }}
                     className={cn(
                       'flex gap-4 p-4 rounded-xl transition-all cursor-pointer',
                       isCompleted

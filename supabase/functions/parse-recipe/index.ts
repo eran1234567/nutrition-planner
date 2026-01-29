@@ -1095,8 +1095,9 @@ Always respond with valid JSON only, no markdown code blocks or explanation.`;
         { "name": "ingredient name", "quantity": 2, "unit": "cups", "aisle": "Produce|Meat|Dairy|Bakery|Canned Goods|Spices|Oils|Health Foods|Frozen|Beverages", "section": "Main|Marinade|Sauce|Dressing|Topping|Garnish|Spice Rub|Glaze|Filling" }
       ],
       "steps": [
-        "Step 1 instruction with specific details",
-        "Step 2 instruction including portion info for discrete items"
+        { "instruction": "Step 1 instruction with specific details", "introduces_section": "Main" },
+        { "instruction": "Step 2 instruction including portion info for discrete items", "introduces_section": null },
+        { "instruction": "Step 3 - now we start making the sauce", "introduces_section": "Sauce" }
       ],
       "nutrition": {
         "calories": 485,
@@ -1139,7 +1140,15 @@ CRITICAL RULES:
 9. MINIMIZE sodium by default (< 600mg unless health filter requires lower)
 10. If no recipes found, return: { "recipes": [], "error": "Could not extract recipe information" }
 11. Include "servings_source" field with the exact quote or observation that determined the serving count
-12. Assign each ingredient a "section" field (e.g., "Main", "Marinade", "Sauce") for multi-part recipes`;
+12. Assign each ingredient a "section" field (e.g., "Main", "Marinade", "Sauce") for multi-part recipes
+13. STEP SECTION PLACEMENT (CRITICAL FOR UI):
+    - Each step can optionally have an "introduces_section" field
+    - Set "introduces_section" to the section name ONLY for the FIRST step where that section's ingredients are used
+    - The "Main" section should ALWAYS have introduces_section on step 1 (or whichever step actually starts using main ingredients)
+    - Example: If step 6 says "Meanwhile, whisk tehina ingredients", set introduces_section: "Creamy Tehina"
+    - Example: If step 7 says "Toss onion salad ingredients together", set introduces_section: "Onion Sumac Salad"
+    - For steps that don't introduce a new section, set introduces_section: null
+    - This tells the UI exactly when to show the section header with its ingredients`;
 
 
     // Build prompt and call Gemini
@@ -1490,16 +1499,30 @@ ${transcript}`;
         }
       }
 
-      // Steps
+      // Steps - now with introduces_section support
       if (Array.isArray(recipe.steps) && recipe.steps.length > 0) {
         const validSteps = recipe.steps
-          .filter((step: any) => typeof step === 'string' && step.trim())
-          .slice(0, 50)
-          .map((step: string, idx: number) => ({
-            recipe_id: newRecipe.id,
-            step_number: idx + 1,
-            instruction: step.trim().substring(0, 2000),
-          }));
+          .map((step: any, idx: number) => {
+            // Handle both string steps (legacy) and object steps (new format with introduces_section)
+            const instruction = typeof step === 'string' 
+              ? step.trim() 
+              : (typeof step?.instruction === 'string' ? step.instruction.trim() : '');
+            
+            if (!instruction) return null;
+            
+            const introducesSection = typeof step === 'object' && typeof step.introduces_section === 'string' 
+              ? step.introduces_section.trim().substring(0, 50) 
+              : null;
+            
+            return {
+              recipe_id: newRecipe.id,
+              step_number: idx + 1,
+              instruction: instruction.substring(0, 2000),
+              introduces_section: introducesSection,
+            };
+          })
+          .filter((step: any) => step !== null)
+          .slice(0, 50);
         
         if (validSteps.length > 0) {
           relatedPromises.push(supabase.from('recipe_steps').insert(validSteps));

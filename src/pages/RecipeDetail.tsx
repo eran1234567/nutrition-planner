@@ -767,18 +767,48 @@ export default function RecipeDetail() {
                 })}
               </div>
 
-              {/* Steps */}
+              {/* Steps with contextual ingredient sections */}
               <div className="mb-6">
                 <h3 className="text-sm font-semibold mb-3">{t('recipes.instructions')}</h3>
                 <ol className="space-y-4">
-                  {recipe.steps?.map((step) => (
-                    <li key={step.step_number} className="flex gap-4">
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
-                        {step.step_number}
-                      </div>
-                      <p className="text-foreground pt-1" dangerouslySetInnerHTML={{ __html: step.instruction }} />
-                    </li>
-                  ))}
+                  {recipe.steps?.map((step) => {
+                    // Check if this step introduces a new ingredient section
+                    const introducesSection = (step as any).introduces_section;
+                    const sectionIngredients = introducesSection ? ingredientsBySection[introducesSection] : null;
+                    
+                    return (
+                      <li key={step.step_number}>
+                        {/* Show section header if this step introduces a new section */}
+                        {introducesSection && sectionIngredients && sectionIngredients.length > 0 && (
+                          <div className="mb-4 p-3 bg-primary/5 border border-primary/20 rounded-lg">
+                            <h4 className="text-xs font-semibold text-primary uppercase tracking-wide mb-2">
+                              {introducesSection === 'Main' ? 'Gather These Ingredients' : `For the ${introducesSection}`}
+                            </h4>
+                            <div className="flex flex-wrap gap-2">
+                              {sectionIngredients.map((ing, i) => (
+                                <span
+                                  key={i}
+                                  className="text-xs px-2 py-1 bg-background rounded-full border"
+                                >
+                                  {ing.quantity && `${formatQuantity(ing.quantity)} `}
+                                  {ing.unit && `${ing.unit} `}
+                                  {ing.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Step instruction */}
+                        <div className="flex gap-4">
+                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
+                            {step.step_number}
+                          </div>
+                          <p className="text-foreground pt-1" dangerouslySetInnerHTML={{ __html: step.instruction }} />
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ol>
               </div>
 
