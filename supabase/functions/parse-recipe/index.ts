@@ -631,27 +631,42 @@ serve(async (req) => {
     if (nutritionOnly === true && content) {
       console.log('Nutrition-only mode: calculating macros from ingredients');
       
-      const nutritionPrompt = `You are a nutrition expert. Calculate accurate macros for this recipe based on the ingredients provided.
+      // Extract original nutrition if provided for context
+      const originalNutrition = body.originalNutrition || null;
+      
+      const nutritionPrompt = `You are a certified nutritionist. Calculate ACCURATE macros for this recipe per serving.
 
-Analyze the following recipe and calculate ACCURATE nutrition facts PER SERVING:
-- Use USDA/professional nutrition databases as reference
-- Account for cooking methods (oil absorption, water loss, etc.)
-- Be precise with portion calculations
+CRITICAL RULES:
+1. Use USDA Food Database values as your reference
+2. Be EXTREMELY precise - a medium tomato is ~22 calories, an egg is ~70 calories
+3. Calculate the TOTAL recipe nutrition, then divide by servings
+4. Do NOT wildly change values for small ingredient changes
+${originalNutrition ? `5. Previous nutrition was: ${JSON.stringify(originalNutrition)} - only adjust proportionally for ingredient changes` : ''}
 
+STANDARD CALORIE REFERENCES (use these!):
+- 1 large egg = 70 cal, 6g protein, 0.5g carbs, 5g fat
+- 1 medium tomato = 22 cal, 1g protein, 5g carbs, 0.2g fat  
+- 1 slice bread = 80 cal, 3g protein, 15g carbs, 1g fat
+- 1 tbsp olive oil = 120 cal, 0g protein, 0g carbs, 14g fat
+- 1 tbsp butter = 100 cal, 0g protein, 0g carbs, 11g fat
+- 1 medium avocado = 240 cal, 3g protein, 12g carbs, 22g fat
+- 100g chicken breast = 165 cal, 31g protein, 0g carbs, 3.6g fat
+
+Recipe to analyze:
 ${content}
 
-Respond with ONLY this JSON structure (no markdown):
+Respond with ONLY valid JSON (no markdown, no backticks):
 {
   "nutrition": {
-    "calories": <number>,
-    "protein_g": <number>,
-    "carbs_g": <number>,
-    "fat_g": <number>,
-    "fiber_g": <number>,
-    "sugar_g": <number>,
-    "sodium_mg": <number>,
-    "saturated_fat_g": <number>,
-    "cholesterol_mg": <number>
+    "calories": <integer>,
+    "protein_g": <integer>,
+    "carbs_g": <integer>,
+    "fat_g": <integer>,
+    "fiber_g": <integer>,
+    "sugar_g": <integer>,
+    "sodium_mg": <integer>,
+    "saturated_fat_g": <integer>,
+    "cholesterol_mg": <integer>
   }
 }`;
 
@@ -666,6 +681,8 @@ Respond with ONLY this JSON structure (no markdown):
       try {
         const cleanContent = aiContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         const parsed = JSON.parse(cleanContent);
+        
+        console.log('AI nutrition result:', JSON.stringify(parsed.nutrition));
         
         return new Response(
           JSON.stringify({
