@@ -770,68 +770,74 @@ export default function RecipeDetail() {
               {/* Steps with contextual ingredient sections */}
               <div className="mb-6">
                 <h3 className="text-sm font-semibold mb-3">{t('recipes.instructions')}</h3>
-                
-                {/* Always show Main/Base ingredients at the top before any steps */}
-                {ingredientsBySection['Main'] && ingredientsBySection['Main'].length > 0 && (
-                  <div className="mb-4 p-3 bg-primary/5 border border-primary/20 rounded-lg">
-                    <h4 className="text-xs font-semibold text-primary uppercase tracking-wide mb-2">
-                      Gather These Ingredients
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {ingredientsBySection['Main'].map((ing, i) => (
-                        <span
-                          key={i}
-                          className="text-xs px-2 py-1 bg-background rounded-full border"
-                        >
-                          {ing.quantity && `${formatQuantity(ing.quantity)} `}
-                          {ing.unit && `${ing.unit} `}
-                          {ing.name}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
+
                 <ol className="space-y-4">
-                  {recipe.steps?.map((step) => {
-                    // Check if this step introduces a new ingredient section (skip 'Main' as it's shown above)
-                    const introducesSection = (step as any).introduces_section;
-                    const shouldShowSection = introducesSection && introducesSection !== 'Main';
-                    const sectionIngredients = shouldShowSection ? ingredientsBySection[introducesSection] : null;
-                    
-                    return (
-                      <li key={step.step_number}>
-                        {/* Show section header if this step introduces a new section (not Main) */}
-                        {shouldShowSection && sectionIngredients && sectionIngredients.length > 0 && (
-                          <div className="mb-4 p-3 bg-primary/5 border border-primary/20 rounded-lg">
-                            <h4 className="text-xs font-semibold text-primary uppercase tracking-wide mb-2">
-                              For the {introducesSection}
-                            </h4>
-                            <div className="flex flex-wrap gap-2">
-                              {sectionIngredients.map((ing, i) => (
-                                <span
-                                  key={i}
-                                  className="text-xs px-2 py-1 bg-background rounded-full border"
-                                >
-                                  {ing.quantity && `${formatQuantity(ing.quantity)} `}
-                                  {ing.unit && `${ing.unit} `}
-                                  {ing.name}
-                                </span>
-                              ))}
+                  {(() => {
+                    const mainSectionKey =
+                      ingredientsBySection['Main']?.length
+                        ? 'Main'
+                        : ingredientsBySection['Base']?.length
+                          ? 'Base'
+                          : null;
+
+                    const renderedSections = new Set<string>();
+
+                    return recipe.steps?.map((step) => {
+                      const introducesSection = (step as any).introduces_section as string | null | undefined;
+                      const stepNum = step.step_number;
+
+                      // For Step 1: if a section is introduced (e.g. Marinade), show it first,
+                      // then show Main/Base right after (before the step), so the user sees marinade first.
+                      const sectionsToRender: string[] = [];
+
+                      if (introducesSection && introducesSection !== mainSectionKey) {
+                        sectionsToRender.push(introducesSection);
+                      }
+
+                      if (stepNum === 1 && mainSectionKey) {
+                        sectionsToRender.push(mainSectionKey);
+                      }
+
+                      return (
+                        <li key={step.step_number}>
+                          {sectionsToRender
+                            .filter((section) => !!section && !renderedSections.has(section))
+                            .map((section) => {
+                              renderedSections.add(section);
+                              const sectionIngredients = ingredientsBySection[section];
+                              if (!sectionIngredients || sectionIngredients.length === 0) return null;
+
+                              const isMain = section === mainSectionKey;
+
+                              return (
+                                <div key={section} className="mb-4 p-3 bg-primary/5 border border-primary/20 rounded-lg">
+                                  <h4 className="text-xs font-semibold text-primary uppercase tracking-wide mb-2">
+                                    {isMain ? 'Gather These Ingredients' : `For the ${section}`}
+                                  </h4>
+                                  <div className="flex flex-wrap gap-2">
+                                    {sectionIngredients.map((ing, i) => (
+                                      <span key={i} className="text-xs px-2 py-1 bg-background rounded-full border">
+                                        {ing.quantity && `${formatQuantity(ing.quantity)} `}
+                                        {ing.unit && `${ing.unit} `}
+                                        {ing.name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                          {/* Step instruction */}
+                          <div className="flex gap-4">
+                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
+                              {step.step_number}
                             </div>
+                            <p className="text-foreground pt-1" dangerouslySetInnerHTML={{ __html: step.instruction }} />
                           </div>
-                        )}
-                        
-                        {/* Step instruction */}
-                        <div className="flex gap-4">
-                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
-                            {step.step_number}
-                          </div>
-                          <p className="text-foreground pt-1" dangerouslySetInnerHTML={{ __html: step.instruction }} />
-                        </div>
-                      </li>
-                    );
-                  })}
+                        </li>
+                      );
+                    });
+                  })()}
                 </ol>
               </div>
 

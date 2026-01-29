@@ -252,58 +252,59 @@ export function CookingMode({
           {/* Instructions with contextual ingredients */}
           <div className="space-y-6">
             <h2 className="text-lg font-bold">Instructions</h2>
-            
-            {/* Always show Main/Base ingredients at the top before any steps */}
-            {ingredientsBySection['Main'] && ingredientsBySection['Main'].length > 0 && (
-              <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg">
-                <h4 className="text-xs font-semibold text-primary uppercase tracking-wide mb-2">
-                  Gather These Ingredients
-                </h4>
-                <div className="flex flex-wrap gap-2">
-                  {ingredientsBySection['Main'].map((ing, i) => (
-                    <span
-                      key={i}
-                      className="text-xs px-2 py-1 bg-background rounded-full border"
-                    >
-                      {ing.quantity && `${formatQuantity(ing.quantity * servingMultiplier)} `}
-                      {ing.unit && `${ing.unit} `}
-                      {ing.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {steps.map((step) => {
+
+            {(() => {
+              const mainSectionKey =
+                ingredientsBySection['Main']?.length
+                  ? 'Main'
+                  : ingredientsBySection['Base']?.length
+                    ? 'Base'
+                    : null;
+
+              const renderedSections = new Set<string>();
+
+              return steps.map((step) => {
               const isCompleted = completedSteps.has(step.step_number);
-              
-              // Check if this step introduces a new ingredient section (skip 'Main' as it's shown above)
-              const introducesSection = step.introduces_section;
-              const shouldShowSection = introducesSection && introducesSection !== 'Main';
-              const sectionIngredients = shouldShowSection ? ingredientsBySection[introducesSection] : null;
+
+              // For Step 1: show introduced section first (e.g. Marinade), then Main/Base.
+              const introducesSection = step.introduces_section as string | null | undefined;
+              const stepNum = step.step_number;
+
+              const sectionsToRender: string[] = [];
+              if (introducesSection && introducesSection !== mainSectionKey) {
+                sectionsToRender.push(introducesSection);
+              }
+              if (stepNum === 1 && mainSectionKey) {
+                sectionsToRender.push(mainSectionKey);
+              }
               
               return (
                 <div key={step.step_number}>
-                  {/* Contextual ingredients for this section (not Main) */}
-                  {shouldShowSection && sectionIngredients && sectionIngredients.length > 0 && (
-                    <div className="mb-4 p-3 bg-primary/5 border border-primary/20 rounded-lg">
-                      <h4 className="text-xs font-semibold text-primary uppercase tracking-wide mb-2">
-                        For the {introducesSection}
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {sectionIngredients.map((ing, i) => (
-                          <span
-                            key={i}
-                            className="text-xs px-2 py-1 bg-background rounded-full border"
-                          >
-                            {ing.quantity && `${formatQuantity(ing.quantity * servingMultiplier)} `}
-                            {ing.unit && `${ing.unit} `}
-                            {ing.name}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  {sectionsToRender
+                    .filter((section) => !!section && !renderedSections.has(section))
+                    .map((section) => {
+                      renderedSections.add(section);
+                      const sectionIngredients = ingredientsBySection[section];
+                      if (!sectionIngredients || sectionIngredients.length === 0) return null;
+                      const isMain = section === mainSectionKey;
+
+                      return (
+                        <div key={section} className="mb-4 p-3 bg-primary/5 border border-primary/20 rounded-lg">
+                          <h4 className="text-xs font-semibold text-primary uppercase tracking-wide mb-2">
+                            {isMain ? 'Gather These Ingredients' : `For the ${section}`}
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {sectionIngredients.map((ing, i) => (
+                              <span key={i} className="text-xs px-2 py-1 bg-background rounded-full border">
+                                {ing.quantity && `${formatQuantity(ing.quantity * servingMultiplier)} `}
+                                {ing.unit && `${ing.unit} `}
+                                {ing.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                   
                   {/* Step card */}
                   <motion.div
@@ -341,7 +342,8 @@ export function CookingMode({
                   </motion.div>
                 </div>
               );
-            })}
+              });
+            })()}
           </div>
 
           {/* Completion message */}
