@@ -306,7 +306,11 @@ export default function RecipeDetail() {
     if (recipeDietTags.includes('paleo') || isPaleoFriendly) badges.push('paleo');
     
     // Mediterranean: auto-detect from ingredients or use tag
-    if (recipeDietTags.includes('mediterranean') || isMediterraneanFriendly) badges.push('mediterranean');
+    // BUT skip if cuisine is already Mediterranean (to avoid duplicate badge)
+    const cuisineIsMediterranean = recipe.cuisine?.toLowerCase() === 'mediterranean';
+    if (!cuisineIsMediterranean && (recipeDietTags.includes('mediterranean') || isMediterraneanFriendly)) {
+      badges.push('mediterranean');
+    }
     
     // Vegan, vegetarian, pescatarian: rely on tags
     ['vegan', 'vegetarian', 'pescatarian'].forEach(diet => {
