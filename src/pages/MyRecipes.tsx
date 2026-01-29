@@ -645,7 +645,7 @@ const MyRecipes = () => {
                 onClick={() => setShowLinkInput(true)}
               >
                 <Link2 className="w-4 h-4 mr-2" />
-                {t('myRecipes.addLink', 'Add Link (YouTube, websites)')}
+                {t('myRecipes.addLink', 'Add Link (YouTube, Instagram, websites)')}
               </Button>
             </motion.div>
           )}
