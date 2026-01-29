@@ -1007,6 +1007,10 @@ For recipes with distinct parts (e.g., main dish + marinade + sauce + dressing):
 - CRITICAL: If the source content (Instagram caption, video description, etc.) uses
   SPECIFIC SECTION NAMES (e.g., "Creamy Tehina", "Onion Sumac Salad", "Crispy Pita"),
   you MUST PRESERVE those exact names. Do NOT replace them with generic labels.
+- CRITICAL: PRESERVE THE ORIGINAL ORDER of sections as they appear in the source content.
+  List ingredients in the SAME SEQUENCE as the original recipe:
+  Example: If source shows "Marinade" → "Creamy Tehina" → "Onion Sumac Salad" → "Crispy Pita",
+  your ingredients array MUST follow that exact order, not alphabetical or arbitrary reordering.
 - Only use generic labels ("Main", "Marinade", "Sauce", "Dressing", "Topping", "Garnish",
   "Spice Rub", "Glaze", "Filling", "Crust", "Batter") when the source does not
   specify section names.
