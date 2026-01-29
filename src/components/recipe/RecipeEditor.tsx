@@ -471,7 +471,49 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
       const aiResult = await calculateNutritionViaAI(activeIngredients, activeSteps);
       
       if (aiResult) {
-        const { nutrition: newNutrition, serving_size: newServingSize } = aiResult;
+        const { nutrition: rawNutrition, serving_size: rawServingSize } = aiResult;
+
+        // If the user only added/increased ingredients (no removals/decreases), nutrition should not go down.
+        // This prevents counter-intuitive swings from the AI when making small additions (e.g. adding tomato).
+        const prevIngredients = (recipe.ingredients || []).filter((i: any) => (i?.name || '').trim());
+        const prevById = new Map<string, any>(prevIngredients.map((i: any) => [i.id, i]));
+        const activeById = new Map<string, EditableIngredient>(
+          activeIngredients.filter(i => !!i.id).map(i => [i.id as string, i])
+        );
+
+        const didAddOrIncrease = activeIngredients.some((ing) => {
+          if (!ing.name.trim()) return false;
+          if (!ing.id) return true; // new ingredient row
+          const prev = prevById.get(ing.id);
+          if (!prev) return true;
+          const prevQty = typeof prev.quantity === 'number' ? prev.quantity : Number(prev.quantity);
+          const nextQty = Number.parseFloat(ing.quantity);
+          return Number.isFinite(prevQty) && Number.isFinite(nextQty) && nextQty > prevQty + 1e-6;
+        });
+
+        const didRemoveOrDecrease = prevIngredients.some((prev: any) => {
+          const next = activeById.get(prev.id);
+          if (!next) return true; // removed
+          const prevQty = typeof prev.quantity === 'number' ? prev.quantity : Number(prev.quantity);
+          const nextQty = Number.parseFloat(next.quantity);
+          return Number.isFinite(prevQty) && Number.isFinite(nextQty) && nextQty < prevQty - 1e-6;
+        });
+
+        const newNutrition = { ...rawNutrition };
+        if (didAddOrIncrease && !didRemoveOrDecrease && recipe.nutrition) {
+          const prevCals = Math.round((recipe.nutrition.calories ?? 0) as number);
+          const prevP = Math.round((recipe.nutrition.protein_g ?? 0) as number);
+          const prevC = Math.round((recipe.nutrition.carbs_g ?? 0) as number);
+          const prevF = Math.round((recipe.nutrition.fat_g ?? 0) as number);
+          newNutrition.calories = Math.max(newNutrition.calories, prevCals);
+          newNutrition.protein_g = Math.max(newNutrition.protein_g, prevP);
+          newNutrition.carbs_g = Math.max(newNutrition.carbs_g, prevC);
+          newNutrition.fat_g = Math.max(newNutrition.fat_g, prevF);
+        }
+
+        const newServingSize = (rawServingSize || '')
+          .replace(/^\s*1\s*serving\s*=\s*/i, '')
+          .trim();
         
         // Update nutrition
         if (recipe.nutrition?.id) {

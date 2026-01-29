@@ -654,7 +654,8 @@ STANDARD CALORIE REFERENCES (use these!):
 
 SERVING SIZE DESCRIPTION RULES:
 - Describe what ONE serving looks like using discrete, countable portions
-- Use format: "1 serving = X eggs + Y slices bread with avocado"
+- IMPORTANT: Return ONLY the description (do NOT include the prefix "1 serving =")
+- Example output: "4 scrambled eggs + 1 slice keto bread with half avocado"
 - Prioritize: countable pieces > volume measurements > weight
 - Examples: "2 meatballs + 1 cup pasta", "1 chicken breast + 1.5 cups rice"
 
@@ -674,7 +675,7 @@ Respond with ONLY valid JSON (no markdown, no backticks):
     "saturated_fat_g": <integer>,
     "cholesterol_mg": <integer>
   },
-  "serving_size": "<human readable description of one serving>"
+  "serving_size": "<description of one serving WITHOUT the prefix '1 serving ='>"
 }`;
 
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
