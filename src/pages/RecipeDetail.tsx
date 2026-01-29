@@ -214,8 +214,32 @@ export default function RecipeDetail() {
     return recipe.ingredients.map(ing => ({
       ...ing,
       quantity: ing.quantity ? parseFloat((ing.quantity * servingMultiplier).toFixed(2)) : null,
+      section: (ing as any).section || 'Main', // Default to 'Main' if no section provided
     }));
   }, [recipe?.ingredients, servingMultiplier]);
+
+  // Group ingredients by section
+  const ingredientsBySection = useMemo(() => {
+    const sections: Record<string, typeof adjustedIngredients> = {};
+    for (const ing of adjustedIngredients) {
+      const section = ing.section || 'Main';
+      if (!sections[section]) {
+        sections[section] = [];
+      }
+      sections[section].push(ing);
+    }
+    return sections;
+  }, [adjustedIngredients]);
+
+  // Get ordered section keys (Main first, then alphabetically)
+  const sectionOrder = useMemo(() => {
+    const keys = Object.keys(ingredientsBySection);
+    return keys.sort((a, b) => {
+      if (a === 'Main') return -1;
+      if (b === 'Main') return 1;
+      return a.localeCompare(b);
+    });
+  }, [ingredientsBySection]);
 
   // Helper to check if recipe meets strict keto macro criteria
   const isKetoFriendly = useMemo(() => {
@@ -650,7 +674,7 @@ export default function RecipeDetail() {
             />
           ) : (
             <>
-              {/* Ingredients - adjusted for requested servings */}
+              {/* Ingredients - adjusted for requested servings, grouped by section */}
               <div className="mb-6">
                 <h3 className="text-sm font-semibold mb-3">
                   {t('recipes.ingredients')}
@@ -660,21 +684,36 @@ export default function RecipeDetail() {
                     </span>
                   )}
                 </h3>
-                <ul className="space-y-2">
-                  {adjustedIngredients.map((ing, index) => (
-                    <li key={index} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
-                      <div className="w-2 h-2 rounded-full bg-primary" />
-                      <span className="flex-1 text-foreground">
-                        {ing.quantity && `${formatQuantity(ing.quantity)} `}
-                        {ing.unit && `${ing.unit} `}
-                        {ing.name}
-                      </span>
-                      {ing.aisle && (
-                        <span className="text-xs text-muted-foreground">{ing.aisle}</span>
+                
+                {sectionOrder.map((section) => {
+                  const sectionIngredients = ingredientsBySection[section];
+                  const showSectionHeader = sectionOrder.length > 1 || section !== 'Main';
+                  
+                  return (
+                    <div key={section} className="mb-4 last:mb-0">
+                      {showSectionHeader && (
+                        <h4 className="text-xs font-medium text-primary uppercase tracking-wide mb-2 mt-3 first:mt-0">
+                          {section}
+                        </h4>
                       )}
-                    </li>
-                  ))}
-                </ul>
+                      <ul className="space-y-2">
+                        {sectionIngredients.map((ing, index) => (
+                          <li key={index} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
+                            <div className="w-2 h-2 rounded-full bg-primary" />
+                            <span className="flex-1 text-foreground">
+                              {ing.quantity && `${formatQuantity(ing.quantity)} `}
+                              {ing.unit && `${ing.unit} `}
+                              {ing.name}
+                            </span>
+                            {ing.aisle && (
+                              <span className="text-xs text-muted-foreground">{ing.aisle}</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Steps */}
