@@ -1,11 +1,12 @@
 import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Trash2, GripVertical, Save, X, Loader2, Camera, Upload, ImageIcon, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Save, X, Loader2, Camera, Upload, ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { Reorder } from 'framer-motion';
 import type { Recipe } from '@/types';
 
 interface RecipeEditorProps {
@@ -213,21 +214,11 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
     ));
   };
 
-  // Reorder steps (move up/down)
-  const moveStep = (index: number, direction: 'up' | 'down') => {
-    const visibleStepsList = steps.filter(s => !s.isDeleted);
-    const visibleIndex = visibleStepsList.findIndex(s => s === steps[index]);
-    
-    if (direction === 'up' && visibleIndex === 0) return;
-    if (direction === 'down' && visibleIndex === visibleStepsList.length - 1) return;
-    
-    const swapVisibleIndex = direction === 'up' ? visibleIndex - 1 : visibleIndex + 1;
-    const swapStep = visibleStepsList[swapVisibleIndex];
-    const swapOriginalIndex = steps.findIndex(s => s === swapStep);
-    
-    const newSteps = [...steps];
-    [newSteps[index], newSteps[swapOriginalIndex]] = [newSteps[swapOriginalIndex], newSteps[index]];
-    setSteps(newSteps);
+  // Handle drag-and-drop reorder for steps
+  const handleStepsReorder = (reorderedSteps: EditableStep[]) => {
+    // Merge reordered visible steps with deleted steps
+    const deletedSteps = steps.filter(s => s.isDeleted);
+    setSteps([...reorderedSteps, ...deletedSteps]);
   };
 
   const calculateNutritionViaAI = async (ingredientsList: EditableIngredient[], stepsList: EditableStep[]): Promise<{
@@ -696,62 +687,53 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
             {t('common.add', 'Add')}
           </Button>
         </div>
-        <div className="space-y-3">
-          {visibleSteps.map((step, idx) => {
-            const originalIdx = steps.findIndex(s => s === step);
-            const isFirst = idx === 0;
-            const isLast = idx === visibleSteps.length - 1;
-            return (
-              <div key={originalIdx} className="flex gap-2 items-start p-2 bg-muted rounded-lg">
-                {/* Reorder controls */}
-                <div className="flex flex-col gap-0.5 flex-shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => moveStep(originalIdx, 'up')}
-                    disabled={isFirst}
-                    className={`p-0.5 rounded ${isFirst ? 'text-muted-foreground/30' : 'text-muted-foreground hover:text-foreground hover:bg-background'}`}
-                  >
-                    <ChevronUp className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveStep(originalIdx, 'down')}
-                    disabled={isLast}
-                    className={`p-0.5 rounded ${isLast ? 'text-muted-foreground/30' : 'text-muted-foreground hover:text-foreground hover:bg-background'}`}
-                  >
-                    <ChevronDown className="w-4 h-4" />
-                  </button>
-                </div>
-                {/* Step number */}
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
-                  {idx + 1}
-                </div>
-                {/* Instruction textarea */}
-                <div className="flex-1 flex gap-2">
-                  <Textarea
-                    placeholder="Instruction..."
-                    value={step.instruction}
-                    onChange={(e) => updateStep(originalIdx, e.target.value)}
-                    className="min-h-[60px]"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9 text-destructive hover:text-destructive flex-shrink-0"
-                    onClick={() => removeStep(originalIdx)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
-          {visibleSteps.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              {t('recipes.noStepsYet', 'No instructions yet. Click Add to add one.')}
-            </p>
-          )}
-        </div>
+        {visibleSteps.length > 0 ? (
+          <Reorder.Group 
+            axis="y" 
+            values={visibleSteps} 
+            onReorder={handleStepsReorder}
+            className="space-y-3"
+          >
+            {visibleSteps.map((step, idx) => {
+              const originalIdx = steps.findIndex(s => s === step);
+              return (
+                <Reorder.Item
+                  key={step.id || `new-step-${originalIdx}`}
+                  value={step}
+                  className="flex gap-2 items-start p-2 bg-muted rounded-lg cursor-grab active:cursor-grabbing"
+                >
+                  {/* Drag handle */}
+                  <GripVertical className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-2" />
+                  {/* Step number */}
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-sm">
+                    {idx + 1}
+                  </div>
+                  {/* Instruction textarea */}
+                  <div className="flex-1 flex gap-2">
+                    <Textarea
+                      placeholder="Instruction..."
+                      value={step.instruction}
+                      onChange={(e) => updateStep(originalIdx, e.target.value)}
+                      className="min-h-[60px]"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 text-destructive hover:text-destructive flex-shrink-0"
+                      onClick={() => removeStep(originalIdx)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </Reorder.Item>
+              );
+            })}
+          </Reorder.Group>
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            {t('recipes.noStepsYet', 'No instructions yet. Click Add to add one.')}
+          </p>
+        )}
       </div>
 
       {/* Action Buttons */}
