@@ -12,6 +12,79 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithRetry(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  maxRetries = 3,
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const resp = await fetch(input, init);
+
+      // Retry on rate limiting
+      if (resp.status === 429) {
+        const retryAfter = resp.headers.get('Retry-After');
+        const retryAfterMs = retryAfter ? Number.parseInt(retryAfter, 10) * 1000 : NaN;
+        const backoffMs = Math.pow(2, attempt) * 1000 + Math.floor(Math.random() * 1000);
+        const waitMs = Number.isFinite(retryAfterMs) ? retryAfterMs : backoffMs;
+        console.warn(`[fetchWithRetry] 429 received; waiting ${waitMs}ms (attempt ${attempt + 1}/${maxRetries + 1})`);
+        await sleep(waitMs);
+        continue;
+      }
+
+      return resp;
+    } catch (e) {
+      lastErr = e;
+      if (attempt >= maxRetries) break;
+      const waitMs = Math.pow(2, attempt) * 1000 + Math.floor(Math.random() * 1000);
+      console.warn(`[fetchWithRetry] fetch failed; waiting ${waitMs}ms (attempt ${attempt + 1}/${maxRetries + 1})`, e);
+      await sleep(waitMs);
+    }
+  }
+
+  throw lastErr instanceof Error
+    ? new Error(`[fetchWithRetry] Max retries exceeded: ${lastErr.message}`)
+    : new Error('[fetchWithRetry] Max retries exceeded');
+}
+
+function isInstagramUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return /(^|\.)instagram\.com$/i.test(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function decodeHtmlEntitiesLite(input: string): string {
+  return input
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ');
+}
+
+function extractOgDescriptionFromHtml(html: string): string | null {
+  // Look for a <meta ... property="og:description" ... content="..."> tag.
+  // Instagram frequently includes this and it is far smaller than full HTML.
+  const metaTags = html.match(/<meta\s+[^>]*>/gi) || [];
+  for (const tag of metaTags) {
+    if (!/\bproperty\s*=\s*["']og:description["']/i.test(tag)) continue;
+    const contentMatch = tag.match(/\bcontent\s*=\s*["']([^"']+)["']/i);
+    const content = contentMatch?.[1]?.trim();
+    if (!content) return null;
+    return decodeHtmlEntitiesLite(content);
+  }
+  return null;
+}
+
 // Magic bytes for file type validation
 const MAGIC_BYTES = {
   jpeg: [[0xFF, 0xD8, 0xFF]],
@@ -1147,31 +1220,46 @@ ${transcript}`;
           // For regular URLs, fetch the actual webpage content first
           console.log(`Fetching recipe from URL: ${sourceUrl}`);
           let webpageContent = '';
+          const instagram = isInstagramUrl(sourceUrl);
           
           try {
-            const fetchResponse = await fetch(sourceUrl, {
+            const fetchResponse = await fetchWithRetry(sourceUrl, {
               headers: {
                 'User-Agent': 'Mozilla/5.0 (compatible; RecipeParser/1.0)',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
               },
-            });
+            }, instagram ? 4 : 2);
             
             if (fetchResponse.ok) {
-              webpageContent = await fetchResponse.text();
-              console.log(`Fetched ${webpageContent.length} characters from URL`);
-              
-              // Clean HTML to reduce token usage
-              webpageContent = webpageContent
-                .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-                .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-                .replace(/<!--[\s\S]*?-->/g, '')
-                .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
-                .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
-                .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
-                .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '')
-                .substring(0, 150000);
-              
-              console.log(`Cleaned HTML to ${webpageContent.length} characters`);
+              const rawHtml = await fetchResponse.text();
+              console.log(`Fetched ${rawHtml.length} characters from URL`);
+
+              if (instagram) {
+                const ogDescription = extractOgDescriptionFromHtml(rawHtml);
+                if (ogDescription) {
+                  // Keep this tiny to reduce TPM usage when calling Gemini.
+                  const clipped = ogDescription.slice(0, 8000);
+                  webpageContent = `Instagram URL: ${sourceUrl}\n\nOG Description (caption/summary):\n${clipped}`;
+                  console.log(`Instagram og:description extracted (${clipped.length} chars)`);
+                } else {
+                  // Fallback: do NOT send full Instagram HTML (too large and noisy).
+                  webpageContent = `Instagram URL: ${sourceUrl}\n\n(Unable to extract og:description from HTML)`;
+                  console.warn('Instagram og:description meta tag not found');
+                }
+              } else {
+                // Clean HTML to reduce token usage
+                webpageContent = rawHtml
+                  .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+                  .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+                  .replace(/<!--[\s\S]*?-->/g, '')
+                  .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+                  .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+                  .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
+                  .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '')
+                  .substring(0, 150000);
+                
+                console.log(`Cleaned HTML to ${webpageContent.length} characters`);
+              }
             } else {
               console.warn(`Failed to fetch URL: ${fetchResponse.status}`);
               webpageContent = `URL: ${sourceUrl} (could not fetch content, status: ${fetchResponse.status})`;
