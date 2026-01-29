@@ -230,7 +230,20 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
     setSteps(newSteps);
   };
 
-  const calculateNutritionViaAI = async (ingredientsList: EditableIngredient[], stepsList: EditableStep[]) => {
+  const calculateNutritionViaAI = async (ingredientsList: EditableIngredient[], stepsList: EditableStep[]): Promise<{
+    nutrition: {
+      calories: number;
+      protein_g: number;
+      carbs_g: number;
+      fat_g: number;
+      fiber_g: number;
+      sugar_g: number;
+      sodium_mg: number;
+      saturated_fat_g: number;
+      cholesterol_mg: number;
+    };
+    serving_size?: string;
+  } | null> => {
     // Build a recipe text from the current ingredients and steps for AI parsing
     const activeIngredients = ingredientsList.filter(i => !i.isDeleted && i.name.trim());
     const activeSteps = stepsList.filter(s => !s.isDeleted && s.instruction.trim());
@@ -294,15 +307,18 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
       
       if (result.nutrition) {
         return {
-          calories: Math.round(result.nutrition.calories || 0),
-          protein_g: Math.round(result.nutrition.protein_g || 0),
-          carbs_g: Math.round(result.nutrition.carbs_g || 0),
-          fat_g: Math.round(result.nutrition.fat_g || 0),
-          fiber_g: Math.round(result.nutrition.fiber_g || 0),
-          sugar_g: Math.round(result.nutrition.sugar_g || 0),
-          sodium_mg: Math.round(result.nutrition.sodium_mg || 0),
-          saturated_fat_g: Math.round(result.nutrition.saturated_fat_g || 0),
-          cholesterol_mg: Math.round(result.nutrition.cholesterol_mg || 0),
+          nutrition: {
+            calories: Math.round(result.nutrition.calories || 0),
+            protein_g: Math.round(result.nutrition.protein_g || 0),
+            carbs_g: Math.round(result.nutrition.carbs_g || 0),
+            fat_g: Math.round(result.nutrition.fat_g || 0),
+            fiber_g: Math.round(result.nutrition.fiber_g || 0),
+            sugar_g: Math.round(result.nutrition.sugar_g || 0),
+            sodium_mg: Math.round(result.nutrition.sodium_mg || 0),
+            saturated_fat_g: Math.round(result.nutrition.saturated_fat_g || 0),
+            cholesterol_mg: Math.round(result.nutrition.cholesterol_mg || 0),
+          },
+          serving_size: result.serving_size || undefined,
         };
       }
       
@@ -310,7 +326,8 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
     } catch (error) {
       if (import.meta.env.DEV) console.error('AI nutrition calculation failed:', error);
       // Fallback to basic estimation
-      return calculateNutritionFallback(activeIngredients);
+      const fallbackNutrition = calculateNutritionFallback(activeIngredients);
+      return fallbackNutrition ? { nutrition: fallbackNutrition } : null;
     }
   };
   
@@ -460,9 +477,12 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
       }
 
       // Recalculate and update nutrition via AI
-      const newNutrition = await calculateNutritionViaAI(activeIngredients, activeSteps);
+      const aiResult = await calculateNutritionViaAI(activeIngredients, activeSteps);
       
-      if (newNutrition) {
+      if (aiResult) {
+        const { nutrition: newNutrition, serving_size: newServingSize } = aiResult;
+        
+        // Update nutrition
         if (recipe.nutrition?.id) {
           await supabase
             .from('recipe_nutrition')
@@ -475,6 +495,14 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
               recipe_id: recipe.id,
               ...newNutrition,
             });
+        }
+        
+        // Update serving_size on the recipe if changed
+        if (newServingSize) {
+          await supabase
+            .from('recipes')
+            .update({ serving_size: newServingSize })
+            .eq('id', recipe.id);
         }
       }
 
