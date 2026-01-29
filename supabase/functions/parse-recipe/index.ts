@@ -1143,8 +1143,10 @@ CRITICAL RULES:
 12. Assign each ingredient a "section" field (e.g., "Main", "Marinade", "Sauce") for multi-part recipes
 13. STEP SECTION PLACEMENT (CRITICAL FOR UI):
     - Each step can optionally have an "introduces_section" field
-    - Set "introduces_section" to the section name ONLY for the FIRST step where that section's ingredients are used
-    - The "Main" section should ALWAYS have introduces_section on step 1 (or whichever step actually starts using main ingredients)
+    - Set "introduces_section" to the section name ONLY for the FIRST step where that section's ingredients are actually used
+    - DO NOT default "Main" to step 1. Place each section (including "Main") on the EXACT step where those ingredients are first used.
+    - If step 1 says "mix all marinade ingredients", set introduces_section: "Marinade" (NOT "Main")
+    - If step 2 says "Place onion half, insert skewers, thread chicken", set introduces_section: "Main" because that's when the main ingredients (onion, chicken) are first used
     - Example: If step 6 says "Meanwhile, whisk tehina ingredients", set introduces_section: "Creamy Tehina"
     - Example: If step 7 says "Toss onion salad ingredients together", set introduces_section: "Onion Sumac Salad"
     - For steps that don't introduce a new section, set introduces_section: null
