@@ -782,19 +782,32 @@ export default function RecipeDetail() {
 
                     const renderedSections = new Set<string>();
 
+                    // If the recipe explicitly says when Main/Base is introduced, respect that.
+                    // Otherwise (legacy imports), fall back to showing Main/Base at Step 1.
+                    const mainIntroStepNum = mainSectionKey
+                      ? (recipe.steps ?? []).find(
+                          (s) => ((s as any).introduces_section as string | null | undefined) === mainSectionKey
+                        )?.step_number ?? null
+                      : null;
+                    const shouldRenderMainAtTopFallback = !!mainSectionKey && mainIntroStepNum === null;
+
                     return recipe.steps?.map((step) => {
                       const introducesSection = (step as any).introduces_section as string | null | undefined;
                       const stepNum = step.step_number;
 
-                      // For Step 1: if a section is introduced (e.g. Marinade), show it first,
-                      // then show Main/Base right after (before the step), so the user sees marinade first.
                       const sectionsToRender: string[] = [];
 
-                      if (introducesSection && introducesSection !== mainSectionKey) {
-                        sectionsToRender.push(introducesSection);
-                      }
+                      // Show the section exactly where it is introduced.
+                      if (introducesSection) sectionsToRender.push(introducesSection);
 
-                      if (stepNum === 1 && mainSectionKey) {
+                      // Legacy fallback: if Main/Base was never explicitly introduced,
+                      // show it at the top (but after any Step-1 prep section like Marinade).
+                      if (
+                        shouldRenderMainAtTopFallback &&
+                        stepNum === 1 &&
+                        mainSectionKey &&
+                        introducesSection !== mainSectionKey
+                      ) {
                         sectionsToRender.push(mainSectionKey);
                       }
 
