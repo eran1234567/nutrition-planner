@@ -1468,6 +1468,7 @@ ${transcript}`;
             quantity: (typeof ing.quantity === 'number' && ing.quantity >= 0 && ing.quantity <= 10000) ? ing.quantity : null,
             unit: typeof ing.unit === 'string' ? ing.unit.trim().substring(0, 50) : null,
             order_index: idx,
+            section: typeof ing.section === 'string' ? ing.section.trim().substring(0, 50) : 'Main',
           }));
         
         if (validIngredients.length > 0) {

@@ -501,6 +501,7 @@ export type Database = {
           order_index: number | null
           quantity: number | null
           recipe_id: string
+          section: string | null
           unit: string | null
         }
         Insert: {
@@ -511,6 +512,7 @@ export type Database = {
           order_index?: number | null
           quantity?: number | null
           recipe_id: string
+          section?: string | null
           unit?: string | null
         }
         Update: {
@@ -521,6 +523,7 @@ export type Database = {
           order_index?: number | null
           quantity?: number | null
           recipe_id?: string
+          section?: string | null
           unit?: string | null
         }
         Relationships: [
