@@ -1004,8 +1004,12 @@ INGREDIENT SECTIONS/CATEGORIES (MULTI-PART RECIPES)
 ═══════════════════════════════════════════════════════════════
 For recipes with distinct parts (e.g., main dish + marinade + sauce + dressing):
 - Assign each ingredient a "section" field indicating its category
-- Common sections: "Main", "Marinade", "Sauce", "Dressing", "Topping", "Garnish",
-  "Spice Rub", "Glaze", "Filling", "Crust", "Batter"
+- CRITICAL: If the source content (Instagram caption, video description, etc.) uses
+  SPECIFIC SECTION NAMES (e.g., "Creamy Tehina", "Onion Sumac Salad", "Crispy Pita"),
+  you MUST PRESERVE those exact names. Do NOT replace them with generic labels.
+- Only use generic labels ("Main", "Marinade", "Sauce", "Dressing", "Topping", "Garnish",
+  "Spice Rub", "Glaze", "Filling", "Crust", "Batter") when the source does not
+  specify section names.
 - For simple recipes with no distinct parts, use "Main" for all ingredients
 - This enables the UI to group and display ingredients under clear headings
 
