@@ -240,8 +240,8 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
     }
     
     // Build content string for the AI
-    let content = `${recipe.title}\n\nServings: ${recipe.servings || 1}\n\n`;
-    content += 'Ingredients:\n';
+    const servings = recipe.servings || 1;
+    let content = `Recipe: ${recipe.title}\nServings: ${servings}\n\nIngredients:\n`;
     activeIngredients.forEach(ing => {
       const qty = ing.quantity ? `${ing.quantity} ` : '';
       const unit = ing.unit ? `${ing.unit} ` : '';
@@ -254,6 +254,14 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
         content += `${idx + 1}. ${step.instruction}\n`;
       });
     }
+    
+    // Include original nutrition for context to prevent wild swings
+    const originalNutrition = recipe.nutrition ? {
+      calories: recipe.nutrition.calories,
+      protein_g: recipe.nutrition.protein_g,
+      carbs_g: recipe.nutrition.carbs_g,
+      fat_g: recipe.nutrition.fat_g,
+    } : null;
     
     try {
       const { data: session } = await supabase.auth.getSession();
@@ -272,7 +280,8 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
           body: JSON.stringify({
             content,
             isImage: false,
-            nutritionOnly: true, // Signal we only need nutrition recalculation
+            nutritionOnly: true,
+            originalNutrition, // Pass original nutrition for context
           }),
         }
       );
