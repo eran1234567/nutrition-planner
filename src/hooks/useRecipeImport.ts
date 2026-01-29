@@ -101,7 +101,7 @@ export function useRecipeImport(): UseRecipeImportReturn {
       }, 800);
 
       // Call parse-recipe
-      const { data } = await supabase.functions.invoke('parse-recipe', {
+      const { data, error: invokeError } = await supabase.functions.invoke('parse-recipe', {
         body: { 
           uploadId: uploadData.id, 
           sourceUrl: url
@@ -110,6 +110,13 @@ export function useRecipeImport(): UseRecipeImportReturn {
 
       clearInterval(progressInterval);
       setImportProgress(prev => prev ? { ...prev, progress: 100 } : null);
+
+      // Handle invoke-level errors (including 429 rate limits)
+      if (invokeError) {
+        const errorMsg = invokeError.message || String(invokeError);
+        toast.error(formatApiError(errorMsg) || t('myRecipes.parseError', 'Failed to parse recipe'));
+        return { success: false };
+      }
 
       if (data?.success) {
         toast.success(t('myRecipes.parseSuccess', `Found ${data.count} recipe(s)!`));
@@ -209,7 +216,7 @@ export function useRecipeImport(): UseRecipeImportReturn {
       }, 800);
 
       // Call parse-recipe
-      const { data } = await supabase.functions.invoke('parse-recipe', {
+      const { data, error: invokeError } = await supabase.functions.invoke('parse-recipe', {
         body: { 
           uploadId: uploadData.id, 
           content: fileContent,
@@ -219,6 +226,17 @@ export function useRecipeImport(): UseRecipeImportReturn {
 
       clearInterval(progressInterval);
       setImportProgress(prev => prev ? { ...prev, progress: 100 } : null);
+
+      // Handle invoke-level errors (including 429 rate limits)
+      if (invokeError) {
+        const errorMsg = invokeError.message || String(invokeError);
+        toast.error(formatApiError(errorMsg) || t('myRecipes.parseError', 'Failed to parse recipe'));
+        await supabase.from('uploads').update({ 
+          status: 'failed', 
+          error_message: errorMsg 
+        }).eq('id', uploadData.id);
+        return { success: false };
+      }
 
       if (data?.success) {
         toast.success(t('myRecipes.parseSuccess', `Found ${data.count} recipe(s)!`));
