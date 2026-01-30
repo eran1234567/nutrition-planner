@@ -730,7 +730,7 @@ export default function RecipeDetail() {
             </div>
           )}
 
-          {/* Keto Sandbox - show in Keto Mode for any recipe with a ketoScore < 100 */}
+          {/* Keto Sandbox - show in Keto Mode for user-owned recipes with ketoScore < 100 */}
           {isKetoMode && recipe?.ingredients && neutronBadges?.ketoScore && neutronBadges.ketoScore.score < 100 && isUserRecipe && (
             <KetoSandbox
               recipeId={recipe.id}
@@ -754,6 +754,25 @@ export default function RecipeDetail() {
                 queryClient.invalidateQueries({ queryKey: ['recipe', recipe.id] });
               }}
             />
+          )}
+
+          {/* Keto Mode Info for global recipes - show when Keto Mode is active but recipe is not owned */}
+          {isKetoMode && neutronBadges?.isKeto && !isUserRecipe && (
+            <div className="mb-6 p-4 rounded-xl bg-success/10 border border-success/30">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-success/20 flex items-center justify-center flex-shrink-0">
+                  <Sparkles className="w-5 h-5 text-success" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-success">
+                    Keto Mode Active
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Viewing Net Carbs. To optimize recipes with the Keto Sandbox, save this recipe to your collection first.
+                  </p>
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Keto Discovery Tip - Actionable Context Switcher */}
