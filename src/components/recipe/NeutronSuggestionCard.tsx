@@ -243,8 +243,15 @@ export function NeutronSuggestionCard({
   const hasSwaps = swapSuggestions.length > 0;
 
   const handlePreviewSwap = (swap: SwapSuggestion) => {
-    setPreviewingSwap(swap);
-    onPreviewSwap?.(swap.originalIngredient, swap.swapTo);
+    // Toggle behavior: if already previewing this swap, clear it
+    if (previewingSwap?.originalIngredient === swap.originalIngredient) {
+      setPreviewingSwap(null);
+      // Optionally notify parent to clear preview (pass empty strings)
+      onPreviewSwap?.('', '');
+    } else {
+      setPreviewingSwap(swap);
+      onPreviewSwap?.(swap.originalIngredient, swap.swapTo);
+    }
   };
 
   return (
