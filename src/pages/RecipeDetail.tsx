@@ -757,7 +757,8 @@ export default function RecipeDetail() {
           )}
 
           {/* Keto Discovery Tip - Actionable Context Switcher */}
-          {!isKetoMode && neutronBadges?.ketoScore && neutronBadges.ketoScore.score >= 70 && neutronBadges.ketoScore.score < 100 && (
+          {/* Show for any keto-badged recipe when Keto Mode is not active */}
+          {!isKetoMode && neutronBadges?.isKeto && neutronBadges.ketoScore && neutronBadges.ketoScore.score < 100 && (
             <KetoDiscoveryBanner 
               ketoScore={neutronBadges.ketoScore.score}
             />
