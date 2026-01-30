@@ -19,6 +19,7 @@ interface NutritionData {
   fat_g?: number | null;
   fiber_g?: number | null;
   sugar_alcohols_g?: number | null;
+  sodium_mg?: number | null;
 }
 
 interface RecipeCardRecipe {
