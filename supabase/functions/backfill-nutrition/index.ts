@@ -2,6 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.21.0";
 
+// Import shared Neutron Engine
+import { buildNutritionPromptInstructions } from "../_shared/neutron.ts";
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-lovable-internal-seed',
@@ -92,20 +95,16 @@ serve(async (req) => {
 
         console.log(`Processing: ${recipe.title}`);
 
-        // Use AI to estimate missing nutrition values
+        // Use AI to estimate missing nutrition values with Neutron Engine rules
         const prompt = `You are a nutrition expert. Given a recipe and its ingredients, estimate TOTAL values for the ENTIRE recipe (not per serving). Return ONLY a JSON object:
-{"sugar_g": <number>, "saturated_fat_g": <number>, "cholesterol_mg": <number|}
+{"sugar_g": <number>, "saturated_fat_g": <number>, "cholesterol_mg": <number>}
 
-CRITICAL - FIBER AND NET CARBS:
-Fiber does NOT contribute calories! When calculating any calorie-related values:
-- NET CARBS = Total Carbs - Fiber
-- CALORIES from carbs = NET CARBS × 4 (NOT total carbs × 4!)
+${buildNutritionPromptInstructions()}
 
 Examples:
 - 1 tbsp sugar = 12g sugar
 - 1 egg = 186mg cholesterol, 1.6g saturated fat
 - Vegan = 0 cholesterol
-- Keto bread (13g carbs, 12g fiber) = only 1g net carb = 4 calories from carbs
 No explanation, just JSON.
 
 Recipe: ${recipe.title}

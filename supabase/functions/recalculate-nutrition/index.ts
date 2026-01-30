@@ -2,10 +2,33 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.21.0";
 
+// Import shared Neutron Engine
+import {
+  buildNutritionPromptInstructions,
+  validateAndCorrectNutrition,
+  type DbIngredientNutrition,
+} from "../_shared/neutron.ts";
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-lovable-internal-seed',
 };
+
+// Cache for ingredient_nutrition table
+let ingredientNutritionCache: DbIngredientNutrition[] = [];
+
+async function loadIngredientNutritionCache(supabase: any): Promise<DbIngredientNutrition[]> {
+  if (ingredientNutritionCache.length > 0) return ingredientNutritionCache;
+  
+  const { data, error } = await supabase.from('ingredient_nutrition').select('*');
+  if (error) {
+    console.error('[NEUTRON] Failed to load ingredient cache:', error);
+    return [];
+  }
+  ingredientNutritionCache = data || [];
+  console.log(`[NEUTRON] Loaded ${ingredientNutritionCache.length} ingredient references`);
+  return ingredientNutritionCache;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -34,6 +57,9 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const genAI = new GoogleGenerativeAI(geminiApiKey);
+
+    // Load ingredient nutrition cache from Neutron
+    const nutritionCache = await loadIngredientNutritionCache(supabase);
 
     // Get global recipes with their ingredients
     const { data: recipes, error: fetchError } = await supabase
@@ -88,6 +114,7 @@ serve(async (req) => {
 
         console.log(`Recalculating: ${recipe.title}`);
 
+        // Use Neutron Engine prompt instructions
         const prompt = `You are a certified nutritionist. Calculate ACCURATE macros for this recipe PER SERVING.
 
 RECIPE: ${recipe.title}
@@ -96,43 +123,7 @@ SERVINGS: ${recipe.servings || 1}
 INGREDIENTS:
 - ${ingredientList}
 
-═══════════════════════════════════════════════════════════════
-USER-PROVIDED NUTRITION (HIGHEST PRIORITY - NEVER OVERRIDE!)
-═══════════════════════════════════════════════════════════════
-CRITICAL: If ingredient names include nutrition values (e.g., "Keto Bread (60 cal, 13g carbs, 12g fiber)"),
-you MUST use EXACTLY those values. DO NOT substitute generic database values.
-
-USDA STANDARD MACRO REFERENCES (for ingredients WITHOUT explicit nutrition):
-- 1 large egg = 72 cal, 6.3g protein, 0.4g carbs, 4.8g fat, 0g fiber
-- 1 medium tomato = 22 cal, 1.1g protein, 4.8g carbs, 0.2g fat, 1.5g fiber
-- 1 slice regular bread = 79 cal, 2.7g protein, 15g carbs, 1g fat, 1g fiber
-- 1 tbsp olive oil = 119 cal, 0g protein, 0g carbs, 13.5g fat, 0g fiber
-- 1 tbsp butter = 102 cal, 0.1g protein, 0g carbs, 11.5g fat, 0g fiber
-- 1 medium avocado (201g) = 322 cal, 4g protein, 17g carbs, 29g fat, 13g fiber
-- Half avocado (100g) = 160 cal, 2g protein, 8.5g carbs, 14.7g fat, 7g fiber
-- 100g chicken breast = 165 cal, 31g protein, 0g carbs, 3.6g fat, 0g fiber
-- 100g salmon = 208 cal, 20g protein, 0g carbs, 13g fat, 0g fiber
-- 100g ground beef 90/10 = 176 cal, 26g protein, 0g carbs, 8g fat, 0g fiber
-- 1 cup cooked rice = 205 cal, 4.3g protein, 45g carbs, 0.4g fat, 0.6g fiber
-- 1 cup cooked pasta = 220 cal, 8g protein, 43g carbs, 1.3g fat, 2.5g fiber
-
-═══════════════════════════════════════════════════════════════
-FIBER AND NET CARBS - CRITICAL FOR CALORIE ACCURACY
-═══════════════════════════════════════════════════════════════
-FIBER DOES NOT CONTRIBUTE CALORIES! This is critical for keto/high-fiber foods.
-
-When calculating calories from carbs:
-- NET CARBS = Total Carbs - Fiber
-- CALORIES from carbs = NET CARBS × 4 (NOT total carbs × 4!)
-
-EXAMPLE - High fiber food:
-If an ingredient has 13g carbs and 12g fiber:
-- Net carbs = 13 - 12 = 1g
-- Calories from carbs = 1 × 4 = 4 cal (NOT 13 × 4 = 52 cal!)
-
-CALORIE CALCULATION HIERARCHY:
-1. If user provides CALORIES for an ingredient → USE THAT EXACT VALUE
-2. If NO calories provided → Calculate: (protein × 4) + (NET carbs × 4) + (fat × 9)
+${buildNutritionPromptInstructions()}
 
 CALCULATION METHOD:
 1. For EACH ingredient, extract: protein, total carbs, fiber, fat, and calories (if provided)

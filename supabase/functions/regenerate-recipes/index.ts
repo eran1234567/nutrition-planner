@@ -2,6 +2,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.21.0";
 
+// Import shared Neutron Engine
+import {
+  buildNutritionPromptInstructions,
+  KETO_BADGE_MAX_NET_CARBS,
+  KETO_BADGE_MIN_FAT_PERCENT,
+} from "../_shared/neutron.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-lovable-internal",
@@ -113,7 +120,7 @@ serve(async (req) => {
       try {
         console.log(`Regenerating: ${recipe.title}`);
 
-        // Use the same detailed AI prompt as parse-recipe
+        // Use the same detailed AI prompt as parse-recipe with Neutron Engine
         const systemPrompt = `You are a professional chef and nutritionist creating complete, authentic recipes.
 
 CRITICAL REQUIREMENTS:
@@ -123,26 +130,12 @@ CRITICAL REQUIREMENTS:
 4. Steps should reference the ingredients and include timing/technique details
 5. Make the recipe authentic to its cuisine
 
-═══════════════════════════════════════════════════════════════
-FIBER AND NET CARBS - CRITICAL FOR CALORIE ACCURACY
-═══════════════════════════════════════════════════════════════
-FIBER DOES NOT CONTRIBUTE CALORIES! This is critical for keto/high-fiber foods.
-
-When calculating calories from carbs:
-- NET CARBS = Total Carbs - Fiber
-- CALORIES from carbs = NET CARBS × 4 (NOT total carbs × 4!)
-
-CALCULATION METHOD:
-1. For EACH ingredient, calculate: protein, total carbs, fiber, fat, AND calories
-2. calories = (protein × 4) + (NET carbs × 4) + (fat × 9)
-   - NET carbs = Total carbs - Fiber
-3. SUM all ingredient values, then DIVIDE by servings
-4. Round to nearest integer
+${buildNutritionPromptInstructions()}
 
 USDA STANDARD MACRO REFERENCES:
-- 1 large egg = 72 cal, 6.3g protein, 0.4g carbs, 4.8g fat, 0g fiber
+- 1 large egg = 72 cal, 6.3g protein, 0.4g carbs, 4.8g fat, 0g fiber, 186mg cholesterol
 - Half avocado (100g) = 160 cal, 2g protein, 8.5g carbs, 14.7g fat, 7g fiber
-- 100g chicken breast = 165 cal, 31g protein, 0g carbs, 3.6g fat, 0g fiber`;
+- 100g chicken breast = 165 cal, 31g protein, 0g carbs, 3.6g fat, 0g fiber, 85mg cholesterol`;
 
         const userPrompt = `Generate a complete, authentic recipe for: "${recipe.title}"
 Cuisine: ${recipe.cuisine || "International"}
