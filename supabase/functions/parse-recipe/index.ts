@@ -658,13 +658,34 @@ USER-PROVIDED NUTRITION (HIGHEST PRIORITY - NEVER OVERRIDE!)
 CRITICAL: When a user provides specific nutrition values in the ingredient description,
 you MUST use EXACTLY those values. DO NOT estimate or look up generic values.
 
-Example: "4 slices keto bread (each slice: 60 cal, 2.5g fat, 13g carbs, 12g fiber, 6g protein)"
-For 4 slices, you MUST calculate:
-- Calories: 4 × 60 = 240 cal
+PARSING USER INPUT - CRITICAL EXAMPLES:
+
+Example 1: "4 slices keto bread (each: 69 cal, 6g protein, 2.5g fat, 13g carbs but 12g fiber)"
+The phrase "13g carbs but 12g fiber" means:
+- Total carbs = 13g (this is what you store in carbs_g)
+- Fiber = 12g (this is what you store in fiber_g)
+- The "but" indicates that 12g of the 13g total are fiber
+- DO NOT calculate 13-12=1 and store that as carbs_g! Store 13!
+
+For 4 slices:
+- Calories: 4 × 69 = 276 cal
 - Protein: 4 × 6 = 24g
-- Carbs: 4 × 13 = 52g (total carbs)
-- Fiber: 4 × 12 = 48g
+- Carbs (carbs_g): 4 × 13 = 52g ← STORE THIS AS carbs_g
+- Fiber (fiber_g): 4 × 12 = 48g ← STORE THIS AS fiber_g
 - Fat: 4 × 2.5 = 10g
+
+Example 2: "bread with 15g carbs (10g fiber)"
+- carbs_g = 15 (the number BEFORE the parentheses)
+- fiber_g = 10 (the number INSIDE the parentheses)
+- WRONG: carbs_g = 5 (that's net carbs, not total!)
+
+Example 3: "low carb tortilla - 8g carbs, 6g fiber"
+- carbs_g = 8
+- fiber_g = 6
+- WRONG: carbs_g = 2
+
+THE RULE: When user writes "Xg carbs" followed by fiber info, X is ALWAYS total carbs.
+Store X in carbs_g. The net carbs calculation happens later in the UI.
 
 DO NOT substitute generic "bread" or "keto bread" values from a database!
 The user has provided EXACT per-unit values - use them!
@@ -1125,13 +1146,34 @@ USER-PROVIDED NUTRITION (HIGHEST PRIORITY - NEVER OVERRIDE!)
 CRITICAL: When a user provides specific nutrition values in the ingredient description,
 you MUST use EXACTLY those values. DO NOT estimate or look up generic values.
 
-Example: "4 slices keto bread (each slice: 60 cal, 2.5g fat, 13g carbs, 12g fiber, 6g protein)"
-For 4 slices, you MUST calculate:
-- Calories: 4 × 60 = 240 cal
+PARSING USER INPUT - CRITICAL EXAMPLES:
+
+Example 1: "4 slices keto bread (each: 69 cal, 6g protein, 2.5g fat, 13g carbs but 12g fiber)"
+The phrase "13g carbs but 12g fiber" means:
+- Total carbs = 13g (this is what you store in carbs_g)
+- Fiber = 12g (this is what you store in fiber_g)
+- The "but" indicates that 12g of the 13g total are fiber
+- DO NOT calculate 13-12=1 and store that as carbs_g! Store 13!
+
+For 4 slices:
+- Calories: 4 × 69 = 276 cal
 - Protein: 4 × 6 = 24g
-- Carbs: 4 × 13 = 52g (total carbs)
-- Fiber: 4 × 12 = 48g
+- Carbs (carbs_g): 4 × 13 = 52g ← STORE THIS AS carbs_g
+- Fiber (fiber_g): 4 × 12 = 48g ← STORE THIS AS fiber_g
 - Fat: 4 × 2.5 = 10g
+
+Example 2: "bread with 15g carbs (10g fiber)"
+- carbs_g = 15 (the number BEFORE the parentheses)
+- fiber_g = 10 (the number INSIDE the parentheses)
+- WRONG: carbs_g = 5 (that's net carbs, not total!)
+
+Example 3: "low carb tortilla - 8g carbs, 6g fiber"
+- carbs_g = 8
+- fiber_g = 6
+- WRONG: carbs_g = 2
+
+THE RULE: When user writes "Xg carbs" followed by fiber info, X is ALWAYS total carbs.
+Store X in carbs_g. The net carbs calculation happens later in the UI.
 
 DO NOT substitute generic "bread" or "keto bread" values from a database!
 The user has provided EXACT per-unit values - use them!
