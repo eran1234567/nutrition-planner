@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Loader2, Pencil, Leaf, Fish, Drumstick, Sun, CalendarPlus, Trash2, Heart, Droplets, Activity, Globe, Pizza, UtensilsCrossed, Soup, Cherry, PlayCircle } from 'lucide-react';
+import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Loader2, Pencil, Leaf, Fish, Drumstick, Sun, CalendarPlus, Trash2, Heart, Droplets, Activity, Globe, Pizza, UtensilsCrossed, Soup, Cherry, PlayCircle, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -28,11 +28,18 @@ import { VideoHero } from '@/components/recipe/VideoHero';
 import { CookingMode } from '@/components/recipe/CookingMode';
 import { useRecipeById } from '@/hooks/useGlobalRecipes';
 import { useMealPlanStore } from '@/stores/mealPlanStore';
+import { useNeutronStore } from '@/stores/neutronStore';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import type { Recipe } from '@/types';
 import { MEAL_SLOT_DEFINITIONS } from '@/types/mealPlan';
-import { getHealthBadges } from '@/lib/nutrition/healthDetection';
+import { 
+  processNutrition, 
+  getNeutronBadges, 
+  KETO_BADGE_MAX_NET_CARBS,
+  KETO_BADGE_MIN_FAT_PERCENT,
+  type RawNutritionData 
+} from '@/lib/neutron';
 
 // Diet badge config with colors and icons
 const DIET_BADGES: Record<string, { label: string; icon: React.ReactNode; bgClass: string; textClass: string }> = {
@@ -57,9 +64,9 @@ const HEALTH_BADGE_TOOLTIPS: Record<string, string> = {
   'heart-healthy': '≥ 5g fiber + < 300mg sodium',
 };
 
-// Diet badge tooltip definitions
+// Diet badge tooltip definitions (Neutron-aware)
 const DIET_BADGE_TOOLTIPS: Record<string, string> = {
-  keto: '≤ 8g carbs, ≥ 70% fat, ≤ 25% protein',
+  keto: `≤ ${KETO_BADGE_MAX_NET_CARBS}g net carbs, ≥ ${KETO_BADGE_MIN_FAT_PERCENT}% fat`,
   paleo: 'No grains, legumes, dairy, or refined oils',
   mediterranean: 'No red meat, processed foods, or refined grains',
   vegan: 'No animal products',
@@ -190,26 +197,49 @@ export default function RecipeDetail() {
 
   const isAlreadyInPlan = planPresence.isInPlan;
 
+  // Get Neutron mode for display
+  const neutronMode = useNeutronStore((s) => s.mode);
+  const isKetoMode = neutronMode === 'keto';
+
+  // Process nutrition through Neutron Engine
+  const neutronNutrition = useMemo(() => {
+    if (!recipe?.nutrition) return null;
+    return processNutrition(recipe.nutrition as RawNutritionData, neutronMode);
+  }, [recipe?.nutrition, neutronMode]);
+
+  // Get Neutron badges for this recipe
+  const neutronBadges = useMemo(() => {
+    if (!recipe) return null;
+    return getNeutronBadges(
+      recipe.nutrition as RawNutritionData,
+      recipe.ingredients,
+      recipe.tags
+    );
+  }, [recipe]);
+
   // Nutrition is ALWAYS per serving - never scaled
   // The nutrition values in the database represent what you get from one serving
   const perServingNutrition = useMemo(() => {
-    if (!recipe?.nutrition) return null;
-    const n = recipe.nutrition;
-    const carbs = n.carbs_g || 0;
-    const fiber = n.fiber_g || 0;
+    if (!neutronNutrition) return null;
     return {
-      calories: Math.round(n.calories || 0),
-      protein_g: Math.round(n.protein_g || 0),
-      carbs_g: Math.round(carbs),
-      fat_g: Math.round(n.fat_g || 0),
-      fiber_g: Math.round(fiber),
-      sodium_mg: Math.round(n.sodium_mg || 0),
-      sugar_g: Math.round(n.sugar_g || 0),
-      saturated_fat_g: Math.round(n.saturated_fat_g || 0),
-      cholesterol_mg: Math.round(n.cholesterol_mg || 0),
-      net_carbs_g: Math.round(Math.max(0, carbs - fiber)),
+      calories: Math.round(neutronNutrition.calories),
+      protein_g: Math.round(neutronNutrition.protein),
+      carbs_g: Math.round(neutronNutrition.totalCarbs),
+      displayCarbs_g: Math.round(neutronNutrition.displayCarbs),
+      fat_g: Math.round(neutronNutrition.fat),
+      fiber_g: Math.round(neutronNutrition.fiber),
+      sodium_mg: Math.round(neutronNutrition.sodium),
+      sugar_g: Math.round(neutronNutrition.sugar),
+      saturated_fat_g: Math.round(neutronNutrition.saturatedFat),
+      cholesterol_mg: Math.round(neutronNutrition.cholesterol),
+      net_carbs_g: Math.round(neutronNutrition.netCarbs),
+      // Macro percentages
+      fatPercent: neutronNutrition.fatPercent,
+      proteinPercent: neutronNutrition.proteinPercent,
+      carbPercent: neutronNutrition.carbPercent,
+      carbLabel: neutronNutrition.carbLabel,
     };
-  }, [recipe?.nutrition]);
+  }, [neutronNutrition]);
 
   // Calculate adjusted ingredients based on serving multiplier
   const adjustedIngredients = useMemo(() => {
@@ -343,11 +373,10 @@ export default function RecipeDetail() {
     return badges;
   }, [recipe, isKetoFriendly, isPaleoFriendly, isMediterraneanFriendly]);
 
-  // Build health badges array using auto-detection
+  // Build health badges array using Neutron Engine
   const healthBadges = useMemo(() => {
-    if (!recipe?.nutrition) return [];
-    return getHealthBadges(recipe.nutrition);
-  }, [recipe?.nutrition]);
+    return neutronBadges?.healthBadges ?? [];
+  }, [neutronBadges]);
 
   // Get cuisine badge from recipe data
   const cuisineBadge = useMemo(() => {
@@ -662,8 +691,8 @@ export default function RecipeDetail() {
                   <p className="text-xs text-muted-foreground">fat</p>
                 </div>
                 <div className="text-center bg-background rounded-lg p-2">
-                  <p className="text-xl font-bold text-carbs">{perServingNutrition.carbs_g}g</p>
-                  <p className="text-xs text-muted-foreground">carbs</p>
+                  <p className="text-xl font-bold text-carbs">{perServingNutrition.displayCarbs_g}g</p>
+                  <p className="text-xs text-muted-foreground">{isKetoMode ? 'net carbs' : 'carbs'}</p>
                 </div>
               </div>
               

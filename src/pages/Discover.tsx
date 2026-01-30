@@ -18,13 +18,14 @@ import { FilterHelpModal } from '@/components/discover/FilterHelpModal';
 import { useGlobalRecipesInfinite } from '@/hooks/useGlobalRecipesInfinite';
 import { useAppStore } from '@/stores/appStore';
 import { useMealPlanStore } from '@/stores/mealPlanStore';
+import { useNeutronStore, syncNeutronMode } from '@/stores/neutronStore';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserData } from '@/hooks/useUserData';
 import { supabase } from '@/integrations/supabase/client';
 import type { MealSlotId, MealSlot } from '@/types/mealPlan';
 import { MEAL_SLOT_DEFINITIONS, getDefaultPercentsForSlots } from '@/types/mealPlan';
-import { getHealthBadges, meetsHealthConsideration } from '@/lib/nutrition/healthDetection';
+import { getNeutronBadges, isKetoBadgeEligible, calculateNetCarbs, meetsHealthConsideration } from '@/lib/neutron';
 
 // Age-based meal suitability
 type AgeGroup = 'toddler' | 'child' | 'teen' | 'adult';
@@ -328,6 +329,11 @@ export default function Discover() {
     : (selectedDietType || (effectiveDietType === 'none' ? null : effectiveDietType));
   const userDietType = (activeDietType || 'none').toLowerCase();
 
+  // Sync Neutron mode with keto filter state
+  useEffect(() => {
+    syncNeutronMode(userDietType);
+  }, [userDietType]);
+
   // If the macro calculator selected a diet, sync it into the URL so the dropdown
   // is selected and the filter persists across refresh/share.
   // Only do this once on initial load, not after user clears the filter.
@@ -349,60 +355,22 @@ export default function Discover() {
     none: [],
   };
 
-  // Strict Keto meal criteria (carb-defined first, not fat-defined):
-  // 1. Net carbs under 8g per serving (strict keto aims for ~20-30g/day total across 3 meals)
-  // 2. Carbs must be under 10% of total calories (filters out carb-dense low-cal foods)
-  // 3. Protein should not be excessive (avoid gluconeogenesis) - max 25% of calories from protein
-  // 4. Fat must provide majority of energy - at least 70% of calories from fat
-  const KETO_MAX_CARBS = 8; // Stricter: 8g instead of 10g
-  const KETO_MAX_CARB_PERCENT = 10; // Max % of calories from carbs
-  const KETO_MAX_PROTEIN_PERCENT = 25; // Max % of calories from protein (stricter for true keto)
-  const KETO_MIN_FAT_PERCENT = 70; // Min % of calories from fat (raised to 70% for strict keto)
-  
-  // Helper to check if a recipe meets strict keto macro criteria
-  const isKetoFriendly = (nutrition: { calories?: number | null; carbs_g?: number | null; protein_g?: number | null; fat_g?: number | null } | undefined): boolean => {
+  // Helper to check if a recipe meets Neutron Engine keto criteria
+  // Uses net carbs (total - fiber - sugar alcohols) for evaluation
+  const isKetoFriendly = (nutrition: { calories?: number | null; carbs_g?: number | null; protein_g?: number | null; fat_g?: number | null; fiber_g?: number | null; sugar_alcohols_g?: number | null } | undefined): boolean => {
     if (!nutrition) return false; // Reject if no nutrition data (can't verify keto compliance)
     
-    const carbs = nutrition.carbs_g ?? 0;
+    const totalCarbs = nutrition.carbs_g ?? 0;
+    const fiber = nutrition.fiber_g ?? 0;
+    const sugarAlcohols = nutrition.sugar_alcohols_g ?? 0;
     const protein = nutrition.protein_g ?? 0;
     const fat = nutrition.fat_g ?? 0;
     
-    // Rule 1: Absolute carbs must be under threshold (most important for keto)
-    if (carbs > KETO_MAX_CARBS) {
-      return false;
-    }
+    // Calculate net carbs using Neutron Engine
+    const netCarbs = calculateNetCarbs(totalCarbs, fiber, sugarAlcohols);
     
-    // Calculate calorie percentages (protein/carbs = 4 cal/g, fat = 9 cal/g)
-    const proteinCals = protein * 4;
-    const fatCals = fat * 9;
-    const carbCals = carbs * 4;
-    const totalMacroCals = proteinCals + fatCals + carbCals;
-    
-    // Need some calorie data to evaluate ratios
-    if (totalMacroCals <= 0) {
-      return false;
-    }
-    
-    const carbPercent = (carbCals / totalMacroCals) * 100;
-    const proteinPercent = (proteinCals / totalMacroCals) * 100;
-    const fatPercent = (fatCals / totalMacroCals) * 100;
-    
-    // Rule 2: Carb percentage must be very low (catches carb-dense low-cal foods like Baba Ganoush, Cucumber Dill Salad)
-    if (carbPercent > KETO_MAX_CARB_PERCENT) {
-      return false;
-    }
-    
-    // Rule 3: Protein shouldn't be too high (avoid gluconeogenesis)
-    if (proteinPercent > KETO_MAX_PROTEIN_PERCENT) {
-      return false;
-    }
-    
-    // Rule 4: Fat must dominate energy (true ketogenic ratio)
-    if (fatPercent < KETO_MIN_FAT_PERCENT) {
-      return false;
-    }
-    
-    return true;
+    // Use Neutron Engine's keto badge eligibility check
+    return isKetoBadgeEligible(netCarbs, fat, protein);
   };
 
   // Helper to check if a recipe meets paleo criteria (no grains, legumes, dairy, etc.)
@@ -1237,8 +1205,9 @@ export default function Discover() {
                   }
                 });
                 
-                // Auto-detect health badges from nutrition
-                const healthBadges = getHealthBadges(recipe.nutrition);
+                // Auto-detect health badges from nutrition using Neutron Engine
+                const neutronBadges = getNeutronBadges(recipe.nutrition, recipe.ingredients);
+                const healthBadges = neutronBadges.healthBadges;
                 
                 return (
                   <RecipeCard

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Clock, Users, Check, Plus, Trash2, Minus, Flame, Leaf, Fish, Drumstick, Sun, Heart, Droplets, Activity, Globe, Pizza, UtensilsCrossed, Soup, Cherry } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -8,12 +8,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useNeutronStore } from '@/stores/neutronStore';
+import { processNutrition, getNeutronBadges, type RawNutritionData, type NeutronMode } from '@/lib/neutron';
 
 interface NutritionData {
   calories?: number | null;
   protein_g?: number | null;
   carbs_g?: number | null;
   fat_g?: number | null;
+  fiber_g?: number | null;
+  sugar_alcohols_g?: number | null;
 }
 
 interface RecipeCardRecipe {
@@ -26,6 +30,8 @@ interface RecipeCardRecipe {
   is_kid_friendly?: boolean | null;
   is_meal_prep_friendly?: boolean | null;
   nutrition?: NutritionData | null;
+  ingredients?: Array<{ name: string; normalized_name?: string | null }>;
+  tags?: Array<{ tag_type: string; tag_value: string }>;
   // Allow additional properties from different recipe types
   [key: string]: unknown;
 }
@@ -53,9 +59,9 @@ const HEALTH_BADGE_TOOLTIPS: Record<string, string> = {
   'heart-healthy': '≥ 5g fiber + < 300mg sodium',
 };
 
-// Diet badge tooltip definitions
+// Diet badge tooltip definitions (Neutron-aware)
 const DIET_BADGE_TOOLTIPS: Record<string, string> = {
-  keto: '≤ 8g carbs, ≥ 70% fat, ≤ 25% protein',
+  keto: '≤ 10g net carbs, ≥ 60% fat',
   paleo: 'No grains, legumes, dairy, or refined oils',
   mediterranean: 'No red meat, processed foods, or refined grains',
   vegan: 'No animal products',
@@ -86,10 +92,11 @@ interface RecipeCardProps {
   onClick?: () => void;
   onDelete?: () => void;
   compact?: boolean;
-  dietBadges?: string[]; // Array of diet types to show as badges
-  healthBadges?: string[]; // Array of health considerations to show as badges
-  showCuisineBadge?: boolean; // Whether to show cuisine badge
+  dietBadges?: string[]; // Override auto-detection if provided
+  healthBadges?: string[]; // Override auto-detection if provided
+  showCuisineBadge?: boolean;
   showKidBadge?: boolean;
+  showKetoScore?: boolean; // Show keto score when in keto mode
 }
 
 export function RecipeCard({ 
@@ -100,20 +107,35 @@ export function RecipeCard({
   onClick,
   onDelete,
   compact = false,
-  dietBadges = [],
-  healthBadges = [],
+  dietBadges: overrideDietBadges,
+  healthBadges: overrideHealthBadges,
   showCuisineBadge = false,
-  showKidBadge = false
+  showKidBadge = false,
+  showKetoScore = false,
 }: RecipeCardProps) {
-  const nutrition = recipe.nutrition;
   const [imageError, setImageError] = useState(false);
+  const mode = useNeutronStore((s) => s.mode);
+
+  // Process nutrition through Neutron Engine
+  const neutronResult = useMemo(() => {
+    const rawNutrition: RawNutritionData = recipe.nutrition || {};
+    const processed = processNutrition(rawNutrition, mode);
+    const badges = getNeutronBadges(
+      rawNutrition,
+      recipe.ingredients,
+      recipe.tags
+    );
+    return { nutrition: processed, badges };
+  }, [recipe.nutrition, recipe.ingredients, recipe.tags, mode]);
+
+  const { nutrition, badges } = neutronResult;
   
   // Check if we have valid nutrition data to display
-  const hasNutrition = nutrition && (
-    nutrition.calories != null || 
-    nutrition.protein_g != null || 
-    nutrition.carbs_g != null || 
-    nutrition.fat_g != null
+  const hasNutrition = recipe.nutrition && (
+    recipe.nutrition.calories != null || 
+    recipe.nutrition.protein_g != null || 
+    recipe.nutrition.carbs_g != null || 
+    recipe.nutrition.fat_g != null
   );
 
   // Get cuisine badge if enabled
@@ -121,8 +143,12 @@ export function RecipeCard({
     ? CUISINE_BADGES[recipe.cuisine.toLowerCase()] 
     : null;
 
+  // Use provided badges or auto-detected from Neutron
+  const effectiveDietBadges = overrideDietBadges ?? badges.dietBadges;
+  const effectiveHealthBadges = overrideHealthBadges ?? badges.healthBadges;
+
   // Combine diet and health badges, show up to 3 to balance visibility with space
-  const allBadges = [...dietBadges, ...healthBadges];
+  const allBadges = [...effectiveDietBadges, ...effectiveHealthBadges];
   const visibleBadges = cuisineBadge ? allBadges.slice(0, 2) : allBadges.slice(0, 3);
 
   return (
@@ -182,6 +208,13 @@ export function RecipeCard({
           >
             <Trash2 className="w-4 h-4" />
           </button>
+        )}
+
+        {/* Keto Score badge (when in keto mode and showKetoScore is true) */}
+        {showKetoScore && mode === 'keto' && badges.ketoScore.score > 0 && (
+          <div className="absolute top-2 left-2 px-2 py-1 rounded-full bg-emerald-500/90 text-white text-xs font-bold">
+            {badges.ketoScore.score}
+          </div>
         )}
 
         {/* Time badge */}
@@ -262,26 +295,26 @@ export function RecipeCard({
           </h3>
         </div>
 
-        {/* Nutrition per serving */}
+        {/* Nutrition per serving - Neutron-aware */}
         {hasNutrition && (
           <div className="bg-muted/50 rounded-lg p-2 mt-1">
             <p className="text-2xs text-muted-foreground mb-1.5 font-medium">Per serving</p>
             <div className="flex items-center justify-between gap-1">
               <div className="text-center flex-1">
-                <p className="text-sm font-bold text-[hsl(var(--calories))]">{nutrition?.calories ?? '-'}</p>
+                <p className="text-sm font-bold text-[hsl(var(--calories))]">{Math.round(nutrition.calories)}</p>
                 <p className="text-2xs text-muted-foreground">kcal</p>
               </div>
               <div className="text-center flex-1">
-                <p className="text-sm font-bold text-[hsl(var(--protein))]">{nutrition?.protein_g ?? '-'}g</p>
+                <p className="text-sm font-bold text-[hsl(var(--protein))]">{Math.round(nutrition.protein)}g</p>
                 <p className="text-2xs text-muted-foreground">protein</p>
               </div>
               <div className="text-center flex-1">
-                <p className="text-sm font-bold text-[hsl(var(--fat))]">{nutrition?.fat_g ?? '-'}g</p>
+                <p className="text-sm font-bold text-[hsl(var(--fat))]">{Math.round(nutrition.fat)}g</p>
                 <p className="text-2xs text-muted-foreground">fat</p>
               </div>
               <div className="text-center flex-1">
-                <p className="text-sm font-bold text-[hsl(var(--carbs))]">{nutrition?.carbs_g ?? '-'}g</p>
-                <p className="text-2xs text-muted-foreground">carbs</p>
+                <p className="text-sm font-bold text-[hsl(var(--carbs))]">{Math.round(nutrition.displayCarbs)}g</p>
+                <p className="text-2xs text-muted-foreground">{mode === 'keto' ? 'net carbs' : 'carbs'}</p>
               </div>
             </div>
           </div>
