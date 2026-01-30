@@ -15,7 +15,7 @@ import { useRecipeImport } from '@/hooks/useRecipeImport';
 import { YouTubeImportProgress } from '@/components/recipe/YouTubeImportProgress';
 import { RecipeImportDrawer } from '@/components/recipe/RecipeImportDrawer';
 import { syncNeutronMode } from '@/stores/neutronStore';
-import { meetsHealthConsideration } from '@/lib/neutron';
+import { meetsHealthConsideration, calculateNetCarbs, isKetoBadgeEligible, getNeutronBadges } from '@/lib/neutron';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -173,20 +173,13 @@ const isKetoFriendly = (nutrition: RecipeNutrition | null | undefined): boolean 
   
   const totalCarbs = nutrition.carbs_g ?? 0;
   const fiber = nutrition.fiber_g ?? 0;
+  const sugarAlcohols = (nutrition as any).sugar_alcohols_g ?? 0;
   const protein = nutrition.protein_g ?? 0;
   const fat = nutrition.fat_g ?? 0;
   
-  // Calculate net carbs: Total Carbs - Fiber
-  const netCarbs = Math.max(0, totalCarbs - fiber);
-  
-  // Keto badge requires: Net Carbs ≤ 10g AND Fat ≥ 60% of Net Energy
-  if (netCarbs > 10) return false;
-  
-  const netEnergy = (fat * 9) + (protein * 4) + (netCarbs * 4);
-  if (netEnergy <= 0) return false;
-  
-  const fatPercent = ((fat * 9) / netEnergy) * 100;
-  return fatPercent >= 60;
+  // Use Neutron Engine for consistent calculation
+  const netCarbs = calculateNetCarbs(totalCarbs, fiber, sugarAlcohols);
+  return isKetoBadgeEligible(netCarbs, fat, protein);
 };
 
 const isPaleoFriendly = (ingredients: RecipeIngredient[] | undefined): boolean => {
@@ -205,30 +198,11 @@ const isMediterraneanFriendly = (ingredients: RecipeIngredient[] | undefined): b
   });
 };
 
-// Build diet badges for a recipe
-const getDietBadges = (recipe: UserRecipe): string[] => {
-  const badges: string[] = [];
-  const recipeDietTags = (recipe.tags || [])
-    .filter(t => t.tag_type === 'diet')
-    .map(t => t.tag_value.toLowerCase());
-  
-  // Keto: auto-detect from macros
-  if (isKetoFriendly(recipe.nutrition)) badges.push('keto');
-  
-  // Paleo: auto-detect from ingredients or use tag
-  if (recipeDietTags.includes('paleo') || isPaleoFriendly(recipe.ingredients)) badges.push('paleo');
-  
-  // Mediterranean: auto-detect from ingredients or use tag
-  if (recipeDietTags.includes('mediterranean') || isMediterraneanFriendly(recipe.ingredients)) badges.push('mediterranean');
-  
-  // Vegan, vegetarian, pescatarian: rely on tags
-  ['vegan', 'vegetarian', 'pescatarian'].forEach(diet => {
-    if (recipeDietTags.includes(diet) && !badges.includes(diet)) {
-      badges.push(diet);
-    }
-  });
-  
-  return badges;
+// Build diet badges for a recipe using Neutron Engine for consistency
+const getRecipeDietBadges = (recipe: UserRecipe): string[] => {
+  // Use Neutron Engine for consistent badge detection
+  const neutronBadges = getNeutronBadges(recipe.nutrition, recipe.ingredients, recipe.tags);
+  return neutronBadges.dietBadges;
 };
 
 export default function Recipes() {
@@ -367,7 +341,7 @@ export default function Recipes() {
       
       // Diet type filter
       if (selectedDietType) {
-        const dietBadges = getDietBadges(recipe);
+        const dietBadges = getRecipeDietBadges(recipe);
         if (!dietBadges.includes(selectedDietType.toLowerCase())) {
           return false;
         }
@@ -842,10 +816,10 @@ export default function Recipes() {
                       is_kid_friendly: recipe.is_kid_friendly || false,
                       is_meal_prep_friendly: recipe.is_meal_prep_friendly || false,
                       nutrition: recipe.nutrition,
+                      ingredients: recipe.ingredients,
+                      tags: recipe.tags,
                     }} 
-                    dietBadges={getDietBadges(recipe)}
-                    healthBadges={[]}
-                    showCuisineBadge={true}
+                    showCuisineBadge={false}
                     onClick={() => navigate(`/recipe/${recipe.id}`)}
                     onDelete={() => handleDeleteClick(recipe)}
                   />
