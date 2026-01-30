@@ -1,6 +1,6 @@
 /**
- * useKetoSandbox - Hook for managing Keto Sandbox preview state
- * Refactored to use context-aware increments instead of percentages
+ * useKetoSandbox - Hook for managing Keto Architect preview state
+ * Refactored with smart filtering, carb-weight sorting, and auto-apply logic
  */
 
 import { useState, useMemo, useCallback } from 'react';
@@ -11,6 +11,8 @@ import {
   calculateMacroPercents,
   calculateKetoScore,
   CALORIES_PER_GRAM,
+  KETO_SCORE_CARB_THRESHOLD,
+  KETO_BADGE_MIN_FAT_PERCENT,
 } from '@/lib/neutron';
 import type {
   IngredientData,
@@ -31,6 +33,16 @@ import {
   CUP_UNITS,
   CUP_INCREMENT,
 } from './types';
+import { calculateRecommendations, type Recommendation } from './PathToHundred';
+
+// Zero-impact ingredients (spices, seasonings, water, etc.)
+const ZERO_IMPACT_PATTERNS = [
+  'salt', 'pepper', 'spice', 'seasoning', 'herb', 'oregano', 'basil', 'thyme',
+  'rosemary', 'parsley', 'cilantro', 'dill', 'cumin', 'paprika', 'turmeric',
+  'cinnamon', 'nutmeg', 'garlic powder', 'onion powder', 'chili powder',
+  'cayenne', 'water', 'ice', 'bay leaf', 'bay leaves', 'vanilla extract',
+  'lemon juice', 'lime juice', 'vinegar', 'mustard', 'hot sauce',
+];
 
 interface UseKetoSandboxProps {
   nutrition: {
@@ -50,27 +62,10 @@ function detectIncrementType(name: string, unit: string | null): IncrementType {
   const lowerName = name.toLowerCase();
   const lowerUnit = (unit || '').toLowerCase();
   
-  // Check for avocado first
-  if (lowerName.includes('avocado')) {
-    return 'avocado';
-  }
-  
-  // Check for countable units
-  if (COUNTABLE_UNITS.some(u => lowerUnit.includes(u))) {
-    return 'countable';
-  }
-  
-  // Check for liquid small units (tsp, tbsp)
-  if (LIQUID_SMALL_UNITS.some(u => lowerUnit.includes(u))) {
-    return 'liquid-small';
-  }
-  
-  // Check for cup units
-  if (CUP_UNITS.some(u => lowerUnit.includes(u))) {
-    return 'liquid-cup';
-  }
-  
-  // Check for weight units
+  if (lowerName.includes('avocado')) return 'avocado';
+  if (COUNTABLE_UNITS.some(u => lowerUnit.includes(u))) return 'countable';
+  if (LIQUID_SMALL_UNITS.some(u => lowerUnit.includes(u))) return 'liquid-small';
+  if (CUP_UNITS.some(u => lowerUnit.includes(u))) return 'liquid-cup';
   if (['g', 'gram', 'grams', 'oz', 'ounce', 'ounces', 'lb', 'pound'].some(u => lowerUnit.includes(u))) {
     return 'weight';
   }
@@ -86,7 +81,13 @@ function getCarbsPerUnit(name: string): number {
       return carbs;
     }
   }
-  return 2; // default estimation
+  return 2;
+}
+
+// Check if ingredient has zero impact on keto score
+function isZeroImpact(name: string): boolean {
+  const lowerName = name.toLowerCase();
+  return ZERO_IMPACT_PATTERNS.some(pattern => lowerName.includes(pattern));
 }
 
 // Get increment value based on type
@@ -95,41 +96,35 @@ function getIncrementValue(incrementType: IncrementType, currentQty: number, dir
   
   switch (incrementType) {
     case 'countable':
-      return delta * 1; // +/- 1 unit
+      return delta * 1;
     case 'avocado': {
       const currentIndex = AVOCADO_OPTIONS.findIndex(opt => Math.abs(opt - currentQty) < 0.01);
       const newIndex = Math.max(0, Math.min(AVOCADO_OPTIONS.length - 1, currentIndex + delta));
       return AVOCADO_OPTIONS[newIndex] - currentQty;
     }
     case 'liquid-cup':
-      return delta * CUP_INCREMENT; // +/- 0.25 cup
+      return delta * CUP_INCREMENT;
     case 'liquid-small':
-      return delta * 0.5; // +/- 0.5 for small liquids
+      return delta * 0.5;
     case 'weight':
-      return delta * 10; // +/- 10g
+      return delta * 10;
     default:
-      return delta * 0.5; // default increment
+      return delta * 0.5;
   }
 }
 
 // Get min quantity based on increment type
 function getMinQuantity(incrementType: IncrementType): number {
   switch (incrementType) {
-    case 'avocado':
-      return 0;
-    case 'countable':
-      return 1;
-    case 'liquid-cup':
-      return 0.25;
-    case 'liquid-small':
-      return 0.5;
-    default:
-      return 0.1;
+    case 'avocado': return 0;
+    case 'countable': return 1;
+    case 'liquid-cup': return 0.25;
+    case 'liquid-small': return 0.5;
+    default: return 0.1;
   }
 }
 
 export function useKetoSandbox({ nutrition, ingredients, servings }: UseKetoSandboxProps) {
-  // Initialize sandbox state
   const [previewState, setPreviewState] = useState<SandboxPreviewState>({
     swaps: [],
     quantities: [],
@@ -158,10 +153,13 @@ export function useKetoSandbox({ nutrition, ingredients, servings }: UseKetoSand
     });
   }, [ingredients]);
 
-  // Generate quantity tweaks for all ingredients with context-aware increments
+  // Generate quantity tweaks with SMART FILTERING:
+  // - Filter out zero-impact ingredients
+  // - Sort by carb weight (highest impact first)
   const quantityTweaks = useMemo(() => {
     return ingredients
       .filter(ing => ing.quantity && ing.quantity > 0)
+      .filter(ing => !isZeroImpact(ing.name)) // NOISE REDUCTION
       .map(ing => {
         const isHighCarb = HIGH_CARB_PATTERNS.some(pattern => 
           ing.name.toLowerCase().includes(pattern)
@@ -170,7 +168,6 @@ export function useKetoSandbox({ nutrition, ingredients, servings }: UseKetoSand
         const incrementType = detectIncrementType(ing.name, ing.unit);
         const carbsPerUnit = getCarbsPerUnit(ing.name);
         
-        // Find existing quantity change or use original
         const existingChange = previewState.quantities.find(q => q.ingredientId === ing.id);
         const currentQuantity = existingChange?.newQuantity ?? ing.quantity!;
         
@@ -184,7 +181,15 @@ export function useKetoSandbox({ nutrition, ingredients, servings }: UseKetoSand
           isHighCarb,
           incrementType,
           carbsPerUnit,
+          // Carb weight for sorting (total carbs = qty * carbsPerUnit)
+          carbWeight: (ing.quantity || 0) * carbsPerUnit,
         };
+      })
+      // IMPACT SORT: High-carb items first, then by carb weight
+      .sort((a, b) => {
+        if (a.isHighCarb && !b.isHighCarb) return -1;
+        if (!a.isHighCarb && b.isHighCarb) return 1;
+        return b.carbWeight - a.carbWeight;
       });
   }, [ingredients, previewState.quantities]);
 
@@ -223,11 +228,10 @@ export function useKetoSandbox({ nutrition, ingredients, servings }: UseKetoSand
       deltaCalories -= swap.estimatedCarbReduction * CALORIES_PER_GRAM.carbs;
     });
 
-    // Apply quantity changes using exact unit-based calculations
+    // Apply quantity changes
     previewState.quantities.forEach(q => {
       const unitDelta = q.newQuantity - q.originalQuantity;
       if (unitDelta !== 0) {
-        // Use carbsPerUnit for accurate calculation
         const carbDelta = (unitDelta * q.carbsPerUnit) / servings;
         deltaCarbs += carbDelta;
         deltaCalories += carbDelta * CALORIES_PER_GRAM.carbs;
@@ -244,7 +248,6 @@ export function useKetoSandbox({ nutrition, ingredients, servings }: UseKetoSand
       }
     });
 
-    // Calculate new values
     const newCarbs = Math.max(0, baseCarbs + deltaCarbs);
     const newFat = Math.max(0, baseFat + deltaFat);
     const newCalories = Math.max(0, baseCalories + deltaCalories);
@@ -297,13 +300,118 @@ export function useKetoSandbox({ nutrition, ingredients, servings }: UseKetoSand
     };
   }, [nutrition]);
 
+  // Calculate fat needed for target ratio
+  const fatNeeded = useMemo(() => {
+    const protein = nutrition?.protein_g ?? 0;
+    const netCarbs = originalNutrition.netCarbs;
+    const currentFat = nutrition?.fat_g ?? 0;
+    
+    const nonFatCals = protein * CALORIES_PER_GRAM.protein + netCarbs * CALORIES_PER_GRAM.carbs;
+    const targetFatCals = (0.601 * nonFatCals) / 0.399;
+    const currentFatCals = currentFat * CALORIES_PER_GRAM.fat;
+    const additionalFatCalsNeeded = Math.max(0, targetFatCals - currentFatCals);
+    
+    return Math.ceil(additionalFatCalsNeeded / CALORIES_PER_GRAM.fat);
+  }, [nutrition, originalNutrition]);
+
+  // Generate recommendations for Path to 100
+  const recommendations = useMemo((): Recommendation[] => {
+    const highCarbIngredients = quantityTweaks
+      .filter(t => t.isHighCarb)
+      .map(t => ({
+        id: t.ingredientId,
+        name: t.ingredientName,
+        carbsPerUnit: t.carbsPerUnit,
+        currentQty: t.newQuantity,
+        unit: t.unit,
+      }));
+
+    return calculateRecommendations(originalNutrition, highCarbIngredients);
+  }, [originalNutrition, quantityTweaks]);
+
+  // AUTO-APPLY: Apply all recommendations at once
+  const autoApplyRecommendations = useCallback(() => {
+    setPreviewState(prev => {
+      let newState = { ...prev };
+
+      for (const rec of recommendations) {
+        if (!rec.action) continue;
+
+        // Handle carb reduction
+        if (rec.type === 'reduce_carbs' && rec.action.ingredientId && rec.action.reduction) {
+          const ingredient = ingredients.find(i => i.id === rec.action!.ingredientId);
+          if (ingredient && ingredient.quantity) {
+            const existingIndex = newState.quantities.findIndex(q => q.ingredientId === rec.action!.ingredientId);
+            const incrementType = detectIncrementType(ingredient.name, ingredient.unit);
+            const carbsPerUnit = getCarbsPerUnit(ingredient.name);
+            const isHighCarb = HIGH_CARB_PATTERNS.some(pattern => 
+              ingredient.name.toLowerCase().includes(pattern)
+            );
+            
+            const newQuantity = Math.max(1, ingredient.quantity - rec.action.reduction);
+            
+            const newChange: QuantityChange = {
+              type: 'quantity',
+              ingredientId: rec.action.ingredientId,
+              ingredientName: ingredient.name,
+              originalQuantity: ingredient.quantity,
+              newQuantity,
+              unit: ingredient.unit,
+              isHighCarb,
+              incrementType,
+              carbsPerUnit,
+            };
+
+            if (existingIndex >= 0) {
+              newState.quantities = [...newState.quantities];
+              newState.quantities[existingIndex] = newChange;
+            } else {
+              newState.quantities = [...newState.quantities, newChange];
+            }
+          }
+        }
+
+        // Handle fat addition
+        if ((rec.type === 'add_fat' || rec.type === 'balance_protein') && rec.action.fatSource) {
+          const fatSourceId = rec.action.fatSource.toLowerCase().replace(' ', '-');
+          const fatAddition = FAT_ADDITIONS.find(f => 
+            f.name.toLowerCase() === rec.action!.fatSource!.toLowerCase()
+          );
+          
+          if (fatAddition) {
+            const existingIndex = newState.additions.findIndex(a => a.id === fatAddition.id);
+            const quantity = rec.action.fatAmount || 1;
+            
+            const newAddition: AdditionChange = {
+              type: 'addition',
+              id: fatAddition.id,
+              name: fatAddition.name,
+              quantity,
+              unit: fatAddition.unit,
+              estimatedFatAddition: quantity * fatAddition.fatPerUnit,
+              enabled: true,
+            };
+
+            if (existingIndex >= 0) {
+              newState.additions = [...newState.additions];
+              newState.additions[existingIndex] = newAddition;
+            } else {
+              newState.additions = [...newState.additions, newAddition];
+            }
+          }
+        }
+      }
+
+      return newState;
+    });
+  }, [recommendations, ingredients]);
+
   // Toggle swap
   const toggleSwap = useCallback((ingredientId: string) => {
     setPreviewState(prev => {
       const existingIndex = prev.swaps.findIndex(s => s.ingredientId === ingredientId);
       
       if (existingIndex >= 0) {
-        // Toggle existing
         const newSwaps = [...prev.swaps];
         newSwaps[existingIndex] = { 
           ...newSwaps[existingIndex], 
@@ -311,7 +419,6 @@ export function useKetoSandbox({ nutrition, ingredients, servings }: UseKetoSand
         };
         return { ...prev, swaps: newSwaps };
       } else {
-        // Add new swap from suggestions
         const suggestion = swapSuggestions.find(s => s.ingredientId === ingredientId);
         if (suggestion) {
           return { 
@@ -342,13 +449,12 @@ export function useKetoSandbox({ nutrition, ingredients, servings }: UseKetoSand
       const currentQty = existingChange?.newQuantity ?? ingredient.quantity;
       const delta = getIncrementValue(incrementType, currentQty, direction);
       const minQty = getMinQuantity(incrementType);
-      const maxQty = ingredient.quantity * 3; // Allow up to 3x original
+      const maxQty = ingredient.quantity * 3;
       
       const newQuantity = Math.max(minQty, Math.min(maxQty, currentQty + delta));
       
-      // Round appropriately based on increment type
       const roundedQuantity = incrementType === 'avocado' 
-        ? Math.round(newQuantity * 4) / 4 // Round to nearest 0.25
+        ? Math.round(newQuantity * 4) / 4
         : incrementType === 'countable'
           ? Math.round(newQuantity)
           : Math.round(newQuantity * 100) / 100;
@@ -471,6 +577,8 @@ export function useKetoSandbox({ nutrition, ingredients, servings }: UseKetoSand
     previewNutrition,
     originalNutrition,
     hasChanges,
+    recommendations,
+    fatNeeded,
     
     // Actions
     toggleSwap,
@@ -480,5 +588,6 @@ export function useKetoSandbox({ nutrition, ingredients, servings }: UseKetoSand
     updateAdditionQuantity,
     getActiveChanges,
     resetAll,
+    autoApplyRecommendations,
   };
 }
