@@ -700,7 +700,9 @@ CRITICAL RULES:
 ${originalNutrition ? `7. Previous nutrition was: ${JSON.stringify(originalNutrition)} - only adjust proportionally for ingredient changes` : ''}
 
 USDA STANDARD MACRO REFERENCES (for ingredients WITHOUT user-provided nutrition):
-- 1 large egg = 72 cal, 6.3g protein, 0.4g carbs, 4.8g fat, 0g fiber
+- 1 large egg (whole) = 72 cal, 6.3g protein, 0.4g carbs, 4.8g fat, 0g fiber
+- 1 large egg yolk ONLY = 55 cal, 2.7g protein, 0.6g carbs, 4.5g fat, 0g fiber
+- 1 large egg white ONLY = 17 cal, 3.6g protein, 0.2g carbs, 0g fat, 0g fiber
 - 1 medium tomato = 22 cal, 1.1g protein, 4.8g carbs, 0.2g fat, 1.5g fiber
 - 1 slice regular bread = 79 cal, 2.7g protein, 15g carbs, 1g fat, 1g fiber
 - 1 tbsp olive oil = 119 cal, 0g protein, 0g carbs, 13.5g fat, 0g fiber
@@ -709,6 +711,13 @@ USDA STANDARD MACRO REFERENCES (for ingredients WITHOUT user-provided nutrition)
 - Half avocado (100g) = 160 cal, 2g protein, 8.5g carbs, 14.7g fat, 7g fiber
 - 100g chicken breast = 165 cal, 31g protein, 0g carbs, 3.6g fat, 0g fiber
 - 100g salmon = 208 cal, 20g protein, 0g carbs, 13g fat, 0g fiber
+
+FAT CALCULATION - CRITICAL FOR ACCURACY:
+When summing fat from ingredients, be EXTREMELY precise:
+- Eggs are fat-rich: 1 whole egg = 4.8g fat, 1 yolk = 4.5g fat
+- Avocado is fat-rich: half avocado = ~15g fat
+- Always SUM each ingredient's fat contribution individually
+- Example: 2 eggs (9.6g) + 2 yolks (9g) + half avocado (15g) + 4 bread slices (10g) = 43.6g ≈ 44g
 
 ═══════════════════════════════════════════════════════════════
 FIBER AND NET CARBS - CRITICAL FOR CALORIE ACCURACY
@@ -1129,7 +1138,9 @@ Pescatarian: Fish allowed, no meat
 MACRO CALCULATION RULES (CRITICAL - FOLLOW EXACTLY)
 ═══════════════════════════════════════════════════════════════
 USDA STANDARD MACRO REFERENCES (use these EXACT values!):
-- 1 large egg = 72 cal, 6.3g protein, 0.4g carbs, 4.8g fat, 0g fiber
+- 1 large egg (whole) = 72 cal, 6.3g protein, 0.4g carbs, 4.8g fat, 0g fiber
+- 1 large egg yolk ONLY = 55 cal, 2.7g protein, 0.6g carbs, 4.5g fat, 0g fiber
+- 1 large egg white ONLY = 17 cal, 3.6g protein, 0.2g carbs, 0g fat, 0g fiber
 - 1 medium tomato = 22 cal, 1.1g protein, 4.8g carbs, 0.2g fat, 1.5g fiber
 - 1 slice regular bread = 79 cal, 2.7g protein, 15g carbs, 1g fat, 1g fiber
 - 1 tbsp olive oil = 119 cal, 0g protein, 0g carbs, 13.5g fat, 0g fiber
@@ -1139,6 +1150,14 @@ USDA STANDARD MACRO REFERENCES (use these EXACT values!):
 - 100g chicken breast = 165 cal, 31g protein, 0g carbs, 3.6g fat, 0g fiber
 - 100g salmon = 208 cal, 20g protein, 0g carbs, 13g fat, 0g fiber
 - 100g ground beef 90/10 = 176 cal, 26g protein, 0g carbs, 8g fat, 0g fiber
+
+FAT CALCULATION - CRITICAL FOR ACCURACY:
+When summing fat from ingredients, be EXTREMELY precise:
+- Eggs are fat-rich: 1 whole egg = 4.8g fat, 1 yolk = 4.5g fat
+- Avocado is fat-rich: half avocado = ~15g fat, full avocado = ~29g fat
+- Always SUM each ingredient's fat contribution individually
+- Example: 2 eggs (9.6g) + 2 yolks (9g) + half avocado (15g) + 4 bread slices (10g) = 43.6g ≈ 44g
+- DO NOT underestimate fat - high-fat foods like eggs, avocados, nuts are your biggest fat sources
 
 ═══════════════════════════════════════════════════════════════
 USER-PROVIDED NUTRITION (HIGHEST PRIORITY - NEVER OVERRIDE!)
