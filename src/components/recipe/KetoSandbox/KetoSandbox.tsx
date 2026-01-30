@@ -1,16 +1,17 @@
 /**
- * KetoSandbox - Multi-action keto optimization component
+ * KetoSandbox - Keto Architect: Prescriptive optimization tool
  * 
- * Provides a unified interface for:
- * - Smart Swaps: Replace high-carb ingredients with keto alternatives
- * - Quantity Tweaks: Adjust ingredient amounts in 10% increments
- * - Fat Additions: Add healthy fat sources to meet keto thresholds
+ * Provides a direct "Path to 100" with:
+ * - Auto-Apply recommendations for instant optimization
+ * - Smart filtering (no noise from salt/pepper/spices)
+ * - Carb-weight sorted ingredients
+ * - Prescriptive fat additions with exact calculations
  */
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Zap, 
+  Target, 
   ChevronDown, 
   ChevronUp, 
   RefreshCw, 
@@ -19,6 +20,7 @@ import {
   Check,
   Loader2,
   RotateCcw,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -26,12 +28,13 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
+import { KETO_BADGE_MIN_FAT_PERCENT } from '@/lib/neutron';
 
 import { useKetoSandbox } from './useKetoSandbox';
-import { KetoAnalysisPreview } from './KetoAnalysisPreview';
+import { PathToHundred } from './PathToHundred';
 import { SwapsList } from './SwapsList';
 import { QuantityTweaksList } from './QuantityTweaksList';
-import { AdditionsList } from './AdditionsList';
+import { PrescriptiveAddFat } from './PrescriptiveAddFat';
 import type { KetoSandboxProps } from './types';
 
 export function KetoSandbox({ 
@@ -44,6 +47,7 @@ export function KetoSandbox({
 }: KetoSandboxProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
+  const [isAutoApplying, setIsAutoApplying] = useState(false);
   const [activeTab, setActiveTab] = useState('swaps');
   const queryClient = useQueryClient();
 
@@ -55,6 +59,8 @@ export function KetoSandbox({
     previewNutrition,
     originalNutrition,
     hasChanges,
+    recommendations,
+    fatNeeded,
     toggleSwap,
     updateQuantity,
     resetQuantity,
@@ -62,6 +68,7 @@ export function KetoSandbox({
     updateAdditionQuantity,
     getActiveChanges,
     resetAll,
+    autoApplyRecommendations,
   } = useKetoSandbox({ nutrition, ingredients, servings });
 
   // Count active changes per section
@@ -69,6 +76,17 @@ export function KetoSandbox({
   const quantityCount = previewState.quantities.filter(q => q.newQuantity !== q.originalQuantity).length;
   const additionCount = previewState.additions.filter(a => a.enabled).length;
   const totalChanges = swapCount + quantityCount + additionCount;
+
+  // Handle auto-apply with visual feedback
+  const handleAutoApply = async () => {
+    setIsAutoApplying(true);
+    await new Promise(resolve => setTimeout(resolve, 300)); // Brief animation delay
+    autoApplyRecommendations();
+    setIsAutoApplying(false);
+    toast.success('Recommendations applied!', {
+      description: 'Review the changes below and commit when ready.',
+    });
+  };
 
   // Commit all changes to database
   const handleCommit = async () => {
@@ -112,7 +130,6 @@ export function KetoSandbox({
       // 4. Auto-sync instructions for quantity changes
       if (changes.quantities.length > 0) {
         for (const qty of changes.quantities) {
-          // Find steps that mention this ingredient quantity
           const ingredient = ingredients.find(i => i.id === qty.ingredientId);
           if (!ingredient) continue;
           
@@ -120,7 +137,6 @@ export function KetoSandbox({
           const newQtyStr = qty.newQuantity.toFixed(1).replace(/\.0$/, '');
           
           for (const step of steps) {
-            // Simple regex to find quantity mentions (e.g., "Add 4 slices" -> "Add 2 slices")
             const patterns = [
               new RegExp(`\\b${originalQtyStr}\\s*(${ingredient.unit || ''})\\s+${ingredient.name.split(' ')[0]}`, 'gi'),
               new RegExp(`\\b${originalQtyStr}\\s+${ingredient.name.split(' ')[0]}`, 'gi'),
@@ -154,8 +170,11 @@ export function KetoSandbox({
       // Invalidate queries to refresh data
       await queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] });
       
+      const scoreGain = previewNutrition.ketoScore - originalNutrition.ketoScore;
       toast.success('Recipe optimized!', {
-        description: `Applied ${totalChanges} change${totalChanges !== 1 ? 's' : ''} for keto compliance.`,
+        description: scoreGain > 0 
+          ? `Score improved by ${scoreGain} points to ${previewNutrition.ketoScore}!`
+          : `Applied ${totalChanges} change${totalChanges !== 1 ? 's' : ''}.`,
       });
       
       resetAll();
@@ -198,38 +217,56 @@ export function KetoSandbox({
     return null;
   }
 
+  const isPerfectScore = originalNutrition.ketoScore >= 100;
+  const projectedScore = hasChanges ? previewNutrition.ketoScore : originalNutrition.ketoScore;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/30 rounded-xl overflow-hidden mb-6"
+      className="bg-gradient-to-br from-indigo-500/10 to-violet-500/5 border border-indigo-500/30 rounded-xl overflow-hidden mb-6"
     >
       {/* Header */}
       <div 
         className="flex items-center justify-between p-4 cursor-pointer"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-            <Zap className="w-4 h-4 text-primary" />
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500/30 to-violet-500/20 flex items-center justify-center">
+            <Target className="w-5 h-5 text-indigo-500" />
           </div>
           <div>
-            <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
-              Keto Sandbox
+            <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
+              Keto Architect
               {totalChanges > 0 && (
-                <Badge className="bg-primary text-primary-foreground text-2xs">
-                  {totalChanges} active
+                <Badge className="bg-indigo-500 text-white text-2xs">
+                  {totalChanges} staged
                 </Badge>
               )}
             </h4>
             <p className="text-xs text-muted-foreground">
-              Optimize ingredients to reach keto compliance
+              {isPerfectScore 
+                ? '✨ Perfect 100 score achieved!' 
+                : `${100 - originalNutrition.ketoScore} points to perfect score`}
             </p>
           </div>
         </div>
-        <button className="text-muted-foreground hover:text-foreground transition-colors">
-          {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-        </button>
+        
+        <div className="flex items-center gap-2">
+          {/* Projected Score Badge */}
+          <div className={`px-3 py-1.5 rounded-full text-sm font-bold transition-all ${
+            projectedScore >= 100
+              ? 'bg-emerald-500 text-white'
+              : hasChanges
+                ? 'bg-indigo-500 text-white'
+                : 'bg-muted text-muted-foreground'
+          }`}>
+            {projectedScore >= 100 ? '100 ✓' : projectedScore}
+          </div>
+          <button className="text-muted-foreground hover:text-foreground transition-colors">
+            {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+          </button>
+        </div>
       </div>
 
       {/* Expanded Content */}
@@ -243,10 +280,14 @@ export function KetoSandbox({
             className="overflow-hidden"
           >
             <div className="px-4 pb-4 space-y-4">
-              {/* Keto Analysis Preview */}
-              <KetoAnalysisPreview
-                original={originalNutrition}
-                preview={previewNutrition}
+              {/* Path to 100 - Prescriptive Header */}
+              <PathToHundred
+                currentScore={originalNutrition.ketoScore}
+                projectedScore={projectedScore}
+                nutrition={originalNutrition}
+                recommendations={recommendations}
+                onAutoApply={handleAutoApply}
+                isApplying={isAutoApplying}
                 hasChanges={hasChanges}
               />
 
@@ -262,14 +303,14 @@ export function KetoSandbox({
                   </TabsTrigger>
                   <TabsTrigger value="quantities" className="text-xs gap-1">
                     <SlidersHorizontal className="w-3.5 h-3.5" />
-                    Quantities
+                    Adjust
                     {quantityCount > 0 && (
                       <Badge variant="secondary" className="text-2xs h-4 px-1">{quantityCount}</Badge>
                     )}
                   </TabsTrigger>
                   <TabsTrigger value="additions" className="text-xs gap-1">
                     <Droplets className="w-3.5 h-3.5" />
-                    Add Fat
+                    Fat
                     {additionCount > 0 && (
                       <Badge variant="secondary" className="text-2xs h-4 px-1">{additionCount}</Badge>
                     )}
@@ -293,7 +334,10 @@ export function KetoSandbox({
                 </TabsContent>
 
                 <TabsContent value="additions" className="mt-3">
-                  <AdditionsList
+                  <PrescriptiveAddFat
+                    fatNeeded={fatNeeded}
+                    currentFatPercent={originalNutrition.fatPercent}
+                    targetFatPercent={KETO_BADGE_MIN_FAT_PERCENT}
                     additions={availableAdditions}
                     onToggle={toggleAddition}
                     onUpdateQuantity={updateAdditionQuantity}
@@ -311,12 +355,12 @@ export function KetoSandbox({
                     className="text-muted-foreground"
                   >
                     <RotateCcw className="w-4 h-4 mr-1.5" />
-                    Reset All
+                    Reset
                   </Button>
                 )}
                 
                 <Button
-                  className="flex-1 gradient-primary"
+                  className="flex-1 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white"
                   size="sm"
                   onClick={handleCommit}
                   disabled={!hasChanges || isCommitting}
@@ -328,8 +372,9 @@ export function KetoSandbox({
                     </>
                   ) : (
                     <>
-                      <Check className="w-4 h-4 mr-1.5" />
-                      Apply & Commit Changes
+                      <Sparkles className="w-4 h-4 mr-1.5" />
+                      Commit Changes
+                      {hasChanges && projectedScore >= 100 && ' → 100'}
                     </>
                   )}
                 </Button>
