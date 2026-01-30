@@ -389,15 +389,15 @@ export function NeutronSuggestionCard({
 
             {/* Preview result */}
             {previewingSwap && (
-              <div className="mt-4 p-3 bg-accent border border-border rounded-lg">
+              <div className="mt-4 p-3 bg-primary/10 border border-primary/30 rounded-lg">
                 <div className="flex items-center gap-2">
                   <Flame className="w-4 h-4 text-primary" />
                   <span className="text-sm font-medium text-foreground">
                     With {previewingSwap.swapTo}:
                   </span>
                 </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Estimated Net Carbs: <span className="font-medium text-foreground">
+                <p className="text-sm text-foreground mt-1">
+                  Estimated Net Carbs: <span className="font-semibold">
                     ~{Math.max(0, currentNetCarbs - previewingSwap.estimatedCarbReduction).toFixed(0)}g
                   </span>
                   {currentNetCarbs - previewingSwap.estimatedCarbReduction <= KETO_BADGE_MAX_NET_CARBS && (
