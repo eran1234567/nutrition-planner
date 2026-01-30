@@ -194,12 +194,22 @@ export function generateSmartActions(
         const carbReduction = actualReduction * ing.carbsPerUnit;
         const reduceScoreImpact = Math.min(carbReduction * 10, scoreToGain);
         
-        // Format quantity + unit clearly, especially for compound units like "6 oz fillets"
-        const unitLabel = ing.unit || 'unit';
-        const hasCompoundUnit = /^\d/.test(unitLabel); // Unit starts with a number like "6 oz"
-        const formattedQuantity = hasCompoundUnit 
-          ? `${newQty} × ${unitLabel}` // Use multiplication for clarity: "4 × 6 oz fillets"
-          : `${newQty} ${unitLabel}${newQty !== 1 && !unitLabel.endsWith('s') ? 's' : ''}`;
+        // Format quantity + unit clearly
+        const unitLabel = ing.unit || '';
+        
+        // Handle compound units like "6 oz fillets" - extract the base unit and size
+        const compoundUnitMatch = unitLabel.match(/^(\d+\s*(?:oz|g|lb|ml))\s+(.+)$/i);
+        let formattedQuantity: string;
+        
+        if (compoundUnitMatch) {
+          // "6 oz fillets" -> "4 fillets (6 oz each)"
+          const [, size, baseUnit] = compoundUnitMatch;
+          formattedQuantity = `${newQty} ${baseUnit} (${size} each)`;
+        } else if (unitLabel) {
+          formattedQuantity = `${newQty} ${unitLabel}${newQty !== 1 && !unitLabel.endsWith('s') ? 's' : ''}`;
+        } else {
+          formattedQuantity = `${newQty}`;
+        }
         
         actions.push({
           id: `reduce-${ing.id}`,
