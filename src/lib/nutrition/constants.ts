@@ -64,9 +64,10 @@ export const ADULT_MACRO_RANGES: MacroRanges = {
 };
 
 // Keto-specific macro ranges (same for youth and adults)
+// Strict keto: ≥70% fat, ≤25% protein
 export const KETO_MACRO_RANGES: MacroRanges = {
-  protein: { min: 0.6, max: 1.5, default: 0.8 },
-  fat: { min: 65, max: 80, default: 70 },
+  protein: { min: 0.6, max: 1.2, default: 0.8 },
+  fat: { min: 70, max: 80, default: 75 },
 };
 
 // Schofield BMR coefficients by age band and sex (WHO/FAO/UNU)

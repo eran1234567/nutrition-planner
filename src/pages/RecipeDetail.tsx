@@ -59,7 +59,7 @@ const HEALTH_BADGE_TOOLTIPS: Record<string, string> = {
 
 // Diet badge tooltip definitions
 const DIET_BADGE_TOOLTIPS: Record<string, string> = {
-  keto: '≤ 8g carbs, ≥ 60% fat, ≤ 35% protein',
+  keto: '≤ 8g carbs, ≥ 70% fat, ≤ 25% protein',
   paleo: 'No grains, legumes, dairy, or refined oils',
   mediterranean: 'No red meat, processed foods, or refined grains',
   vegan: 'No animal products',
@@ -91,8 +91,8 @@ const dietExclusions: Record<string, string[]> = {
 // Strict keto thresholds
 const KETO_MAX_CARBS = 8;
 const KETO_MAX_CARB_PERCENT = 10;
-const KETO_MAX_PROTEIN_PERCENT = 35;
-const KETO_MIN_FAT_PERCENT = 60;
+const KETO_MAX_PROTEIN_PERCENT = 25;
+const KETO_MIN_FAT_PERCENT = 70;
 
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();

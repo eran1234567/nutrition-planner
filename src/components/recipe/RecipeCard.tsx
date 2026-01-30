@@ -55,7 +55,7 @@ const HEALTH_BADGE_TOOLTIPS: Record<string, string> = {
 
 // Diet badge tooltip definitions
 const DIET_BADGE_TOOLTIPS: Record<string, string> = {
-  keto: '≤ 8g carbs, ≥ 60% fat, ≤ 35% protein',
+  keto: '≤ 8g carbs, ≥ 70% fat, ≤ 25% protein',
   paleo: 'No grains, legumes, dairy, or refined oils',
   mediterranean: 'No red meat, processed foods, or refined grains',
   vegan: 'No animal products',
