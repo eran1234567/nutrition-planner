@@ -145,12 +145,23 @@ export function useRecipeFilters(options: UseRecipeFiltersOptions = {}): UseReci
   }, [userDietType]);
   
   // Sync diet from calculator on initial load (if enabled)
+  // Also sync from user-enabled keto mode
+  const isUserEnabledKetoMode = useNeutronStore((s) => s.isUserEnabledKetoMode);
+  
   useEffect(() => {
+    // If user explicitly enabled Keto Mode via the Discovery Banner, auto-set the filter
+    if (isUserEnabledKetoMode() && !filters.selectedDietType && !dietExplicitlyCleared && !hasSyncedDiet.current) {
+      hasSyncedDiet.current = true;
+      updateSearchParams('diet', 'keto');
+      return;
+    }
+    
+    // Otherwise, sync from calculator if enabled
     if (syncFromCalculator && !hasSyncedDiet.current && !filters.selectedDietType && calculatorDietType && !dietExplicitlyCleared) {
       hasSyncedDiet.current = true;
       updateSearchParams('diet', calculatorDietType);
     }
-  }, [syncFromCalculator, filters.selectedDietType, calculatorDietType, dietExplicitlyCleared, updateSearchParams]);
+  }, [syncFromCalculator, filters.selectedDietType, calculatorDietType, dietExplicitlyCleared, updateSearchParams, isUserEnabledKetoMode]);
   
   // Combine profile allergies/dislikes with dropdown selections
   const allAllergies = useMemo(() => 
