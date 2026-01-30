@@ -81,6 +81,36 @@ export function KetoSandbox({
     }
   }, [projectedScore, hasChanges, showCelebration]);
 
+  // Set a specific quantity directly (for Smart Actions)
+  const setQuantityDirect = useCallback((ingredientId: string, targetQuantity: number) => {
+    const ingredient = ingredients.find(i => i.id === ingredientId);
+    if (!ingredient || !ingredient.quantity) return;
+
+    // Detect unit type for proper rounding
+    const lowerUnit = (ingredient.unit || '').toLowerCase();
+    const isCountable = ['fillet', 'fillets', 'slice', 'slices', 'piece', 'pieces', 
+      'egg', 'eggs', 'strip', 'strips', 'breast', 'breasts', 'thigh', 'thighs'].some(
+      u => lowerUnit.includes(u) || ingredient.name.toLowerCase().includes(u)
+    );
+    
+    // Round countables to nearest 0.5 or 1.0, never microscopic decimals
+    let roundedQuantity: number;
+    if (isCountable) {
+      roundedQuantity = Math.max(1, Math.round(targetQuantity));
+    } else {
+      roundedQuantity = Math.max(0.25, Math.round(targetQuantity * 4) / 4);
+    }
+
+    // Calculate how many times we need to call updateQuantity
+    const currentQty = ingredient.quantity;
+    const direction = roundedQuantity < currentQty ? 'down' : 'up';
+    const steps = Math.abs(Math.round(currentQty - roundedQuantity));
+    
+    for (let i = 0; i < steps; i++) {
+      updateQuantity(ingredientId, direction);
+    }
+  }, [ingredients, updateQuantity]);
+
   // Handle applying a single Smart Action
   const handleApplyAction = useCallback(async (action: SmartAction) => {
     setApplyingActionId(action.id);
@@ -92,30 +122,21 @@ export function KetoSandbox({
       switch (action.type) {
         case 'swap':
           if (action.ingredientId && action.swapTo) {
-            // For swaps, we need to update the ingredient name
-            // This will be handled in the commit phase
-            // For now, mark as applied and track the change
             toggleSwap(action.ingredientId);
           }
           break;
 
         case 'reduce':
           if (action.ingredientId && action.newQuantity !== undefined) {
-            // Apply the quantity reduction
-            const delta = (action.originalQuantity || 0) - action.newQuantity;
-            for (let i = 0; i < Math.ceil(delta); i++) {
-              updateQuantity(action.ingredientId, 'down');
-            }
+            // FIX #1: Use absolute target value, not calculated difference
+            setQuantityDirect(action.ingredientId, action.newQuantity);
           }
           break;
 
         case 'remove':
           if (action.ingredientId) {
-            // Set quantity to minimum (will be handled as reduction to 0)
-            const current = ingredients.find(i => i.id === action.ingredientId)?.quantity || 0;
-            for (let i = 0; i < Math.ceil(current - 0.1); i++) {
-              updateQuantity(action.ingredientId, 'down');
-            }
+            // Set quantity to 1 (minimum for countables)
+            setQuantityDirect(action.ingredientId, 1);
           }
           break;
 
@@ -141,7 +162,7 @@ export function KetoSandbox({
     } finally {
       setApplyingActionId(null);
     }
-  }, [ingredients, toggleSwap, updateQuantity, toggleAddition, updateAdditionQuantity]);
+  }, [toggleSwap, setQuantityDirect, toggleAddition, updateAdditionQuantity]);
 
   // Commit all changes to database
   const handleCommit = async () => {
@@ -160,11 +181,23 @@ export function KetoSandbox({
           .eq('id', swap.ingredientId);
       }
       
-      // 2. Apply quantity changes
+      // 2. Apply quantity changes with proper rounding for countables
       for (const qty of changes.quantities) {
+        // FIX #1: Ensure countable units are rounded to whole numbers
+        let finalQuantity = qty.newQuantity;
+        const lowerUnit = (qty.unit || '').toLowerCase();
+        const isCountable = ['fillet', 'fillets', 'slice', 'slices', 'piece', 'pieces', 
+          'egg', 'eggs', 'strip', 'strips', 'breast', 'breasts', 'thigh', 'thighs'].some(
+          u => lowerUnit.includes(u) || qty.ingredientName.toLowerCase().includes(u)
+        );
+        
+        if (isCountable) {
+          finalQuantity = Math.max(1, Math.round(qty.newQuantity));
+        }
+        
         await supabase
           .from('recipe_ingredients')
-          .update({ quantity: qty.newQuantity })
+          .update({ quantity: finalQuantity })
           .eq('id', qty.ingredientId);
       }
       
@@ -222,8 +255,16 @@ export function KetoSandbox({
       // 5. Recalculate nutrition
       await recalculateNutrition();
       
-      // Invalidate queries to refresh data
-      await queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] });
+      // FIX #2: Force hard refresh to update macros and badge
+      // Invalidate ALL relevant queries to ensure fresh data
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] }),
+        queryClient.invalidateQueries({ queryKey: ['global-recipes'] }),
+        queryClient.invalidateQueries({ queryKey: ['user-recipes'] }),
+      ]);
+      
+      // Force refetch to ensure UI updates
+      await queryClient.refetchQueries({ queryKey: ['recipe', recipeId] });
       
       const scoreGain = previewNutrition.ketoScore - originalNutrition.ketoScore;
       
@@ -375,43 +416,45 @@ export function KetoSandbox({
                 )}
               </AnimatePresence>
 
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2 pt-3 border-t border-border/50">
-                {hasChanges && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleReset}
-                    className="text-muted-foreground"
-                  >
-                    <RotateCcw className="w-4 h-4 mr-1.5" />
-                    Reset
-                  </Button>
-                )}
-                
-                <Button
-                  className={`flex-1 text-white ${
-                    projectedScore >= 100
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600'
-                      : 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600'
-                  }`}
-                  size="sm"
-                  onClick={handleCommit}
-                  disabled={!hasChanges || isCommitting}
-                >
-                  {isCommitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4 mr-1.5" />
-                      {projectedScore >= 100 ? 'Save & Celebrate!' : 'Commit Changes'}
-                    </>
+              {/* Action Buttons - FIX #3: Only show when NOT in celebration mode */}
+              {!showCelebration && (
+                <div className="flex items-center gap-2 pt-3 border-t border-border/50">
+                  {hasChanges && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleReset}
+                      className="text-muted-foreground"
+                    >
+                      <RotateCcw className="w-4 h-4 mr-1.5" />
+                      Reset
+                    </Button>
                   )}
-                </Button>
-              </div>
+                  
+                  <Button
+                    className={`flex-1 text-white ${
+                      projectedScore >= 100
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600'
+                        : 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600'
+                    }`}
+                    size="sm"
+                    onClick={handleCommit}
+                    disabled={!hasChanges || isCommitting}
+                  >
+                    {isCommitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 mr-1.5" />
+                        {projectedScore >= 100 ? 'Save & Celebrate!' : 'Commit Changes'}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
