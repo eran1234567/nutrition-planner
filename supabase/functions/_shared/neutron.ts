@@ -1,0 +1,552 @@
+/**
+ * Neutron Engine - Shared Backend Module
+ * 
+ * This module provides centralized nutrition calculations for all edge functions.
+ * It mirrors the frontend src/lib/neutron/ logic to ensure consistency.
+ */
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TYPES
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type NeutronMode = 'standard' | 'keto';
+
+export interface RawNutritionData {
+  calories?: number | null;
+  protein_g?: number | null;
+  carbs_g?: number | null;
+  fat_g?: number | null;
+  fiber_g?: number | null;
+  sugar_g?: number | null;
+  sodium_mg?: number | null;
+  saturated_fat_g?: number | null;
+  cholesterol_mg?: number | null;
+  sugar_alcohols_g?: number | null;
+}
+
+export interface IngredientMacros {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  sugar?: number;
+  sodium?: number;
+  saturated_fat?: number;
+  cholesterol?: number;
+}
+
+export interface DbIngredientNutrition {
+  name: string;
+  keywords: string[];
+  serving_description: string;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g: number;
+  sugar_g: number;
+  sodium_mg: number;
+  saturated_fat_g: number;
+  cholesterol_mg: number;
+}
+
+export interface KetoScore {
+  score: number;
+  isKeto: boolean;
+  penalties: {
+    carbPenalty: number;
+    proteinPenalty: number;
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONSTANTS - Single source of truth for all thresholds
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Keto badge thresholds
+export const KETO_BADGE_MAX_NET_CARBS = 10;      // ≤10g net carbs per serving
+export const KETO_BADGE_MIN_FAT_PERCENT = 60;    // ≥60% of net energy from fat
+
+// Keto score thresholds
+export const KETO_SCORE_CARB_THRESHOLD = 5;     // Penalty starts after 5g net carbs
+export const KETO_SCORE_CARB_PENALTY = 10;      // -10 points per gram over threshold
+export const KETO_SCORE_PROTEIN_THRESHOLD = 35; // % of net energy
+export const KETO_SCORE_PROTEIN_PENALTY = 5;    // -5 if protein > threshold
+
+// Macro calorie multipliers
+export const CALORIES_PER_GRAM = {
+  fat: 9,
+  protein: 4,
+  carbs: 4,
+} as const;
+
+// Health badge thresholds
+export const HEALTH_THRESHOLDS = {
+  LOW_SODIUM_MAX: 300,
+  KIDNEY_SODIUM_MAX: 400,
+  KIDNEY_PROTEIN_MAX: 30,
+  DIABETES_FIBER_MIN: 5,
+  DIABETES_CARBS_MAX: 40,
+  HEART_FIBER_MIN: 5,
+  HEART_SODIUM_MAX: 300,
+} as const;
+
+// USDA reference values for common ingredients (fallback if DB is empty)
+export const USDA_REFERENCES: Record<string, IngredientMacros> = {
+  'egg': { calories: 72, protein: 6.3, carbs: 0.4, fat: 4.8, fiber: 0, cholesterol: 186, sodium: 71 },
+  'egg_yolk': { calories: 55, protein: 2.7, carbs: 0.6, fat: 4.5, fiber: 0, cholesterol: 184, sodium: 8 },
+  'egg_white': { calories: 17, protein: 3.6, carbs: 0.2, fat: 0, fiber: 0, cholesterol: 0, sodium: 55 },
+  'avocado_half': { calories: 160, protein: 2, carbs: 8.5, fat: 14.7, fiber: 7, cholesterol: 0, sodium: 7 },
+  'avocado_full': { calories: 322, protein: 4, carbs: 17, fat: 29, fiber: 13, cholesterol: 0, sodium: 14 },
+  'olive_oil_tbsp': { calories: 119, protein: 0, carbs: 0, fat: 13.5, fiber: 0, cholesterol: 0, sodium: 0 },
+  'butter_tbsp': { calories: 102, protein: 0.1, carbs: 0, fat: 11.5, fiber: 0, cholesterol: 31, sodium: 91 },
+  'keto_bread_slice': { calories: 60, protein: 6, carbs: 13, fat: 2.5, fiber: 12, cholesterol: 0, sodium: 150 },
+  'bacon_slice': { calories: 43, protein: 3, carbs: 0.1, fat: 3.3, fiber: 0, cholesterol: 9, sodium: 137 },
+  'chicken_breast': { calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, cholesterol: 85, sodium: 74 },
+  'salmon': { calories: 208, protein: 20, carbs: 0, fat: 13, fiber: 0, cholesterol: 55, sodium: 59 },
+  'cheddar': { calories: 115, protein: 7, carbs: 0.5, fat: 9, fiber: 0, cholesterol: 28, sodium: 180 },
+  'cream_cheese': { calories: 99, protein: 2.1, carbs: 1.2, fat: 9.9, fiber: 0, cholesterol: 29, sodium: 89 },
+  'heavy_cream': { calories: 51, protein: 0.4, carbs: 0.4, fat: 5.4, fiber: 0, cholesterol: 20, sodium: 6 },
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CORE CALCULATIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Calculate net carbs: Total Carbs - Fiber - Sugar Alcohols
+ */
+export function calculateNetCarbs(
+  totalCarbs: number,
+  fiber: number,
+  sugarAlcohols: number = 0
+): number {
+  return Math.max(0, totalCarbs - fiber - sugarAlcohols);
+}
+
+/**
+ * Calculate standard energy: (Fat * 9) + (Protein * 4) + (Total Carbs * 4)
+ */
+export function calculateStandardEnergy(
+  fat: number,
+  protein: number,
+  totalCarbs: number
+): number {
+  return (
+    fat * CALORIES_PER_GRAM.fat +
+    protein * CALORIES_PER_GRAM.protein +
+    totalCarbs * CALORIES_PER_GRAM.carbs
+  );
+}
+
+/**
+ * Calculate net energy (keto mode): (Fat * 9) + (Protein * 4) + (Net Carbs * 4)
+ * IMPORTANT: This is the correct calorie formula for high-fiber foods
+ */
+export function calculateNetEnergy(
+  fat: number,
+  protein: number,
+  netCarbs: number
+): number {
+  return (
+    fat * CALORIES_PER_GRAM.fat +
+    protein * CALORIES_PER_GRAM.protein +
+    netCarbs * CALORIES_PER_GRAM.carbs
+  );
+}
+
+/**
+ * Calculate macro percentages based on the given energy base
+ */
+export function calculateMacroPercents(
+  fat: number,
+  protein: number,
+  carbs: number,
+  energyBase: number
+): { fatPercent: number; proteinPercent: number; carbPercent: number } {
+  if (energyBase <= 0) {
+    return { fatPercent: 0, proteinPercent: 0, carbPercent: 0 };
+  }
+
+  const fatCals = fat * CALORIES_PER_GRAM.fat;
+  const proteinCals = protein * CALORIES_PER_GRAM.protein;
+  const carbCals = carbs * CALORIES_PER_GRAM.carbs;
+
+  return {
+    fatPercent: Math.round((fatCals / energyBase) * 100),
+    proteinPercent: Math.round((proteinCals / energyBase) * 100),
+    carbPercent: Math.round((carbCals / energyBase) * 100),
+  };
+}
+
+/**
+ * Check if recipe qualifies for KETO badge
+ * - Net Carbs ≤ 10g per serving
+ * - Fat ≥ 60% of Net Energy
+ */
+export function isKetoBadgeEligible(
+  netCarbs: number,
+  fat: number,
+  protein: number
+): boolean {
+  if (netCarbs > KETO_BADGE_MAX_NET_CARBS) {
+    return false;
+  }
+
+  const netEnergy = calculateNetEnergy(fat, protein, netCarbs);
+  if (netEnergy <= 0) return false;
+
+  const fatCals = fat * CALORIES_PER_GRAM.fat;
+  const fatPercent = (fatCals / netEnergy) * 100;
+
+  return fatPercent >= KETO_BADGE_MIN_FAT_PERCENT;
+}
+
+/**
+ * Calculate Keto Score (0-100)
+ */
+export function calculateKetoScore(
+  netCarbs: number,
+  fat: number,
+  protein: number
+): KetoScore {
+  let score = 100;
+  const penalties = { carbPenalty: 0, proteinPenalty: 0 };
+
+  // Carb penalty: -10 per gram over 5g
+  if (netCarbs > KETO_SCORE_CARB_THRESHOLD) {
+    penalties.carbPenalty = Math.round(
+      (netCarbs - KETO_SCORE_CARB_THRESHOLD) * KETO_SCORE_CARB_PENALTY
+    );
+    score -= penalties.carbPenalty;
+  }
+
+  // Protein penalty: -5 if > 35% of net energy
+  const netEnergy = calculateNetEnergy(fat, protein, netCarbs);
+  if (netEnergy > 0) {
+    const proteinCals = protein * CALORIES_PER_GRAM.protein;
+    const proteinPercent = (proteinCals / netEnergy) * 100;
+    
+    if (proteinPercent > KETO_SCORE_PROTEIN_THRESHOLD) {
+      penalties.proteinPenalty = KETO_SCORE_PROTEIN_PENALTY;
+      score -= penalties.proteinPenalty;
+    }
+  }
+
+  score = Math.max(0, Math.min(100, score));
+  const isKeto = isKetoBadgeEligible(netCarbs, fat, protein);
+
+  return { score, isKeto, penalties };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INGREDIENT LOOKUP
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Find best matching ingredient in cache using keyword scoring
+ */
+export function findIngredientInCache(
+  text: string,
+  cache: DbIngredientNutrition[]
+): DbIngredientNutrition | null {
+  const lowerText = text.toLowerCase();
+  
+  let bestMatch: DbIngredientNutrition | null = null;
+  let bestScore = 0;
+  
+  for (const item of cache) {
+    for (const keyword of item.keywords) {
+      const lowerKeyword = keyword.toLowerCase();
+      
+      if (lowerText.includes(lowerKeyword)) {
+        const score = lowerKeyword.length;
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = item;
+        }
+      }
+    }
+  }
+  
+  return bestMatch;
+}
+
+/**
+ * Parse ingredient quantity from text
+ */
+export function parseIngredientQuantity(text: string): number {
+  const trimmed = text.trim();
+  const halfStart = /^(?:half\b|0\.5\b|1\/2\b)/i.test(trimmed);
+  if (halfStart) return 0.5;
+
+  const numMatch = trimmed.match(/^(\d+\.?\d*)/);
+  return numMatch ? Number.parseFloat(numMatch[1]) : 1;
+}
+
+/**
+ * Extract explicit macros from ingredient text (e.g., "Keto Bread (60 cal, 13g carbs)")
+ */
+export function extractExplicitMacros(text: string): Partial<IngredientMacros> | null {
+  const result: Partial<IngredientMacros> = {};
+  let hasExplicit = false;
+  
+  const calMatch = text.match(/(\d+\.?\d*)\s*(?:cal(?:orie)?s?)\b/i);
+  if (calMatch) {
+    result.calories = parseFloat(calMatch[1]);
+    hasExplicit = true;
+  }
+  
+  const proteinMatch = text.match(/(\d+\.?\d*)\s*g?\s*protein/i);
+  if (proteinMatch) {
+    result.protein = parseFloat(proteinMatch[1]);
+    hasExplicit = true;
+  }
+  
+  const fatMatch = text.match(/(\d+\.?\d*)\s*g?\s*fat/i);
+  if (fatMatch) {
+    result.fat = parseFloat(fatMatch[1]);
+    hasExplicit = true;
+  }
+  
+  const carbMatch = text.match(/(\d+\.?\d*)\s*g?\s*carb(?:ohydrate)?s?/i);
+  if (carbMatch) {
+    result.carbs = parseFloat(carbMatch[1]);
+    hasExplicit = true;
+  }
+  
+  const fiberMatch = text.match(/(\d+\.?\d*)\s*g?\s*fiber/i);
+  if (fiberMatch) {
+    result.fiber = parseFloat(fiberMatch[1]);
+    hasExplicit = true;
+  }
+
+  const sugarMatch = text.match(/(\d+\.?\d*)\s*g?\s*sugar/i);
+  if (sugarMatch) {
+    result.sugar = parseFloat(sugarMatch[1]);
+    hasExplicit = true;
+  }
+
+  const sodiumMatch = text.match(/(\d+\.?\d*)\s*(?:mg)?\s*sodium/i);
+  if (sodiumMatch) {
+    result.sodium = parseFloat(sodiumMatch[1]);
+    hasExplicit = true;
+  }
+  
+  return hasExplicit ? result : null;
+}
+
+/**
+ * Calculate macros for a single ingredient using priority hierarchy:
+ * 1. Explicit user-provided values in text
+ * 2. Database reference table lookup
+ * 3. USDA fallback constants
+ * 4. Return null (let AI estimate)
+ */
+export function calculateIngredientMacros(
+  ingredientText: string,
+  cache: DbIngredientNutrition[]
+): IngredientMacros | null {
+  const quantity = parseIngredientQuantity(ingredientText);
+  
+  // Priority 1: Explicit macros in text
+  const explicit = extractExplicitMacros(ingredientText);
+  if (explicit && explicit.calories !== undefined) {
+    return {
+      calories: (explicit.calories ?? 0) * quantity,
+      protein: (explicit.protein ?? 0) * quantity,
+      carbs: (explicit.carbs ?? 0) * quantity,
+      fat: (explicit.fat ?? 0) * quantity,
+      fiber: (explicit.fiber ?? 0) * quantity,
+      sugar: (explicit.sugar ?? 0) * quantity,
+      sodium: (explicit.sodium ?? 0) * quantity,
+    };
+  }
+  
+  // Priority 2: Database lookup
+  const dbMatch = findIngredientInCache(ingredientText, cache);
+  if (dbMatch) {
+    return {
+      calories: dbMatch.calories * quantity,
+      protein: dbMatch.protein_g * quantity,
+      carbs: dbMatch.carbs_g * quantity,
+      fat: dbMatch.fat_g * quantity,
+      fiber: dbMatch.fiber_g * quantity,
+      sugar: dbMatch.sugar_g * quantity,
+      sodium: dbMatch.sodium_mg * quantity,
+      saturated_fat: dbMatch.saturated_fat_g * quantity,
+      cholesterol: dbMatch.cholesterol_mg * quantity,
+    };
+  }
+  
+  // Priority 3: USDA fallback
+  const lowerText = ingredientText.toLowerCase();
+  for (const [key, macros] of Object.entries(USDA_REFERENCES)) {
+    if (lowerText.includes(key.replace(/_/g, ' ')) || lowerText.includes(key)) {
+      return {
+        calories: macros.calories * quantity,
+        protein: macros.protein * quantity,
+        carbs: macros.carbs * quantity,
+        fat: macros.fat * quantity,
+        fiber: macros.fiber * quantity,
+        sugar: (macros.sugar ?? 0) * quantity,
+        sodium: (macros.sodium ?? 0) * quantity,
+        saturated_fat: (macros.saturated_fat ?? 0) * quantity,
+        cholesterol: (macros.cholesterol ?? 0) * quantity,
+      };
+    }
+  }
+  
+  // Priority 4: Return null - let AI estimate
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HEALTH BADGE DETECTION
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Detect health badges based on nutritional thresholds
+ */
+export function detectHealthBadges(nutrition: RawNutritionData | null): string[] {
+  if (!nutrition) return [];
+
+  const badges: string[] = [];
+  const { protein_g, carbs_g, fiber_g, sodium_mg } = nutrition;
+
+  // Diabetes Friendly
+  if (fiber_g != null && carbs_g != null) {
+    if (fiber_g >= HEALTH_THRESHOLDS.DIABETES_FIBER_MIN && 
+        carbs_g < HEALTH_THRESHOLDS.DIABETES_CARBS_MAX) {
+      badges.push('diabetes-friendly');
+    }
+  }
+
+  // Heart Healthy
+  if (fiber_g != null && sodium_mg != null) {
+    if (fiber_g >= HEALTH_THRESHOLDS.HEART_FIBER_MIN && 
+        sodium_mg < HEALTH_THRESHOLDS.HEART_SODIUM_MAX) {
+      badges.push('heart-healthy');
+    }
+  }
+
+  // Low Sodium
+  if (sodium_mg != null && sodium_mg < HEALTH_THRESHOLDS.LOW_SODIUM_MAX) {
+    badges.push('low-sodium');
+  }
+
+  // Kidney Friendly
+  if (sodium_mg != null && protein_g != null) {
+    if (sodium_mg < HEALTH_THRESHOLDS.KIDNEY_SODIUM_MAX && 
+        protein_g < HEALTH_THRESHOLDS.KIDNEY_PROTEIN_MAX) {
+      badges.push('kidney-friendly');
+    }
+  }
+
+  return badges;
+}
+
+/**
+ * Auto-detect diet badges including keto
+ */
+export function detectDietBadges(nutrition: RawNutritionData | null): string[] {
+  if (!nutrition) return [];
+
+  const badges: string[] = [];
+  
+  const netCarbs = calculateNetCarbs(
+    nutrition.carbs_g ?? 0,
+    nutrition.fiber_g ?? 0,
+    nutrition.sugar_alcohols_g ?? 0
+  );
+  
+  const ketoScore = calculateKetoScore(
+    netCarbs,
+    nutrition.fat_g ?? 0,
+    nutrition.protein_g ?? 0
+  );
+  
+  if (ketoScore.isKeto) {
+    badges.push('keto');
+  }
+
+  return badges;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// VALIDATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Validate and correct AI-generated nutrition using deterministic calculations
+ */
+export function validateAndCorrectNutrition(
+  aiNutrition: RawNutritionData,
+  ingredients: Array<{ name: string }>,
+  cache: DbIngredientNutrition[],
+  servings: number = 1
+): RawNutritionData {
+  // Calculate deterministic totals from known ingredients
+  let deterministicTotal: IngredientMacros = {
+    calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0,
+    sugar: 0, sodium: 0, saturated_fat: 0, cholesterol: 0
+  };
+  let knownCount = 0;
+
+  for (const ing of ingredients) {
+    const macros = calculateIngredientMacros(ing.name, cache);
+    if (macros) {
+      deterministicTotal.calories += macros.calories;
+      deterministicTotal.protein += macros.protein;
+      deterministicTotal.carbs += macros.carbs;
+      deterministicTotal.fat += macros.fat;
+      deterministicTotal.fiber += macros.fiber;
+      deterministicTotal.sugar = (deterministicTotal.sugar ?? 0) + (macros.sugar ?? 0);
+      deterministicTotal.sodium = (deterministicTotal.sodium ?? 0) + (macros.sodium ?? 0);
+      deterministicTotal.saturated_fat = (deterministicTotal.saturated_fat ?? 0) + (macros.saturated_fat ?? 0);
+      deterministicTotal.cholesterol = (deterministicTotal.cholesterol ?? 0) + (macros.cholesterol ?? 0);
+      knownCount++;
+    }
+  }
+
+  // If we have deterministic data for most ingredients, use it
+  if (knownCount >= ingredients.length * 0.7) {
+    return {
+      calories: Math.round(deterministicTotal.calories / servings),
+      protein_g: Math.round(deterministicTotal.protein / servings),
+      carbs_g: Math.round(deterministicTotal.carbs / servings),
+      fat_g: Math.round(deterministicTotal.fat / servings),
+      fiber_g: Math.round(deterministicTotal.fiber / servings),
+      sugar_g: Math.round((deterministicTotal.sugar ?? 0) / servings),
+      sodium_mg: Math.round((deterministicTotal.sodium ?? 0) / servings),
+      saturated_fat_g: Math.round((deterministicTotal.saturated_fat ?? 0) / servings),
+      cholesterol_mg: Math.round((deterministicTotal.cholesterol ?? 0) / servings),
+    };
+  }
+
+  // Otherwise return AI values with overrides for known ingredients
+  return aiNutrition;
+}
+
+/**
+ * Build AI prompt with USDA references (for functions that still need AI estimation)
+ */
+export function buildNutritionPromptInstructions(): string {
+  return `═══════════════════════════════════════════════════════════════
+FIBER AND NET CARBS - CRITICAL FOR CALORIE ACCURACY
+═══════════════════════════════════════════════════════════════
+FIBER DOES NOT CONTRIBUTE CALORIES! This is critical for keto/high-fiber foods.
+
+When calculating calories from carbs:
+- NET CARBS = Total Carbs - Fiber
+- CALORIES from carbs = NET CARBS × 4 (NOT total carbs × 4!)
+
+CALORIE CALCULATION HIERARCHY:
+1. If user provides CALORIES for an ingredient → USE THAT EXACT VALUE
+2. If NO calories provided → Calculate: (protein × 4) + (NET carbs × 4) + (fat × 9)
+
+KETO BADGE CRITERIA (auto-detected):
+- Net Carbs ≤ ${KETO_BADGE_MAX_NET_CARBS}g per serving
+- Fat ≥ ${KETO_BADGE_MIN_FAT_PERCENT}% of net energy`;
+}
