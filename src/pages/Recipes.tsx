@@ -130,6 +130,8 @@ interface RecipeNutrition {
   protein_g: number | null;
   carbs_g: number | null;
   fat_g: number | null;
+  fiber_g: number | null;
+  sugar_alcohols_g?: number | null;
 }
 
 interface RecipeIngredient {
@@ -165,36 +167,27 @@ const dietExclusions = {
   mediterranean: ['bacon', 'sausage', 'hot dog', 'salami', 'pepperoni', 'processed meat', 'lard', 'margarine', 'candy', 'soda', 'white bread', 'white rice', 'onigiri']
 };
 
-// Keto thresholds
-const KETO_MAX_CARBS = 8;
-const KETO_MAX_CARB_PERCENT = 10;
-const KETO_MAX_PROTEIN_PERCENT = 35;
-const KETO_MIN_FAT_PERCENT = 60;
-
-// Helper to check if a recipe meets strict keto macro criteria
+// Helper to check if a recipe meets strict keto macro criteria using Neutron Engine
 const isKetoFriendly = (nutrition: RecipeNutrition | null | undefined): boolean => {
   if (!nutrition) return false;
   
-  const carbs = nutrition.carbs_g ?? 0;
+  const totalCarbs = nutrition.carbs_g ?? 0;
+  const fiber = nutrition.fiber_g ?? 0;
+  const sugarAlcohols = nutrition.sugar_alcohols_g ?? 0;
   const protein = nutrition.protein_g ?? 0;
   const fat = nutrition.fat_g ?? 0;
   
-  if (carbs > KETO_MAX_CARBS) return false;
+  // Calculate net carbs: Total Carbs - Fiber - Sugar Alcohols
+  const netCarbs = Math.max(0, totalCarbs - fiber - sugarAlcohols);
   
-  const proteinCals = protein * 4;
-  const fatCals = fat * 9;
-  const carbCals = carbs * 4;
-  const totalMacroCals = proteinCals + fatCals + carbCals;
+  // Keto badge requires: Net Carbs ≤ 10g AND Fat ≥ 60% of Net Energy
+  if (netCarbs > 10) return false;
   
-  if (totalMacroCals <= 0) return false;
+  const netEnergy = (fat * 9) + (protein * 4) + (netCarbs * 4);
+  if (netEnergy <= 0) return false;
   
-  const carbPercent = (carbCals / totalMacroCals) * 100;
-  const proteinPercent = (proteinCals / totalMacroCals) * 100;
-  const fatPercent = (fatCals / totalMacroCals) * 100;
-  
-  return carbPercent <= KETO_MAX_CARB_PERCENT && 
-         proteinPercent <= KETO_MAX_PROTEIN_PERCENT && 
-         fatPercent >= KETO_MIN_FAT_PERCENT;
+  const fatPercent = ((fat * 9) / netEnergy) * 100;
+  return fatPercent >= 60;
 };
 
 const isPaleoFriendly = (ingredients: RecipeIngredient[] | undefined): boolean => {
@@ -581,7 +574,7 @@ export default function Recipes() {
       .from('recipes')
       .select(`
         id,title,description,image_url,prep_time,cook_time,total_time,servings,is_kid_friendly,is_meal_prep_friendly,
-        recipe_nutrition(calories,protein_g,carbs_g,fat_g),
+        recipe_nutrition(calories,protein_g,carbs_g,fat_g,fiber_g,sugar_alcohols_g),
         recipe_ingredients(name,normalized_name),
         recipe_tags(tag_type,tag_value)
       `)
