@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Clock, Users, Check, Plus, Trash2, Minus, Flame, Leaf, Fish, Drumstick, Sun, Heart, Droplets, Activity, Globe, Pizza, UtensilsCrossed, Soup, Cherry } from 'lucide-react';
+import { Clock, Users, Check, Plus, Trash2, Minus, Flame, Leaf, Fish, Drumstick, Sun, Heart, Droplets, Activity, Globe, Pizza, UtensilsCrossed, Soup, Cherry, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import {
@@ -90,6 +90,7 @@ interface RecipeCardProps {
   recipe: RecipeCardRecipe;
   isSelected?: boolean;
   isRemovable?: boolean;
+  isUserRecipe?: boolean; // Show "My Recipe" indicator
   onSelect?: () => void;
   onClick?: () => void;
   onDelete?: () => void;
@@ -105,6 +106,7 @@ export function RecipeCard({
   recipe, 
   isSelected = false,
   isRemovable = false,
+  isUserRecipe = false,
   onSelect, 
   onClick,
   onDelete,
@@ -215,10 +217,24 @@ export function RecipeCard({
         {/* Keto Score badge (when in keto mode and showKetoScore is true) */}
         {showKetoScore && mode === 'keto' && badges.ketoScore.score > 0 && (
           <KetoLogicTooltip nutrition={recipe.nutrition as RawNutritionData} showScore>
-            <div className="absolute top-2 left-2 px-2 py-1 rounded-full bg-emerald-500/90 text-white text-xs font-bold cursor-help">
+            <div className="absolute top-2 left-2 px-2 py-1 rounded-full bg-success text-success-foreground text-xs font-bold cursor-help">
               {badges.ketoScore.score}
             </div>
           </KetoLogicTooltip>
+        )}
+
+        {/* User Recipe indicator */}
+        {isUserRecipe && !showKetoScore && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-sm">
+                <User className="w-3.5 h-3.5" />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="text-xs">
+              My Recipe
+            </TooltipContent>
+          </Tooltip>
         )}
 
         {/* Time badge */}
