@@ -1,23 +1,19 @@
 /**
- * KetoSandbox - Keto Architect: Prescriptive optimization tool
+ * KetoArchitect - Prescriptive Keto Optimization Tool
  * 
- * Provides a direct "Path to 100" with:
- * - Auto-Apply recommendations for instant optimization
- * - Smart filtering (no noise from salt/pepper/spices)
- * - Carb-weight sorted ingredients
- * - Prescriptive fat additions with exact calculations
+ * Features:
+ * - Smart Actions with gap calculations
+ * - Zero-Quantity Flavor Guard with swap pivots
+ * - Flat UI with action cards and Apply buttons
+ * - Celebration state with confetti when reaching 100
  */
 
-import { useState } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Target, 
   ChevronDown, 
   ChevronUp, 
-  RefreshCw, 
-  SlidersHorizontal, 
-  Droplets,
-  Check,
   Loader2,
   RotateCcw,
   Sparkles,
@@ -25,16 +21,14 @@ import {
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
-import { KETO_BADGE_MIN_FAT_PERCENT } from '@/lib/neutron';
 
 import { useKetoSandbox } from './useKetoSandbox';
-import { PathToHundred } from './PathToHundred';
-import { SwapsList } from './SwapsList';
-import { QuantityTweaksList } from './QuantityTweaksList';
-import { PrescriptiveAddFat } from './PrescriptiveAddFat';
+import { SmartActionsPanel } from './SmartActionsPanel';
+import { CelebrationState } from './CelebrationState';
+import { generateSmartActions, type SmartAction } from './SmartActionTypes';
+import { FAT_ADDITIONS } from './types';
 import type { KetoSandboxProps } from './types';
 
 export function KetoSandbox({ 
@@ -47,46 +41,107 @@ export function KetoSandbox({
 }: KetoSandboxProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
-  const [isAutoApplying, setIsAutoApplying] = useState(false);
-  const [activeTab, setActiveTab] = useState('swaps');
+  const [applyingActionId, setApplyingActionId] = useState<string | null>(null);
+  const [appliedActionIds, setAppliedActionIds] = useState<Set<string>>(new Set());
+  const [showCelebration, setShowCelebration] = useState(false);
   const queryClient = useQueryClient();
 
   const {
-    swapSuggestions,
-    quantityTweaks,
-    availableAdditions,
     previewState,
     previewNutrition,
     originalNutrition,
     hasChanges,
-    recommendations,
-    fatNeeded,
     toggleSwap,
     updateQuantity,
-    resetQuantity,
     toggleAddition,
     updateAdditionQuantity,
     getActiveChanges,
     resetAll,
-    autoApplyRecommendations,
   } = useKetoSandbox({ nutrition, ingredients, servings });
 
-  // Count active changes per section
-  const swapCount = previewState.swaps.filter(s => s.enabled).length;
-  const quantityCount = previewState.quantities.filter(q => q.newQuantity !== q.originalQuantity).length;
-  const additionCount = previewState.additions.filter(a => a.enabled).length;
-  const totalChanges = swapCount + quantityCount + additionCount;
+  // Generate Smart Actions based on current nutrition
+  const smartActions = useMemo(() => {
+    return generateSmartActions(originalNutrition, ingredients, servings);
+  }, [originalNutrition, ingredients, servings]);
 
-  // Handle auto-apply with visual feedback
-  const handleAutoApply = async () => {
-    setIsAutoApplying(true);
-    await new Promise(resolve => setTimeout(resolve, 300)); // Brief animation delay
-    autoApplyRecommendations();
-    setIsAutoApplying(false);
-    toast.success('Recommendations applied!', {
-      description: 'Review the changes below and commit when ready.',
-    });
-  };
+  // Calculate projected score including staged changes
+  const projectedScore = useMemo(() => {
+    if (hasChanges) {
+      return previewNutrition.ketoScore;
+    }
+    return originalNutrition.ketoScore;
+  }, [hasChanges, previewNutrition, originalNutrition]);
+
+  // Check for celebration trigger
+  useEffect(() => {
+    if (projectedScore >= 100 && hasChanges && !showCelebration) {
+      setShowCelebration(true);
+    } else if (projectedScore < 100) {
+      setShowCelebration(false);
+    }
+  }, [projectedScore, hasChanges, showCelebration]);
+
+  // Handle applying a single Smart Action
+  const handleApplyAction = useCallback(async (action: SmartAction) => {
+    setApplyingActionId(action.id);
+    
+    // Small delay for visual feedback
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    try {
+      switch (action.type) {
+        case 'swap':
+          if (action.ingredientId && action.swapTo) {
+            // For swaps, we need to update the ingredient name
+            // This will be handled in the commit phase
+            // For now, mark as applied and track the change
+            toggleSwap(action.ingredientId);
+          }
+          break;
+
+        case 'reduce':
+          if (action.ingredientId && action.newQuantity !== undefined) {
+            // Apply the quantity reduction
+            const delta = (action.originalQuantity || 0) - action.newQuantity;
+            for (let i = 0; i < Math.ceil(delta); i++) {
+              updateQuantity(action.ingredientId, 'down');
+            }
+          }
+          break;
+
+        case 'remove':
+          if (action.ingredientId) {
+            // Set quantity to minimum (will be handled as reduction to 0)
+            const current = ingredients.find(i => i.id === action.ingredientId)?.quantity || 0;
+            for (let i = 0; i < Math.ceil(current - 0.1); i++) {
+              updateQuantity(action.ingredientId, 'down');
+            }
+          }
+          break;
+
+        case 'add_fat':
+          if (action.fatAdditionId) {
+            toggleAddition(action.fatAdditionId);
+            if (action.newQuantity && action.newQuantity > 1) {
+              updateAdditionQuantity(action.fatAdditionId, action.newQuantity);
+            }
+          }
+          break;
+      }
+
+      setAppliedActionIds(prev => new Set([...prev, action.id]));
+      
+      toast.success(`Applied: ${action.title}`, {
+        description: `+${action.scoreImpact} points`,
+      });
+
+    } catch (error) {
+      console.error('Failed to apply action:', error);
+      toast.error('Failed to apply action');
+    } finally {
+      setApplyingActionId(null);
+    }
+  }, [ingredients, toggleSwap, updateQuantity, toggleAddition, updateAdditionQuantity]);
 
   // Commit all changes to database
   const handleCommit = async () => {
@@ -171,13 +226,21 @@ export function KetoSandbox({
       await queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] });
       
       const scoreGain = previewNutrition.ketoScore - originalNutrition.ketoScore;
-      toast.success('Recipe optimized!', {
-        description: scoreGain > 0 
-          ? `Score improved by ${scoreGain} points to ${previewNutrition.ketoScore}!`
-          : `Applied ${totalChanges} change${totalChanges !== 1 ? 's' : ''}.`,
-      });
+      
+      if (previewNutrition.ketoScore >= 100) {
+        toast.success('Perfect Score! Recipe updated and saved.', {
+          description: 'Neutron Verified: 100',
+        });
+      } else {
+        toast.success('Recipe optimized!', {
+          description: scoreGain > 0 
+            ? `Score improved by ${scoreGain} points to ${previewNutrition.ketoScore}!`
+            : `Applied changes successfully.`,
+        });
+      }
       
       resetAll();
+      setAppliedActionIds(new Set());
       onCommit();
       
     } catch (error) {
@@ -212,13 +275,19 @@ export function KetoSandbox({
     }
   };
 
-  // Don't render if no suggestions at all
-  if (swapSuggestions.length === 0 && quantityTweaks.length === 0) {
+  // Handle reset
+  const handleReset = () => {
+    resetAll();
+    setAppliedActionIds(new Set());
+    setShowCelebration(false);
+  };
+
+  // Don't render if already perfect and no actions available
+  if (originalNutrition.ketoScore >= 100 && smartActions.length === 0) {
     return null;
   }
 
   const isPerfectScore = originalNutrition.ketoScore >= 100;
-  const projectedScore = hasChanges ? previewNutrition.ketoScore : originalNutrition.ketoScore;
 
   return (
     <motion.div
@@ -238,9 +307,9 @@ export function KetoSandbox({
           <div>
             <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
               Keto Architect
-              {totalChanges > 0 && (
+              {appliedActionIds.size > 0 && (
                 <Badge className="bg-indigo-500 text-white text-2xs">
-                  {totalChanges} staged
+                  {appliedActionIds.size} staged
                 </Badge>
               )}
             </h4>
@@ -280,70 +349,31 @@ export function KetoSandbox({
             className="overflow-hidden"
           >
             <div className="px-4 pb-4 space-y-4">
-              {/* Path to 100 - Prescriptive Header */}
-              <PathToHundred
-                currentScore={originalNutrition.ketoScore}
-                projectedScore={projectedScore}
-                nutrition={originalNutrition}
-                recommendations={recommendations}
-                onAutoApply={handleAutoApply}
-                isApplying={isAutoApplying}
-                hasChanges={hasChanges}
-              />
-
-              {/* Optimization Tabs */}
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="swaps" className="text-xs gap-1">
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    Swaps
-                    {swapCount > 0 && (
-                      <Badge variant="secondary" className="text-2xs h-4 px-1">{swapCount}</Badge>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="quantities" className="text-xs gap-1">
-                    <SlidersHorizontal className="w-3.5 h-3.5" />
-                    Adjust
-                    {quantityCount > 0 && (
-                      <Badge variant="secondary" className="text-2xs h-4 px-1">{quantityCount}</Badge>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger value="additions" className="text-xs gap-1">
-                    <Droplets className="w-3.5 h-3.5" />
-                    Fat
-                    {additionCount > 0 && (
-                      <Badge variant="secondary" className="text-2xs h-4 px-1">{additionCount}</Badge>
-                    )}
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="swaps" className="mt-3">
-                  <SwapsList
-                    swapSuggestions={swapSuggestions}
-                    enabledSwaps={previewState.swaps.filter(s => s.enabled)}
-                    onToggle={toggleSwap}
+              {/* Celebration State - Shows when reaching 100 */}
+              <AnimatePresence mode="wait">
+                {showCelebration && projectedScore >= 100 ? (
+                  <CelebrationState 
+                    score={projectedScore} 
+                    show={showCelebration}
                   />
-                </TabsContent>
-
-                <TabsContent value="quantities" className="mt-3">
-                  <QuantityTweaksList
-                    tweaks={quantityTweaks}
-                    onUpdate={updateQuantity}
-                    onReset={resetQuantity}
-                  />
-                </TabsContent>
-
-                <TabsContent value="additions" className="mt-3">
-                  <PrescriptiveAddFat
-                    fatNeeded={fatNeeded}
-                    currentFatPercent={originalNutrition.fatPercent}
-                    targetFatPercent={KETO_BADGE_MIN_FAT_PERCENT}
-                    additions={availableAdditions}
-                    onToggle={toggleAddition}
-                    onUpdateQuantity={updateAdditionQuantity}
-                  />
-                </TabsContent>
-              </Tabs>
+                ) : (
+                  /* Smart Actions Panel */
+                  <motion.div
+                    key="actions"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0, height: 0 }}
+                  >
+                    <SmartActionsPanel
+                      actions={smartActions}
+                      onApplyAction={handleApplyAction}
+                      appliedActionIds={appliedActionIds}
+                      isApplying={applyingActionId}
+                      projectedScore={projectedScore}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2 pt-3 border-t border-border/50">
@@ -351,7 +381,7 @@ export function KetoSandbox({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={resetAll}
+                    onClick={handleReset}
                     className="text-muted-foreground"
                   >
                     <RotateCcw className="w-4 h-4 mr-1.5" />
@@ -360,7 +390,11 @@ export function KetoSandbox({
                 )}
                 
                 <Button
-                  className="flex-1 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white"
+                  className={`flex-1 text-white ${
+                    projectedScore >= 100
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600'
+                      : 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600'
+                  }`}
                   size="sm"
                   onClick={handleCommit}
                   disabled={!hasChanges || isCommitting}
@@ -368,13 +402,12 @@ export function KetoSandbox({
                   {isCommitting ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                      Applying...
+                      Saving...
                     </>
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4 mr-1.5" />
-                      Commit Changes
-                      {hasChanges && projectedScore >= 100 && ' → 100'}
+                      {projectedScore >= 100 ? 'Save & Celebrate!' : 'Commit Changes'}
                     </>
                   )}
                 </Button>
