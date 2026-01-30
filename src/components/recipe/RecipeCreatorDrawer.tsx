@@ -169,30 +169,18 @@ export function RecipeCreatorDrawer({ open, onOpenChange, onSuccess }: RecipeCre
       const fullContent = buildRecipeContent();
       const isImage = !!imagePreview && !recipeText.trim();
 
-      // Call parse-recipe edge function
-      const { data: session } = await supabase.auth.getSession();
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-recipe`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.session?.access_token}`,
-          },
-          body: JSON.stringify({
-            uploadId: upload.id,
-            content: isImage ? imagePreview : fullContent,
-            isImage,
-          }),
-        }
-      );
+      // Call parse-recipe edge function using the SDK for proper auth handling
+      const { data: result, error: fnError } = await supabase.functions.invoke('parse-recipe', {
+        body: {
+          uploadId: upload.id,
+          content: isImage ? imagePreview : fullContent,
+          isImage,
+        },
+      });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to parse recipe');
+      if (fnError) {
+        throw new Error(fnError.message || 'Failed to parse recipe');
       }
-
-      const result = await response.json();
 
       if (!result.success || !result.recipes?.length) {
         throw new Error(result.error || 'Could not create recipe');
