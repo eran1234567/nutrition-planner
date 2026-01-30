@@ -115,10 +115,10 @@ export function SmartActionsPanel({
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium truncate ${isApplied ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
+                  <p className={`text-sm font-medium leading-snug ${isApplied ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
                     {action.title}
                   </p>
-                  <p className="text-xs text-muted-foreground truncate">
+                  <p className="text-xs text-muted-foreground leading-snug">
                     {action.description}
                   </p>
                 </div>
