@@ -175,6 +175,57 @@ export type Database = {
         }
         Relationships: []
       }
+      ingredient_nutrition: {
+        Row: {
+          calories: number
+          carbs_g: number
+          cholesterol_mg: number
+          created_at: string
+          fat_g: number
+          fiber_g: number
+          id: string
+          keywords: string[]
+          name: string
+          protein_g: number
+          saturated_fat_g: number
+          serving_description: string
+          sodium_mg: number
+          sugar_g: number
+        }
+        Insert: {
+          calories?: number
+          carbs_g?: number
+          cholesterol_mg?: number
+          created_at?: string
+          fat_g?: number
+          fiber_g?: number
+          id?: string
+          keywords?: string[]
+          name: string
+          protein_g?: number
+          saturated_fat_g?: number
+          serving_description?: string
+          sodium_mg?: number
+          sugar_g?: number
+        }
+        Update: {
+          calories?: number
+          carbs_g?: number
+          cholesterol_mg?: number
+          created_at?: string
+          fat_g?: number
+          fiber_g?: number
+          id?: string
+          keywords?: string[]
+          name?: string
+          protein_g?: number
+          saturated_fat_g?: number
+          serving_description?: string
+          sodium_mg?: number
+          sugar_g?: number
+        }
+        Relationships: []
+      }
       meal_plan_days: {
         Row: {
           day_date: string
