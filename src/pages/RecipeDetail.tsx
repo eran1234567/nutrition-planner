@@ -613,6 +613,7 @@ export default function RecipeDetail() {
           sourceUrl={recipe.source_url || null}
           imageUrl={recipe.image_url || null}
           title={recipe.title}
+          isUserRecipe={isUserRecipe}
         />
         
         {/* Back button */}
