@@ -477,18 +477,37 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
       
       // Check if any ingredient was added, removed, or modified
       const ingredientsChanged = (() => {
-        if (prevIngredients.length !== activeIngredients.filter(i => i.name.trim()).length) return true;
+        const filteredActive = activeIngredients.filter(i => i.name.trim());
+        if (prevIngredients.length !== filteredActive.length) {
+          console.log('[RecipeEditor] Ingredient count changed:', prevIngredients.length, '→', filteredActive.length);
+          return true;
+        }
         const prevById = new Map<string, any>(prevIngredients.map((i: any) => [i.id, i]));
-        for (const ing of activeIngredients) {
-          if (!ing.name.trim()) continue;
-          if (!ing.id) return true; // new ingredient
+        for (const ing of filteredActive) {
+          if (!ing.id) {
+            console.log('[RecipeEditor] New ingredient detected:', ing.name);
+            return true; // new ingredient
+          }
           const prev = prevById.get(ing.id);
-          if (!prev) return true; // not found in prev
-          if (prev.name.trim().toLowerCase() !== ing.name.trim().toLowerCase()) return true;
-          const prevQty = typeof prev.quantity === 'number' ? prev.quantity : Number(prev.quantity);
-          const nextQty = Number.parseFloat(ing.quantity);
-          if (Math.abs(prevQty - nextQty) > 1e-6) return true;
-          if ((prev.unit || '').trim() !== ing.unit.trim()) return true;
+          if (!prev) {
+            console.log('[RecipeEditor] Ingredient not found in previous:', ing.id);
+            return true; // not found in prev
+          }
+          if (prev.name.trim().toLowerCase() !== ing.name.trim().toLowerCase()) {
+            console.log('[RecipeEditor] Ingredient name changed:', prev.name, '→', ing.name);
+            return true;
+          }
+          // Handle null/undefined quantities safely
+          const prevQty = prev.quantity != null ? Number(prev.quantity) : 0;
+          const nextQty = ing.quantity ? Number.parseFloat(ing.quantity) : 0;
+          if (Math.abs((prevQty || 0) - (nextQty || 0)) > 1e-6) {
+            console.log('[RecipeEditor] Ingredient quantity changed:', prev.name, prevQty, '→', nextQty);
+            return true;
+          }
+          if ((prev.unit || '').trim().toLowerCase() !== ing.unit.trim().toLowerCase()) {
+            console.log('[RecipeEditor] Ingredient unit changed:', prev.name, prev.unit, '→', ing.unit);
+            return true;
+          }
         }
         return false;
       })();
@@ -506,9 +525,11 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
         }
         return false;
       })();
+      console.log('[RecipeEditor] Change detection:', { ingredientsChanged, stepsChanged });
       
       // Only recalculate nutrition if ingredients or steps changed
       if (ingredientsChanged || stepsChanged) {
+        console.log('[RecipeEditor] Ingredients/steps changed - recalculating nutrition via AI');
         const aiResult = await calculateNutritionViaAI(activeIngredients, activeSteps);
         
         if (aiResult) {
@@ -581,6 +602,8 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
               .eq('id', recipe.id);
           }
         }
+      } else {
+        console.log('[RecipeEditor] No ingredient/step changes - skipping nutrition recalculation');
       }
 
       // Update recipe title, description, and image_url if changed
