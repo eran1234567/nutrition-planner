@@ -11,6 +11,10 @@ import type { Recipe } from '@/types';
 
 interface RecipeEditorProps {
   recipe: Recipe;
+  title: string;
+  description: string;
+  onTitleChange: (title: string) => void;
+  onDescriptionChange: (description: string) => void;
   onSave: (updatedRecipe: Recipe) => void;
   onCancel: () => void;
 }
@@ -33,11 +37,10 @@ interface EditableStep {
   isDeleted?: boolean;
 }
 
-export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
+export function RecipeEditor({ recipe, title, description, onTitleChange, onDescriptionChange, onSave, onCancel }: RecipeEditorProps) {
   const { t } = useTranslation();
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const [title, setTitle] = useState(recipe.title || '');
   const [imageUrl, setImageUrl] = useState<string | undefined>(recipe.image_url);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -546,11 +549,15 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
         }
       }
 
-      // Update recipe title and image_url if changed
+      // Update recipe title, description, and image_url if changed
       const recipeUpdates: Record<string, string | null> = {};
       
       if (title.trim() && title.trim() !== recipe.title) {
         recipeUpdates.title = title.trim();
+      }
+      
+      if (description.trim() !== (recipe.description || '')) {
+        recipeUpdates.description = description.trim() || null;
       }
       
       if (imageUrl !== recipe.image_url) {
@@ -611,17 +618,6 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
         className="hidden"
         onChange={onFileSelect}
       />
-
-      {/* Title Section */}
-      <div>
-        <h3 className="text-sm font-semibold mb-3">{t('recipes.title', 'Recipe Name')}</h3>
-        <Input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder={t('recipes.titlePlaceholder', 'Enter recipe name...')}
-          className="text-lg font-medium"
-        />
-      </div>
 
       {/* Photo Section */}
       <div>

@@ -119,6 +119,8 @@ export default function RecipeDetail() {
   const [showAddToPlanModal, setShowAddToPlanModal] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [showCookingMode, setShowCookingMode] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
 
   // Get requested servings from URL (for coming from Plan page)
   // This is the actual number of servings needed, not a multiplier
@@ -488,7 +490,11 @@ export default function RecipeDetail() {
         <div className="absolute top-4 right-4 flex gap-2 z-10">
           {isUserRecipe && !isEditing && (
             <button
-              onClick={() => setIsEditing(true)}
+              onClick={() => {
+                setEditTitle(recipe.title || '');
+                setEditDescription(recipe.description || '');
+                setIsEditing(true);
+              }}
               className="w-10 h-10 rounded-full bg-card/90 backdrop-blur flex items-center justify-center"
               title="Edit recipe"
             >
@@ -520,7 +526,17 @@ export default function RecipeDetail() {
         >
           {/* Title and badges */}
           <div className="mb-4">
-            <h1 className="text-2xl font-bold text-foreground mb-2">{recipe.title}</h1>
+            {isEditing ? (
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="text-2xl font-bold text-foreground mb-2 w-full bg-transparent border-b-2 border-primary focus:outline-none"
+                placeholder={t('recipes.titlePlaceholder', 'Enter recipe name...')}
+              />
+            ) : (
+              <h1 className="text-2xl font-bold text-foreground mb-2">{recipe.title}</h1>
+            )}
             <TooltipProvider delayDuration={300}>
               <div className="flex flex-wrap gap-2">
                 {/* Cuisine badge */}
@@ -769,17 +785,30 @@ export default function RecipeDetail() {
 
 
           {/* Description */}
-          {recipe.description && (
-            <div className="mb-6">
-              <h3 className="text-sm font-semibold mb-2">{t('recipes.description')}</h3>
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold mb-2">{t('recipes.description')}</h3>
+            {isEditing ? (
+              <textarea
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                className="w-full text-muted-foreground bg-transparent border border-border rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-ring min-h-[80px] resize-y"
+                placeholder={t('recipes.descriptionPlaceholder', 'Add a description...')}
+              />
+            ) : recipe.description ? (
               <p className="text-muted-foreground">{recipe.description}</p>
-            </div>
-          )}
+            ) : (
+              <p className="text-muted-foreground/50 italic">{t('recipes.noDescription', 'No description')}</p>
+            )}
+          </div>
 
           {/* Editable content or read-only */}
           {isEditing && recipe ? (
             <RecipeEditor
               recipe={recipe as Recipe}
+              title={editTitle}
+              description={editDescription}
+              onTitleChange={setEditTitle}
+              onDescriptionChange={setEditDescription}
               onSave={handleSaveEdit}
               onCancel={() => setIsEditing(false)}
             />
