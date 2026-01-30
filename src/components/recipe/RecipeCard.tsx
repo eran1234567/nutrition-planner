@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useNeutronStore } from '@/stores/neutronStore';
 import { processNutrition, getNeutronBadges, type RawNutritionData, type NeutronMode } from '@/lib/neutron';
+import { KetoLogicTooltip } from './KetoLogicTooltip';
 
 interface NutritionData {
   calories?: number | null;
@@ -212,9 +213,11 @@ export function RecipeCard({
 
         {/* Keto Score badge (when in keto mode and showKetoScore is true) */}
         {showKetoScore && mode === 'keto' && badges.ketoScore.score > 0 && (
-          <div className="absolute top-2 left-2 px-2 py-1 rounded-full bg-emerald-500/90 text-white text-xs font-bold">
-            {badges.ketoScore.score}
-          </div>
+          <KetoLogicTooltip nutrition={recipe.nutrition as RawNutritionData} showScore>
+            <div className="absolute top-2 left-2 px-2 py-1 rounded-full bg-success/90 text-success-foreground text-xs font-bold cursor-help">
+              {badges.ketoScore.score}
+            </div>
+          </KetoLogicTooltip>
         )}
 
         {/* Time badge */}
@@ -258,7 +261,20 @@ export function RecipeCard({
                 </span>
               );
 
-              // Wrap badges with tooltip if available
+              // Use KetoLogicTooltip for keto badge, otherwise use standard tooltip
+              if (badgeKey === 'keto') {
+                return (
+                  <KetoLogicTooltip 
+                    key={badgeKey} 
+                    nutrition={recipe.nutrition as RawNutritionData}
+                    showScore
+                  >
+                    {badgeElement}
+                  </KetoLogicTooltip>
+                );
+              }
+
+              // Wrap other badges with standard tooltip if available
               if (tooltip) {
                 return (
                   <Tooltip key={badgeKey}>
