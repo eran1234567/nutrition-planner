@@ -494,11 +494,17 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
         const didRemoveOrDecrease = prevIngredients.some((prev: any) => {
           const next = activeById.get(prev.id);
           if (!next) return true; // removed
+          // Also treat ingredient name changes as a modification (e.g., "eggs" → "egg yolks")
+          const prevName = (prev.name || '').trim().toLowerCase();
+          const nextName = (next.name || '').trim().toLowerCase();
+          if (prevName !== nextName) return true; // ingredient was effectively replaced
           const prevQty = typeof prev.quantity === 'number' ? prev.quantity : Number(prev.quantity);
           const nextQty = Number.parseFloat(next.quantity);
           return Number.isFinite(prevQty) && Number.isFinite(nextQty) && nextQty < prevQty - 1e-6;
         });
 
+        // Only clamp nutrition when PURELY adding (no removals, no decreases, no name changes)
+        // This ensures that modifying ingredients (like replacing eggs with egg yolks) gets fresh calculation
         const newNutrition = { ...rawNutrition };
         if (didAddOrIncrease && !didRemoveOrDecrease && recipe.nutrition) {
           const prevCals = Math.round((recipe.nutrition.calories ?? 0) as number);
