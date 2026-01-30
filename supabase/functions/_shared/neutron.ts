@@ -1127,3 +1127,61 @@ export function autoOptimizeForKeto(
     resultingNutrition: workingNutrition,
   };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GAP CALCULATION ENGINE - For Keto Architect Smart Actions
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface GapAnalysis {
+  carbGap: number; // Current Net Carbs - 5g target (for perfect score)
+  fatGap: number; // Target Fat % - Current Fat %
+  proteinPenalty: boolean; // If protein > 35%
+  currentScore: number;
+  targetScore: number; // Always 100
+}
+
+/**
+ * Calculate the exact gaps to reach a perfect 100 Keto Score
+ * Used by the frontend Keto Architect for prescriptive recommendations
+ */
+export function calculateGaps(
+  nutrition: RawNutritionData | null | undefined
+): GapAnalysis {
+  if (!nutrition) {
+    return {
+      carbGap: 0,
+      fatGap: 0,
+      proteinPenalty: false,
+      currentScore: 0,
+      targetScore: 100,
+    };
+  }
+
+  const protein = nutrition.protein_g ?? 0;
+  const fat = nutrition.fat_g ?? 0;
+  const totalCarbs = nutrition.carbs_g ?? 0;
+  const fiber = nutrition.fiber_g ?? 0;
+  const sugarAlcohols = nutrition.sugar_alcohols_g ?? 0;
+
+  const netCarbs = calculateNetCarbs(totalCarbs, fiber, sugarAlcohols);
+  const netEnergy = calculateNetEnergy(fat, protein, netCarbs);
+  const percents = calculateMacroPercents(fat, protein, netCarbs, netEnergy);
+  const ketoScore = calculateKetoScore(netCarbs, fat, protein);
+
+  // Gap to 5g (for perfect score with no carb penalty)
+  const carbGap = Math.max(0, netCarbs - KETO_SCORE_CARB_THRESHOLD);
+  
+  // Gap to 60% fat (for keto badge eligibility)
+  const fatGap = Math.max(0, KETO_BADGE_MIN_FAT_PERCENT - percents.fatPercent);
+  
+  // Protein penalty check (>35% causes -5 penalty)
+  const proteinPenalty = percents.proteinPercent > KETO_SCORE_PROTEIN_THRESHOLD;
+
+  return {
+    carbGap,
+    fatGap,
+    proteinPenalty,
+    currentScore: ketoScore.score,
+    targetScore: 100,
+  };
+}

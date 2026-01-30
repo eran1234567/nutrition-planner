@@ -1,6 +1,6 @@
 /**
  * useKetoSandbox - Hook for managing Keto Architect preview state
- * Refactored with smart filtering, carb-weight sorting, and auto-apply logic
+ * Provides state management for swaps, quantity changes, and fat additions
  */
 
 import { useState, useMemo, useCallback } from 'react';
@@ -11,8 +11,6 @@ import {
   calculateMacroPercents,
   calculateKetoScore,
   CALORIES_PER_GRAM,
-  KETO_SCORE_CARB_THRESHOLD,
-  KETO_BADGE_MIN_FAT_PERCENT,
 } from '@/lib/neutron';
 import type {
   IngredientData,
@@ -33,7 +31,6 @@ import {
   CUP_UNITS,
   CUP_INCREMENT,
 } from './types';
-import { calculateRecommendations, type Recommendation } from './PathToHundred';
 
 // Zero-impact ingredients (spices, seasonings, water, etc.)
 const ZERO_IMPACT_PATTERNS = [
@@ -314,98 +311,6 @@ export function useKetoSandbox({ nutrition, ingredients, servings }: UseKetoSand
     return Math.ceil(additionalFatCalsNeeded / CALORIES_PER_GRAM.fat);
   }, [nutrition, originalNutrition]);
 
-  // Generate recommendations for Path to 100
-  const recommendations = useMemo((): Recommendation[] => {
-    const highCarbIngredients = quantityTweaks
-      .filter(t => t.isHighCarb)
-      .map(t => ({
-        id: t.ingredientId,
-        name: t.ingredientName,
-        carbsPerUnit: t.carbsPerUnit,
-        currentQty: t.newQuantity,
-        unit: t.unit,
-      }));
-
-    return calculateRecommendations(originalNutrition, highCarbIngredients);
-  }, [originalNutrition, quantityTweaks]);
-
-  // AUTO-APPLY: Apply all recommendations at once
-  const autoApplyRecommendations = useCallback(() => {
-    setPreviewState(prev => {
-      let newState = { ...prev };
-
-      for (const rec of recommendations) {
-        if (!rec.action) continue;
-
-        // Handle carb reduction
-        if (rec.type === 'reduce_carbs' && rec.action.ingredientId && rec.action.reduction) {
-          const ingredient = ingredients.find(i => i.id === rec.action!.ingredientId);
-          if (ingredient && ingredient.quantity) {
-            const existingIndex = newState.quantities.findIndex(q => q.ingredientId === rec.action!.ingredientId);
-            const incrementType = detectIncrementType(ingredient.name, ingredient.unit);
-            const carbsPerUnit = getCarbsPerUnit(ingredient.name);
-            const isHighCarb = HIGH_CARB_PATTERNS.some(pattern => 
-              ingredient.name.toLowerCase().includes(pattern)
-            );
-            
-            const newQuantity = Math.max(1, ingredient.quantity - rec.action.reduction);
-            
-            const newChange: QuantityChange = {
-              type: 'quantity',
-              ingredientId: rec.action.ingredientId,
-              ingredientName: ingredient.name,
-              originalQuantity: ingredient.quantity,
-              newQuantity,
-              unit: ingredient.unit,
-              isHighCarb,
-              incrementType,
-              carbsPerUnit,
-            };
-
-            if (existingIndex >= 0) {
-              newState.quantities = [...newState.quantities];
-              newState.quantities[existingIndex] = newChange;
-            } else {
-              newState.quantities = [...newState.quantities, newChange];
-            }
-          }
-        }
-
-        // Handle fat addition
-        if ((rec.type === 'add_fat' || rec.type === 'balance_protein') && rec.action.fatSource) {
-          const fatSourceId = rec.action.fatSource.toLowerCase().replace(' ', '-');
-          const fatAddition = FAT_ADDITIONS.find(f => 
-            f.name.toLowerCase() === rec.action!.fatSource!.toLowerCase()
-          );
-          
-          if (fatAddition) {
-            const existingIndex = newState.additions.findIndex(a => a.id === fatAddition.id);
-            const quantity = rec.action.fatAmount || 1;
-            
-            const newAddition: AdditionChange = {
-              type: 'addition',
-              id: fatAddition.id,
-              name: fatAddition.name,
-              quantity,
-              unit: fatAddition.unit,
-              estimatedFatAddition: quantity * fatAddition.fatPerUnit,
-              enabled: true,
-            };
-
-            if (existingIndex >= 0) {
-              newState.additions = [...newState.additions];
-              newState.additions[existingIndex] = newAddition;
-            } else {
-              newState.additions = [...newState.additions, newAddition];
-            }
-          }
-        }
-      }
-
-      return newState;
-    });
-  }, [recommendations, ingredients]);
-
   // Toggle swap
   const toggleSwap = useCallback((ingredientId: string) => {
     setPreviewState(prev => {
@@ -577,7 +482,6 @@ export function useKetoSandbox({ nutrition, ingredients, servings }: UseKetoSand
     previewNutrition,
     originalNutrition,
     hasChanges,
-    recommendations,
     fatNeeded,
     
     // Actions
@@ -588,6 +492,5 @@ export function useKetoSandbox({ nutrition, ingredients, servings }: UseKetoSand
     updateAdditionQuantity,
     getActiveChanges,
     resetAll,
-    autoApplyRecommendations,
   };
 }
