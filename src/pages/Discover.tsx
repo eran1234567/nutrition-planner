@@ -144,6 +144,8 @@ interface UserRecipe {
     protein_g: number | null;
     carbs_g: number | null;
     fat_g: number | null;
+    fiber_g: number | null;
+    sodium_mg: number | null;
   };
   ingredients: Array<{
     name: string;
@@ -560,7 +562,7 @@ export default function Discover() {
         .from('recipes')
         .select(`
           id, title, description, image_url, prep_time, cook_time, total_time, servings, difficulty, cuisine,
-          recipe_nutrition(calories, protein_g, carbs_g, fat_g),
+          recipe_nutrition(calories, protein_g, carbs_g, fat_g, fiber_g, sodium_mg),
           recipe_ingredients(name, normalized_name),
           recipe_tags(tag_type, tag_value)
         `)
