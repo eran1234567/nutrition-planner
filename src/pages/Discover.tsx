@@ -1175,51 +1175,21 @@ export default function Discover() {
                 const inCurrentPool = isPlanMode && currentSlotFilter && (recipePoolsBySlot[currentSlotFilter] || []).includes(recipe.id);
                 const isChildUser = userAgeGroup === 'toddler' || userAgeGroup === 'child';
                 
-                // Build diet badges array from auto-detection + tags
-                const recipeDietTags = (recipe.tags || [])
-                  .filter((t: { tag_type: string; tag_value: string }) => t.tag_type === 'diet')
-                  .map((t: { tag_type: string; tag_value: string }) => t.tag_value.toLowerCase());
-                
-                // Build badges with auto-detection for keto, paleo, mediterranean
-                const dietBadges: string[] = [];
-                
-                // Keto: auto-detect from macros
-                if (isKetoFriendly(recipe.nutrition)) {
-                  dietBadges.push('keto');
-                }
-                
-                // Paleo: auto-detect from ingredients or use tag
-                if (recipeDietTags.includes('paleo') || isPaleoFriendly(recipe.ingredients)) {
-                  dietBadges.push('paleo');
-                }
-                
-                // Mediterranean: auto-detect from ingredients or use tag
-                if (recipeDietTags.includes('mediterranean') || isMediterraneanFriendly(recipe.ingredients)) {
-                  dietBadges.push('mediterranean');
-                }
-                
-                // Vegan, vegetarian, pescatarian: rely on tags only (require explicit tagging)
-                ['vegan', 'vegetarian', 'pescatarian'].forEach(diet => {
-                  if (recipeDietTags.includes(diet) && !dietBadges.includes(diet)) {
-                    dietBadges.push(diet);
-                  }
-                });
-                
-                // Auto-detect health badges from nutrition using Neutron Engine
-                const neutronBadges = getNeutronBadges(recipe.nutrition, recipe.ingredients);
-                const healthBadges = neutronBadges.healthBadges;
-                
+                // Let RecipeCard compute badges internally using Neutron Engine
+                // This ensures consistent badge logic across all pages
                 return (
                   <RecipeCard
                     key={recipe.id}
-                    recipe={recipe as any}
+                    recipe={{
+                      ...recipe,
+                      ingredients: recipe.ingredients,
+                      tags: recipe.tags,
+                    } as any}
                     isSelected={isSelected(recipe.id)}
                     isRemovable={inCurrentPool}
                     onSelect={() => handleSelect(recipe)}
                     onClick={() => handleRecipeCardClick(recipe)}
                     compact
-                    dietBadges={dietBadges}
-                    healthBadges={healthBadges}
                     showCuisineBadge={true}
                     showKidBadge={isChildUser}
                   />
