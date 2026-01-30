@@ -215,7 +215,7 @@ export function RecipeCard({
         {/* Keto Score badge (when in keto mode and showKetoScore is true) */}
         {showKetoScore && mode === 'keto' && badges.ketoScore.score > 0 && (
           <KetoLogicTooltip nutrition={recipe.nutrition as RawNutritionData} showScore>
-            <div className="absolute top-2 left-2 px-2 py-1 rounded-full bg-success/90 text-success-foreground text-xs font-bold cursor-help">
+            <div className="absolute top-2 left-2 px-2 py-1 rounded-full bg-emerald-500/90 text-white text-xs font-bold cursor-help">
               {badges.ketoScore.score}
             </div>
           </KetoLogicTooltip>
@@ -262,8 +262,8 @@ export function RecipeCard({
                 </span>
               );
 
-              // Use KetoLogicTooltip for keto badge, otherwise use standard tooltip
-              if (badgeKey === 'keto') {
+              // Use KetoLogicTooltip for keto badge ONLY in keto mode
+              if (badgeKey === 'keto' && mode === 'keto') {
                 return (
                   <KetoLogicTooltip 
                     key={badgeKey} 
@@ -272,6 +272,20 @@ export function RecipeCard({
                   >
                     {badgeElement}
                   </KetoLogicTooltip>
+                );
+              }
+
+              // Keto badge without tooltip when not in keto mode
+              if (badgeKey === 'keto') {
+                return (
+                  <Tooltip key={badgeKey}>
+                    <TooltipTrigger asChild>
+                      {badgeElement}
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      {tooltip}
+                    </TooltipContent>
+                  </Tooltip>
                 );
               }
 
