@@ -14,6 +14,8 @@ import { toast } from 'sonner';
 import { useRecipeImport } from '@/hooks/useRecipeImport';
 import { YouTubeImportProgress } from '@/components/recipe/YouTubeImportProgress';
 import { RecipeImportDrawer } from '@/components/recipe/RecipeImportDrawer';
+import { syncNeutronMode } from '@/stores/neutronStore';
+import { meetsHealthConsideration } from '@/lib/neutron';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,7 +34,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
-import { getHealthBadges, meetsHealthConsideration } from '@/lib/nutrition/healthDetection';
 
 // Filter options (same as Discover page)
 const timeFilterOptions = [
@@ -394,6 +395,11 @@ export default function Recipes() {
     });
   }, [userRecipes, searchQuery, selectedTime, selectedMealType, selectedDietType, blockedTerms, selectedHealthConsiderations]);
 
+
+  // Sync Neutron mode with keto filter state
+  useEffect(() => {
+    syncNeutronMode(selectedDietType || 'none');
+  }, [selectedDietType]);
 
   useEffect(() => {
     fetchUserRecipes();
@@ -838,7 +844,7 @@ export default function Recipes() {
                       nutrition: recipe.nutrition,
                     }} 
                     dietBadges={getDietBadges(recipe)}
-                    healthBadges={getHealthBadges(recipe.nutrition)}
+                    healthBadges={[]}
                     showCuisineBadge={true}
                     onClick={() => navigate(`/recipe/${recipe.id}`)}
                     onDelete={() => handleDeleteClick(recipe)}
