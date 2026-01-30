@@ -100,6 +100,50 @@ interface SwapSuggestion {
   estimatedCarbReduction: number;
 }
 
+/**
+ * Normalize ingredient name for comparison
+ */
+function normalizeIngredientName(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/^(fresh|organic|chopped|diced|minced|sliced)\s+/i, '')
+    .replace(/\s+(fresh|organic|chopped|diced|minced|sliced)$/i, '');
+}
+
+/**
+ * Check if ingredient is already the keto alternative
+ */
+function isAlreadyKetoAlternative(ingredientName: string, alternative: string): boolean {
+  const lowerName = normalizeIngredientName(ingredientName);
+  const lowerAlt = normalizeIngredientName(alternative);
+  return lowerName.includes(lowerAlt) || lowerAlt.includes(lowerName);
+}
+
+/**
+ * Get refined alternative for almond flour
+ */
+function getRefinedAlternative(ingredientName: string, category: string): { alternative: string; reason: string } | null {
+  const lowerName = normalizeIngredientName(ingredientName);
+  
+  if (lowerName.includes('almond flour') || lowerName.includes('almond meal')) {
+    if (category === 'Thickeners') {
+      return { alternative: 'Xanthan Gum', reason: 'Zero-carb thickening without almond flour bulk' };
+    }
+    if (category === 'Crunch') {
+      return { alternative: 'Pork Rind Panko', reason: 'Zero-carb breading alternative' };
+    }
+    return null;
+  }
+  
+  if (lowerName.includes('coconut flour')) {
+    return null;
+  }
+  
+  return null;
+}
+
 function findSwapsForIngredients(ingredients: IngredientData[]): SwapSuggestion[] {
   const swaps: SwapSuggestion[] = [];
   
@@ -109,11 +153,32 @@ function findSwapsForIngredients(ingredients: IngredientData[]): SwapSuggestion[
     for (const swapEntry of KETO_SWAP_DICTIONARY) {
       for (const keyword of swapEntry.keywords) {
         if (lowerName.includes(keyword)) {
+          // DEDUPLICATION: Skip if already using the keto alternative
+          if (isAlreadyKetoAlternative(ing.name, swapEntry.alternative)) {
+            break;
+          }
+          
+          // Check for refined alternatives (almond flour → xanthan gum)
+          const refined = getRefinedAlternative(ing.name, swapEntry.category);
+          if (refined === null && lowerName.includes('almond') && swapEntry.alternative.toLowerCase().includes('almond')) {
+            break; // Already keto-friendly
+          }
+          
+          const alternative = refined?.alternative ?? swapEntry.alternative;
+          const reason = refined?.reason ?? swapEntry.reason;
+          
+          // Final check: suppress identical swaps
+          const normalizedSource = normalizeIngredientName(ing.name);
+          const normalizedTarget = normalizeIngredientName(alternative);
+          if (normalizedSource.includes(normalizedTarget) || normalizedTarget.includes(normalizedSource)) {
+            break;
+          }
+          
           swaps.push({
             originalIngredient: ing.name,
-            swapTo: swapEntry.alternative,
+            swapTo: alternative,
             category: swapEntry.category,
-            reason: swapEntry.reason,
+            reason: reason,
             estimatedCarbReduction: swapEntry.estimatedCarbReduction,
           });
           break;

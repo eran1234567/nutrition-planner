@@ -692,7 +692,77 @@ export interface IngredientWithMacros {
 }
 
 /**
+ * Normalize an ingredient name for comparison (lowercase, trim, remove common descriptors)
+ */
+function normalizeIngredientName(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/^(fresh|organic|chopped|diced|minced|sliced)\s+/i, '')
+    .replace(/\s+(fresh|organic|chopped|diced|minced|sliced)$/i, '');
+}
+
+/**
+ * Check if the current ingredient is already the keto-friendly alternative
+ */
+function isAlreadyKetoAlternative(ingredientName: string, alternative: string, alternativeKeywords: string[]): boolean {
+  const lowerName = normalizeIngredientName(ingredientName);
+  const lowerAlt = normalizeIngredientName(alternative);
+  
+  // Direct match check
+  if (lowerName.includes(lowerAlt) || lowerAlt.includes(lowerName)) {
+    return true;
+  }
+  
+  // Check against alternative keywords
+  for (const altKeyword of alternativeKeywords) {
+    if (lowerName.includes(altKeyword.toLowerCase())) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
+ * Get refined alternative for ingredients that are already somewhat keto-friendly
+ * Returns a better suggestion or null if no better alternative exists
+ */
+function getRefinedAlternative(ingredientName: string, swapEntry: KetoSwapEntry): { alternative: string; reason: string } | null {
+  const lowerName = normalizeIngredientName(ingredientName);
+  
+  // Special case: Almond Flour is already keto-friendly
+  // If it matches 'flour' keyword but IS almond flour, suggest Xanthan Gum or skip
+  if (lowerName.includes('almond flour') || lowerName.includes('almond meal')) {
+    // Only suggest alternatives if this is from the Thickeners category
+    if (swapEntry.category === 'Thickeners') {
+      return {
+        alternative: 'Xanthan Gum',
+        reason: 'Zero-carb thickening without almond flour bulk',
+      };
+    }
+    // For Crunch category, suggest pork rinds
+    if (swapEntry.category === 'Crunch') {
+      return {
+        alternative: 'Pork Rind Panko',
+        reason: 'Zero-carb breading alternative',
+      };
+    }
+    return null; // Almond flour is already keto-friendly, no swap needed
+  }
+  
+  // Coconut flour is also low-carb, don't suggest swapping
+  if (lowerName.includes('coconut flour')) {
+    return null;
+  }
+  
+  return null; // Use default swap
+}
+
+/**
  * Find applicable swaps for ingredients based on the KETO_SWAP_DICTIONARY
+ * Includes deduplication to prevent suggesting the same ingredient as source/target
  */
 export function findKetoSwaps(ingredientNames: string[]): KetoSwapSuggestion[] {
   const swaps: KetoSwapSuggestion[] = [];
@@ -703,11 +773,32 @@ export function findKetoSwaps(ingredientNames: string[]): KetoSwapSuggestion[] {
     for (const swapEntry of KETO_SWAP_DICTIONARY) {
       for (const keyword of swapEntry.keywords) {
         if (lowerName.includes(keyword)) {
+          // DEDUPLICATION: Check if ingredient is already the keto alternative
+          if (isAlreadyKetoAlternative(ingName, swapEntry.alternative, swapEntry.alternativeKeywords)) {
+            break; // Skip - already using the keto-friendly version
+          }
+          
+          // Check if we need a refined alternative (e.g., almond flour → xanthan gum)
+          const refined = getRefinedAlternative(ingName, swapEntry);
+          if (refined === null && lowerName.includes('almond') && swapEntry.alternative.toLowerCase().includes('almond')) {
+            break; // Skip - almond flour doesn't need to be swapped for almond flour
+          }
+          
+          const alternative = refined?.alternative ?? swapEntry.alternative;
+          const reason = refined?.reason ?? swapEntry.reason;
+          
+          // Final check: ensure source and target are different
+          const normalizedSource = normalizeIngredientName(ingName);
+          const normalizedTarget = normalizeIngredientName(alternative);
+          if (normalizedSource.includes(normalizedTarget) || normalizedTarget.includes(normalizedSource)) {
+            break; // Skip identical swaps
+          }
+          
           swaps.push({
             originalIngredient: ingName,
-            swapTo: swapEntry.alternative,
+            swapTo: alternative,
             category: swapEntry.category,
-            reason: swapEntry.reason,
+            reason: reason,
             estimatedCarbReduction: swapEntry.estimatedCarbReduction,
             matchedKeyword: keyword,
           });
