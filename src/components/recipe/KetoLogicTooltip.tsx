@@ -78,38 +78,97 @@ function calculateKetoMetrics(nutrition: RawNutritionData | null | undefined): K
   };
 }
 
-function StatusIcon({ passed, warning }: { passed: boolean; warning?: boolean }) {
-  if (passed) {
+function StatusIcon({ type, value }: { type: ProgressType; value: number }) {
+  // Determine status based on type and value
+  let status: 'success' | 'warning' | 'danger';
+  
+  switch (type) {
+    case 'carbs':
+      status = value <= 9 ? 'success' : value <= 10 ? 'warning' : 'danger';
+      break;
+    case 'fat':
+      status = value >= 60 ? 'success' : 'danger';
+      break;
+    case 'protein':
+      status = value <= 35 ? 'success' : 'warning';
+      break;
+    default:
+      status = 'success';
+  }
+
+  if (status === 'success') {
     return (
-      <div className="w-5 h-5 rounded-full bg-success/20 flex items-center justify-center">
-        <Check className="w-3 h-3 text-success" />
+      <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
+        <Check className="w-3 h-3 text-emerald-600" />
       </div>
     );
   }
-  if (warning) {
+  if (status === 'warning') {
     return (
-      <div className="w-5 h-5 rounded-full bg-warning/20 flex items-center justify-center">
-        <AlertTriangle className="w-3 h-3 text-warning" />
+      <div className="w-5 h-5 rounded-full bg-amber-500/20 flex items-center justify-center">
+        <AlertTriangle className="w-3 h-3 text-amber-600" />
       </div>
     );
   }
   return (
-    <div className="w-5 h-5 rounded-full bg-destructive/20 flex items-center justify-center">
-      <X className="w-3 h-3 text-destructive" />
+    <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center">
+      <X className="w-3 h-3 text-red-600" />
     </div>
   );
 }
 
-function ProgressBar({ value, max, passed }: { value: number; max: number; passed: boolean }) {
+// Dynamic color helpers for progress bars
+type ProgressType = 'carbs' | 'fat' | 'protein';
+
+function getProgressColor(type: ProgressType, value: number): string {
+  switch (type) {
+    case 'carbs':
+      // Net Carbs: 0-5g Emerald, 5.1-9g Lime, 9.1-10g Amber
+      if (value <= 5) return 'bg-emerald-500';
+      if (value <= 9) return 'bg-lime-500';
+      return 'bg-amber-500';
+    case 'fat':
+      // Fat: >75% Emerald, 60-74% Lime, <60% Crimson
+      if (value >= 75) return 'bg-emerald-500';
+      if (value >= 60) return 'bg-lime-500';
+      return 'bg-red-600';
+    case 'protein':
+      // Protein: <25% Emerald, 25-35% Lime, >35% Amber
+      if (value < 25) return 'bg-emerald-500';
+      if (value <= 35) return 'bg-lime-500';
+      return 'bg-amber-500';
+    default:
+      return 'bg-muted-foreground';
+  }
+}
+
+function getTextColor(type: ProgressType, value: number): string {
+  switch (type) {
+    case 'carbs':
+      if (value <= 5) return 'text-emerald-600';
+      if (value <= 9) return 'text-lime-600';
+      return 'text-amber-600';
+    case 'fat':
+      if (value >= 75) return 'text-emerald-600';
+      if (value >= 60) return 'text-lime-600';
+      return 'text-red-600';
+    case 'protein':
+      if (value < 25) return 'text-emerald-600';
+      if (value <= 35) return 'text-lime-600';
+      return 'text-amber-600';
+    default:
+      return 'text-muted-foreground';
+  }
+}
+
+function ProgressBar({ value, max, type }: { value: number; max: number; type: ProgressType }) {
   const percentage = Math.min((value / max) * 100, 100);
+  const colorClass = getProgressColor(type, value);
   
   return (
-    <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
+    <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden border border-slate-300 dark:border-slate-600">
       <div
-        className={cn(
-          'h-full rounded-full transition-all',
-          passed ? 'bg-success' : 'bg-warning'
-        )}
+        className={cn('h-full rounded-full transition-all', colorClass)}
         style={{ width: `${percentage}%` }}
       />
     </div>
@@ -189,92 +248,76 @@ export function KetoLogicTooltip({
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <StatusIcon passed={carbsPassed} />
+                  <StatusIcon type="carbs" value={netCarbs} />
                   <div className="flex items-center gap-1.5">
                     <Droplets className="w-3.5 h-3.5 text-[hsl(var(--carbs))]" />
                     <span className="text-xs font-medium">Net Carbs</span>
                   </div>
                 </div>
-                <span className={cn(
-                  'text-xs font-semibold',
-                  carbsPassed ? 'text-success' : 'text-warning'
-                )}>
+                <span className={cn('text-xs font-semibold', getTextColor('carbs', netCarbs))}>
                   {netCarbs.toFixed(1)}g / {carbLimit}g
                 </span>
               </div>
-              <ProgressBar value={netCarbs} max={carbLimit} passed={carbsPassed} />
+              <ProgressBar value={netCarbs} max={carbLimit} type="carbs" />
             </div>
 
             {/* Fat Fuel */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <StatusIcon passed={fatPassed} />
+                  <StatusIcon type="fat" value={fatPercent} />
                   <div className="flex items-center gap-1.5">
                     <Flame className="w-3.5 h-3.5 text-[hsl(var(--fat))]" />
                     <span className="text-xs font-medium">Fat Fuel</span>
                   </div>
                 </div>
-                <span className={cn(
-                  'text-xs font-semibold',
-                  fatPassed ? 'text-success' : 'text-warning'
-                )}>
+                <span className={cn('text-xs font-semibold', getTextColor('fat', fatPercent))}>
                   {fatPercent}% (≥{fatTarget}%)
                 </span>
               </div>
-              <ProgressBar value={fatPercent} max={100} passed={fatPassed} />
+              <ProgressBar value={fatPercent} max={100} type="fat" />
             </div>
 
             {/* Protein Status (optional warning) */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <StatusIcon 
-                    passed={proteinPercent <= proteinThreshold} 
-                    warning={proteinPercent > proteinThreshold}
-                  />
+                  <StatusIcon type="protein" value={proteinPercent} />
                   <div className="flex items-center gap-1.5">
                     <Beef className="w-3.5 h-3.5 text-[hsl(var(--protein))]" />
                     <span className="text-xs font-medium">Protein</span>
                   </div>
                 </div>
-                <span className={cn(
-                  'text-xs font-semibold',
-                  proteinPercent <= proteinThreshold ? 'text-success' : 'text-warning'
-                )}>
+                <span className={cn('text-xs font-semibold', getTextColor('protein', proteinPercent))}>
                   {proteinPercent}% (≤{proteinThreshold}%)
                 </span>
               </div>
-              <ProgressBar 
-                value={proteinPercent} 
-                max={proteinThreshold + 20} 
-                passed={proteinPercent <= proteinThreshold} 
-              />
+              <ProgressBar value={proteinPercent} max={proteinThreshold + 20} type="protein" />
             </div>
 
             {/* Score Breakdown */}
             <div className="pt-2 border-t border-border">
               <div className="flex items-start gap-2">
-                <Info className="w-3.5 h-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <Info className="w-3.5 h-3.5 text-slate-500 mt-0.5 flex-shrink-0" />
                 <p className="text-2xs text-muted-foreground leading-relaxed">
-                  <span className="font-semibold text-foreground">Score {ketoScore.score}:</span>{' '}
+                  <span className="font-bold text-slate-700 dark:text-slate-300">Score {ketoScore.score}:</span>{' '}
                   {scoreBreakdown}
                 </p>
               </div>
             </div>
 
-            {/* Optimization Tip */}
+            {/* Optimization Tip - Ice Blue/Indigo tint */}
             {showOptimizer && optimizationTip && optimizationTip.priority !== 'low' && (
               <div className="pt-2 border-t border-border">
-                <div className="flex items-start gap-2 p-2 rounded-md bg-primary/5">
-                  <Lightbulb className="w-3.5 h-3.5 text-primary mt-0.5 flex-shrink-0" />
+                <div className="flex items-start gap-2 p-2 rounded-md bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50">
+                  <Lightbulb className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-2xs font-semibold text-primary mb-0.5">Optimizer Tip</p>
+                    <p className="text-2xs font-semibold text-indigo-700 dark:text-indigo-300 mb-0.5">Optimizer Tip</p>
                     <p className="text-2xs text-muted-foreground leading-relaxed">
                       {optimizationTip.message}
                     </p>
                     {optimizationTip.action?.impact && (
-                      <span className="inline-block mt-1 text-2xs font-medium text-success">
+                      <span className="inline-block mt-1 text-2xs font-bold text-indigo-600 dark:text-indigo-400">
                         {optimizationTip.action.impact}
                       </span>
                     )}
