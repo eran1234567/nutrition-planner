@@ -554,47 +554,30 @@ export default function RecipeDetail() {
                   if (!badge) return null;
                   const tooltip = DIET_BADGE_TOOLTIPS[diet];
                   
-                  // Keto badge: show KetoLogicTooltip only in Keto Mode, otherwise show simple badge
+                  // Keto badge: ALWAYS show KetoLogicTooltip for detailed analysis
+                  // (The NeutronSuggestionCard optimizer tips are still gated by isKetoMode)
                   if (diet === 'keto') {
-                    if (isKetoMode) {
-                      return (
-                        <KetoLogicTooltip 
-                          key={diet} 
-                          nutrition={recipe.nutrition as RawNutritionData}
-                          showScore
+                    return (
+                      <KetoLogicTooltip 
+                        key={diet} 
+                        nutrition={recipe.nutrition as RawNutritionData}
+                        showScore
+                        showOptimizer={isKetoMode} // Only show optimizer tips in Keto Mode
+                      >
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1 cursor-help ${badge.bgClass} ${badge.textClass}`}
                         >
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1 cursor-help ${badge.bgClass} ${badge.textClass}`}
-                          >
-                            {badge.icon}
-                            {badge.label}
-                            {/* Keto Score inline */}
-                            {neutronBadges?.ketoScore && (
-                              <span className="ml-1 bg-white/20 px-1.5 py-0.5 rounded text-2xs font-bold">
-                                {neutronBadges.ketoScore.score}
-                              </span>
-                            )}
-                          </span>
-                        </KetoLogicTooltip>
-                      );
-                    } else {
-                      // Not in Keto Mode - show simple badge without KetoLogicTooltip
-                      return (
-                        <Tooltip key={diet}>
-                          <TooltipTrigger asChild>
-                            <span
-                              className={`px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1 cursor-help ${badge.bgClass} ${badge.textClass}`}
-                            >
-                              {badge.icon}
-                              {badge.label}
+                          {badge.icon}
+                          {badge.label}
+                          {/* Keto Score inline */}
+                          {neutronBadges?.ketoScore && (
+                            <span className="ml-1 bg-white/20 px-1.5 py-0.5 rounded text-2xs font-bold">
+                              {neutronBadges.ketoScore.score}
                             </span>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" className="text-xs">
-                            {tooltip}
-                          </TooltipContent>
-                        </Tooltip>
-                      );
-                    }
+                          )}
+                        </span>
+                      </KetoLogicTooltip>
+                    );
                   }
                   
                   if (tooltip) {
