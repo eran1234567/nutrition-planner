@@ -131,7 +131,6 @@ interface RecipeNutrition {
   carbs_g: number | null;
   fat_g: number | null;
   fiber_g: number | null;
-  sugar_alcohols_g?: number | null;
 }
 
 interface RecipeIngredient {
@@ -173,12 +172,11 @@ const isKetoFriendly = (nutrition: RecipeNutrition | null | undefined): boolean 
   
   const totalCarbs = nutrition.carbs_g ?? 0;
   const fiber = nutrition.fiber_g ?? 0;
-  const sugarAlcohols = nutrition.sugar_alcohols_g ?? 0;
   const protein = nutrition.protein_g ?? 0;
   const fat = nutrition.fat_g ?? 0;
   
-  // Calculate net carbs: Total Carbs - Fiber - Sugar Alcohols
-  const netCarbs = Math.max(0, totalCarbs - fiber - sugarAlcohols);
+  // Calculate net carbs: Total Carbs - Fiber
+  const netCarbs = Math.max(0, totalCarbs - fiber);
   
   // Keto badge requires: Net Carbs ≤ 10g AND Fat ≥ 60% of Net Energy
   if (netCarbs > 10) return false;
@@ -574,7 +572,7 @@ export default function Recipes() {
       .from('recipes')
       .select(`
         id,title,description,image_url,prep_time,cook_time,total_time,servings,is_kid_friendly,is_meal_prep_friendly,
-        recipe_nutrition(calories,protein_g,carbs_g,fat_g,fiber_g,sugar_alcohols_g),
+        recipe_nutrition(calories,protein_g,carbs_g,fat_g,fiber_g),
         recipe_ingredients(name,normalized_name),
         recipe_tags(tag_type,tag_value)
       `)
