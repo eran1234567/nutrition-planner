@@ -97,8 +97,12 @@ INGREDIENTS:
 - ${ingredientList}
 
 ═══════════════════════════════════════════════════════════════
-USDA STANDARD MACRO REFERENCES (use these EXACT values!):
+USER-PROVIDED NUTRITION (HIGHEST PRIORITY - NEVER OVERRIDE!)
 ═══════════════════════════════════════════════════════════════
+CRITICAL: If ingredient names include nutrition values (e.g., "Keto Bread (60 cal, 13g carbs, 12g fiber)"),
+you MUST use EXACTLY those values. DO NOT substitute generic database values.
+
+USDA STANDARD MACRO REFERENCES (for ingredients WITHOUT explicit nutrition):
 - 1 large egg = 72 cal, 6.3g protein, 0.4g carbs, 4.8g fat, 0g fiber
 - 1 medium tomato = 22 cal, 1.1g protein, 4.8g carbs, 0.2g fat, 1.5g fiber
 - 1 slice regular bread = 79 cal, 2.7g protein, 15g carbs, 1g fat, 1g fiber
@@ -126,10 +130,14 @@ If an ingredient has 13g carbs and 12g fiber:
 - Net carbs = 13 - 12 = 1g
 - Calories from carbs = 1 × 4 = 4 cal (NOT 13 × 4 = 52 cal!)
 
+CALORIE CALCULATION HIERARCHY:
+1. If user provides CALORIES for an ingredient → USE THAT EXACT VALUE
+2. If NO calories provided → Calculate: (protein × 4) + (NET carbs × 4) + (fat × 9)
+
 CALCULATION METHOD:
-1. For EACH ingredient, calculate: protein, total carbs, fiber, fat
+1. For EACH ingredient, extract: protein, total carbs, fiber, fat, and calories (if provided)
 2. SUM all ingredient values to get TOTAL recipe values
-3. Calculate total calories: (protein × 4) + ((total_carbs - fiber) × 4) + (fat × 9)
+3. If no calories provided, calculate: (protein × 4) + ((total_carbs - fiber) × 4) + (fat × 9)
 4. DIVIDE all totals by servings to get per-serving values
 5. Round to nearest integer
 

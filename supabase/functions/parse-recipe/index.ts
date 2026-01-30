@@ -698,15 +698,22 @@ Step 2 - Sum ALL ingredients:
 
 Step 3 - Net carbs verification: 62g - 55g = 7g net carbs
 
-CALCULATION METHOD (CRITICAL - follow step by step):
-1. FIRST: Extract any explicit nutrition values the user provided in ingredient descriptions
-2. For EACH ingredient, calculate: protein, total carbs, fiber, fat, AND calories
-3. If user provides calories for an ingredient, USE THAT EXACT VALUE
-4. If calculating calories yourself: calories = (protein × 4) + (NET carbs × 4) + (fat × 9)
+CALORIE CALCULATION HIERARCHY (CRITICAL):
+1. If user provides CALORIES for an ingredient → USE THAT EXACT VALUE (do not recalculate!)
+2. If NO calories provided → Calculate: (protein × 4) + (NET carbs × 4) + (fat × 9)
    - NET carbs = Total carbs - Fiber
-5. SUM all ingredient values to get TOTAL recipe values
-6. DIVIDE by servings to get per-serving values
-7. Round to nearest integer
+
+CALCULATION METHOD (follow step by step):
+1. FIRST: Extract any explicit nutrition values the user provided in ingredient descriptions
+2. For EACH ingredient:
+   a. Extract protein, total carbs, fiber, fat from user OR use USDA reference
+   b. For CALORIES: check if user provided a value → if yes, use it; if no, calculate from macros
+3. SUM all ingredient values to get TOTAL recipe values
+4. DIVIDE by servings to get per-serving values
+5. Round to nearest integer
+
+NOTE: User-provided calories take priority even if they don't perfectly match macro math.
+This respects product labels which may account for rounding and other factors.
 
 SERVING SIZE DESCRIPTION RULES:
 - Describe what ONE serving looks like using discrete, countable portions
@@ -1099,14 +1106,22 @@ Step 2 - Sum ALL ingredients:
 
 Step 3 - Net carbs verification: 62g - 55g = 7g net carbs
 
-CALCULATION METHOD (step by step):
+CALORIE CALCULATION HIERARCHY (CRITICAL):
+1. If user provides CALORIES for an ingredient → USE THAT EXACT VALUE (do not recalculate!)
+2. If NO calories provided → Calculate: (protein × 4) + (NET carbs × 4) + (fat × 9)
+   - NET carbs = Total carbs - Fiber
+
+CALCULATION METHOD (follow step by step):
 1. FIRST: Extract any explicit nutrition values the user provided in ingredient descriptions
-2. For each ingredient, calculate: protein, total carbs, fiber, fat, AND calories
-3. If user provides calories for an ingredient, USE THAT EXACT VALUE
-4. If calculating calories yourself: calories = (protein × 4) + (NET carbs × 4) + (fat × 9)
-5. SUM all ingredient values to get TOTAL recipe values
-6. DIVIDE total by servings to get per-serving values
-7. Round to nearest integer
+2. For EACH ingredient:
+   a. Extract protein, total carbs, fiber, fat from user OR use USDA reference
+   b. For CALORIES: check if user provided a value → if yes, use it; if no, calculate from macros
+3. SUM all ingredient values to get TOTAL recipe values
+4. DIVIDE total by servings to get per-serving values
+5. Round to nearest integer
+
+NOTE: User-provided calories take priority even if they don't perfectly match macro math.
+This respects product labels which may account for rounding and other factors.
 
 If macros are NOT provided:
 - Generate reasonable macros by SUMMING ingredient contributions
