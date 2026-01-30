@@ -644,24 +644,41 @@ CRITICAL RULES:
 ${originalNutrition ? `5. Previous nutrition was: ${JSON.stringify(originalNutrition)} - only adjust proportionally for ingredient changes` : ''}
 
 USDA STANDARD MACRO REFERENCES (use these EXACT values!):
-- 1 large egg = 72 cal, 6.3g protein, 0.4g carbs, 4.8g fat
-- 1 medium tomato = 22 cal, 1.1g protein, 4.8g carbs, 0.2g fat  
-- 1 slice regular bread = 79 cal, 2.7g protein, 15g carbs, 1g fat
-- 1 tbsp olive oil = 119 cal, 0g protein, 0g carbs, 13.5g fat
-- 1 tbsp butter = 102 cal, 0.1g protein, 0g carbs, 11.5g fat
-- 1 medium avocado (201g) = 322 cal, 4g protein, 17g carbs, 29g fat
-- Half avocado (100g) = 160 cal, 2g protein, 8.5g carbs, 14.7g fat
-- 100g chicken breast = 165 cal, 31g protein, 0g carbs, 3.6g fat
-- 100g salmon = 208 cal, 20g protein, 0g carbs, 13g fat
+- 1 large egg = 72 cal, 6.3g protein, 0.4g carbs, 4.8g fat, 0g fiber
+- 1 medium tomato = 22 cal, 1.1g protein, 4.8g carbs, 0.2g fat, 1.5g fiber
+- 1 slice regular bread = 79 cal, 2.7g protein, 15g carbs, 1g fat, 1g fiber
+- 1 tbsp olive oil = 119 cal, 0g protein, 0g carbs, 13.5g fat, 0g fiber
+- 1 tbsp butter = 102 cal, 0.1g protein, 0g carbs, 11.5g fat, 0g fiber
+- 1 medium avocado (201g) = 322 cal, 4g protein, 17g carbs, 29g fat, 13g fiber
+- Half avocado (100g) = 160 cal, 2g protein, 8.5g carbs, 14.7g fat, 7g fiber
+- 100g chicken breast = 165 cal, 31g protein, 0g carbs, 3.6g fat, 0g fiber
+- 100g salmon = 208 cal, 20g protein, 0g carbs, 13g fat, 0g fiber
+
+═══════════════════════════════════════════════════════════════
+FIBER AND NET CARBS - CRITICAL FOR CALORIE ACCURACY
+═══════════════════════════════════════════════════════════════
+FIBER DOES NOT CONTRIBUTE CALORIES! This is critical for keto/high-fiber foods.
+
+When user provides carbs AND fiber (e.g., "13g carbs, 12g fiber"):
+- NET CARBS = Total Carbs - Fiber (e.g., 13g - 12g = 1g net carb)
+- CALORIES from carbs = NET CARBS × 4 (NOT total carbs × 4!)
+
+EXAMPLE - Keto Bread (4 slices, each: 60cal, 13g carbs, 12g fiber, 6g protein, 2.5g fat):
+- Total carbs: 4 × 13g = 52g (report this in carbs_g)
+- Total fiber: 4 × 12g = 48g (report this in fiber_g)
+- Net carbs: 52g - 48g = 4g (only 4g contributes to calories!)
+- Calories: 4 × 60 = 240 cal (USE the user's stated calories!)
 
 CALCULATION METHOD (CRITICAL - follow step by step):
-1. For EACH ingredient, look up or estimate its macros using USDA values
-2. WRITE OUT the calculation for each: "4 eggs = 4 × 6.3g protein = 25.2g protein"
-3. SUM all ingredient macros to get TOTAL recipe values
-4. DIVIDE by servings to get per-serving values
-5. Round to nearest integer
+1. For EACH ingredient, calculate: protein, total carbs, fiber, fat, AND calories
+2. If user provides calories for an ingredient, USE THAT EXACT VALUE
+3. If calculating calories yourself: calories = (protein × 4) + (NET carbs × 4) + (fat × 9)
+   - NET carbs = Total carbs - Fiber
+4. SUM all ingredient values to get TOTAL recipe values
+5. DIVIDE by servings to get per-serving values
+6. Round to nearest integer
 
-CRITICAL: If user provides specific nutrition info in ingredient descriptions (e.g., "keto bread - 6g protein per slice"), USE THOSE EXACT VALUES, not generic estimates!
+CRITICAL: If user provides specific nutrition info in ingredient descriptions (e.g., "keto bread - 60 cal, 13g carbs, 12g fiber, 6g protein per slice"), USE THOSE EXACT VALUES, not generic estimates!
 
 SERVING SIZE DESCRIPTION RULES:
 - Describe what ONE serving looks like using discrete, countable portions
@@ -1000,26 +1017,43 @@ Pescatarian: Fish allowed, no meat
 MACRO CALCULATION RULES (CRITICAL - FOLLOW EXACTLY)
 ═══════════════════════════════════════════════════════════════
 USDA STANDARD MACRO REFERENCES (use these EXACT values!):
-- 1 large egg = 72 cal, 6.3g protein, 0.4g carbs, 4.8g fat
-- 1 medium tomato = 22 cal, 1.1g protein, 4.8g carbs, 0.2g fat
-- 1 slice regular bread = 79 cal, 2.7g protein, 15g carbs, 1g fat
-- 1 tbsp olive oil = 119 cal, 0g protein, 0g carbs, 13.5g fat
-- 1 tbsp butter = 102 cal, 0.1g protein, 0g carbs, 11.5g fat
-- 1 medium avocado (201g) = 322 cal, 4g protein, 17g carbs, 29g fat
-- Half avocado (100g) = 160 cal, 2g protein, 8.5g carbs, 14.7g fat
-- 100g chicken breast = 165 cal, 31g protein, 0g carbs, 3.6g fat
-- 100g salmon = 208 cal, 20g protein, 0g carbs, 13g fat
-- 100g ground beef 90/10 = 176 cal, 26g protein, 0g carbs, 8g fat
+- 1 large egg = 72 cal, 6.3g protein, 0.4g carbs, 4.8g fat, 0g fiber
+- 1 medium tomato = 22 cal, 1.1g protein, 4.8g carbs, 0.2g fat, 1.5g fiber
+- 1 slice regular bread = 79 cal, 2.7g protein, 15g carbs, 1g fat, 1g fiber
+- 1 tbsp olive oil = 119 cal, 0g protein, 0g carbs, 13.5g fat, 0g fiber
+- 1 tbsp butter = 102 cal, 0.1g protein, 0g carbs, 11.5g fat, 0g fiber
+- 1 medium avocado (201g) = 322 cal, 4g protein, 17g carbs, 29g fat, 13g fiber
+- Half avocado (100g) = 160 cal, 2g protein, 8.5g carbs, 14.7g fat, 7g fiber
+- 100g chicken breast = 165 cal, 31g protein, 0g carbs, 3.6g fat, 0g fiber
+- 100g salmon = 208 cal, 20g protein, 0g carbs, 13g fat, 0g fiber
+- 100g ground beef 90/10 = 176 cal, 26g protein, 0g carbs, 8g fat, 0g fiber
 
 CRITICAL: If user provides specific nutrition info in ingredient descriptions
-(e.g., "keto bread - 60 cal, 6g protein per slice"), USE THOSE EXACT VALUES!
+(e.g., "keto bread - 60 cal, 13g carbs, 12g fiber, 6g protein per slice"),
+USE THOSE EXACT VALUES including the fiber!
+
+═══════════════════════════════════════════════════════════════
+FIBER AND NET CARBS - CRITICAL FOR CALORIE ACCURACY
+═══════════════════════════════════════════════════════════════
+FIBER DOES NOT CONTRIBUTE CALORIES! This is critical for keto/high-fiber foods.
+
+When user provides carbs AND fiber (e.g., "13g carbs, 12g fiber"):
+- NET CARBS = Total Carbs - Fiber (e.g., 13g - 12g = 1g net carb)
+- CALORIES from carbs = NET CARBS × 4 (NOT total carbs × 4!)
+
+EXAMPLE - Keto Bread (4 slices, each: 60cal, 13g carbs, 12g fiber, 6g protein, 2.5g fat):
+- Total carbs: 4 × 13g = 52g (report this in carbs_g)
+- Total fiber: 4 × 12g = 48g (report this in fiber_g)
+- Net carbs: 52g - 48g = 4g (only 4g × 4 = 16 cal from carbs!)
+- Calories: 4 × 60 = 240 cal (USE the user's stated calories!)
 
 CALCULATION METHOD (step by step):
-1. For EACH ingredient, calculate its individual macros
-2. Mentally sum: "4 eggs × 6.3g = 25.2g protein" + "4 slices keto bread × 6g = 24g protein" = 49.2g total
-3. SUM all ingredient macros to get TOTAL recipe values
-4. DIVIDE total by servings to get per-serving values
-5. Round to nearest integer
+1. For EACH ingredient, calculate: protein, total carbs, fiber, fat, AND calories
+2. If user provides calories for an ingredient, USE THAT EXACT VALUE
+3. If calculating calories yourself: calories = (protein × 4) + (NET carbs × 4) + (fat × 9)
+4. SUM all ingredient values to get TOTAL recipe values
+5. DIVIDE total by servings to get per-serving values
+6. Round to nearest integer
 
 If macros are NOT provided:
 - Generate reasonable macros by SUMMING ingredient contributions
