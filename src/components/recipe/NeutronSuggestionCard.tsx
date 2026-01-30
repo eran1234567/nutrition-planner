@@ -2,7 +2,7 @@
  * NeutronSuggestionCard - Smart Swap and Keto Optimization UI Component
  * 
  * Displays actionable suggestions to optimize a recipe for keto compliance,
- * including Smart Swap recommendations from the KETO_SWAP_DICTIONARY.
+ * including Smart Swap recommendations from the shared Neutron Engine.
  */
 
 import { useState, useMemo } from 'react';
@@ -12,8 +12,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
   getKetoOptimization, 
+  findKetoSwaps,
   type KetoOptimizationResult, 
   type KetoOptimizationSuggestion,
+  type KetoSwapSuggestion,
   type RawNutritionData,
   calculateNetCarbs,
   calculateKetoScore,
@@ -32,173 +34,15 @@ interface NeutronSuggestionCardProps {
   onPreviewSwap?: (originalIngredient: string, newIngredient: string) => void;
 }
 
-// Keto swap dictionary mirror for frontend (simplified)
-const KETO_SWAP_DICTIONARY = [
-  {
-    category: 'Grains',
-    highCarbItem: 'Rice',
-    keywords: ['rice', 'white rice', 'brown rice', 'jasmine rice', 'basmati'],
-    alternative: 'Cauliflower Rice',
-    reason: 'Drops net carbs by ~90%',
-    estimatedCarbReduction: 40,
-  },
-  {
-    category: 'Wraps',
-    highCarbItem: 'Flour Tortilla / Bread',
-    keywords: ['tortilla', 'flour tortilla', 'bread', 'wrap', 'pita', 'naan', 'flatbread'],
-    alternative: 'Lettuce Wrap',
-    reason: 'Eliminates nearly all grain-based carbs',
-    estimatedCarbReduction: 25,
-  },
-  {
-    category: 'Pasta',
-    highCarbItem: 'Pasta / Noodles',
-    keywords: ['pasta', 'spaghetti', 'noodle', 'noodles', 'penne', 'fettuccine', 'linguine', 'macaroni', 'lasagna'],
-    alternative: 'Zucchini Noodles (Zoodles)',
-    reason: 'High fiber, extremely low net carbs',
-    estimatedCarbReduction: 35,
-  },
-  {
-    category: 'Sides',
-    highCarbItem: 'Potato',
-    keywords: ['potato', 'potatoes', 'fries', 'french fries', 'mashed potato', 'hash brown'],
-    alternative: 'Jicama or Zucchini',
-    reason: 'Reduces starch significantly',
-    estimatedCarbReduction: 30,
-  },
-  {
-    category: 'Thickeners',
-    highCarbItem: 'Cornstarch / Flour',
-    keywords: ['cornstarch', 'corn starch', 'flour', 'all-purpose flour', 'wheat flour'],
-    alternative: 'Xanthan Gum or Almond Flour',
-    reason: 'Removes high-glycemic thickeners',
-    estimatedCarbReduction: 10,
-  },
-  {
-    category: 'Crunch',
-    highCarbItem: 'Croutons / Crackers',
-    keywords: ['crouton', 'croutons', 'cracker', 'crackers', 'breadcrumb', 'breadcrumbs', 'panko'],
-    alternative: 'Pork Rinds or Parmesan Crisps',
-    reason: 'Replaces carbs with protein/fat crunch',
-    estimatedCarbReduction: 15,
-  },
-  {
-    category: 'Sweeteners',
-    highCarbItem: 'Sugar / Honey / Maple Syrup',
-    keywords: ['sugar', 'honey', 'maple syrup', 'brown sugar', 'cane sugar', 'agave', 'molasses'],
-    alternative: 'Allulose or Monk Fruit',
-    reason: 'Zero net carb impact',
-    estimatedCarbReduction: 20,
-  },
-];
-
-interface SwapSuggestion {
-  originalIngredient: string;
-  swapTo: string;
-  category: string;
-  reason: string;
-  estimatedCarbReduction: number;
-}
-
-/**
- * Normalize ingredient name for comparison
- */
-function normalizeIngredientName(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, ' ')
-    .replace(/^(fresh|organic|chopped|diced|minced|sliced)\s+/i, '')
-    .replace(/\s+(fresh|organic|chopped|diced|minced|sliced)$/i, '');
-}
-
-/**
- * Check if ingredient is already the keto alternative
- */
-function isAlreadyKetoAlternative(ingredientName: string, alternative: string): boolean {
-  const lowerName = normalizeIngredientName(ingredientName);
-  const lowerAlt = normalizeIngredientName(alternative);
-  return lowerName.includes(lowerAlt) || lowerAlt.includes(lowerName);
-}
-
-/**
- * Get refined alternative for almond flour
- */
-function getRefinedAlternative(ingredientName: string, category: string): { alternative: string; reason: string } | null {
-  const lowerName = normalizeIngredientName(ingredientName);
-  
-  if (lowerName.includes('almond flour') || lowerName.includes('almond meal')) {
-    if (category === 'Thickeners') {
-      return { alternative: 'Xanthan Gum', reason: 'Zero-carb thickening without almond flour bulk' };
-    }
-    if (category === 'Crunch') {
-      return { alternative: 'Pork Rind Panko', reason: 'Zero-carb breading alternative' };
-    }
-    return null;
-  }
-  
-  if (lowerName.includes('coconut flour')) {
-    return null;
-  }
-  
-  return null;
-}
-
-function findSwapsForIngredients(ingredients: IngredientData[]): SwapSuggestion[] {
-  const swaps: SwapSuggestion[] = [];
-  
-  for (const ing of ingredients) {
-    const lowerName = ing.name.toLowerCase();
-    
-    for (const swapEntry of KETO_SWAP_DICTIONARY) {
-      for (const keyword of swapEntry.keywords) {
-        if (lowerName.includes(keyword)) {
-          // DEDUPLICATION: Skip if already using the keto alternative
-          if (isAlreadyKetoAlternative(ing.name, swapEntry.alternative)) {
-            break;
-          }
-          
-          // Check for refined alternatives (almond flour → xanthan gum)
-          const refined = getRefinedAlternative(ing.name, swapEntry.category);
-          if (refined === null && lowerName.includes('almond') && swapEntry.alternative.toLowerCase().includes('almond')) {
-            break; // Already keto-friendly
-          }
-          
-          const alternative = refined?.alternative ?? swapEntry.alternative;
-          const reason = refined?.reason ?? swapEntry.reason;
-          
-          // Final check: suppress identical swaps
-          const normalizedSource = normalizeIngredientName(ing.name);
-          const normalizedTarget = normalizeIngredientName(alternative);
-          if (normalizedSource.includes(normalizedTarget) || normalizedTarget.includes(normalizedSource)) {
-            break;
-          }
-          
-          swaps.push({
-            originalIngredient: ing.name,
-            swapTo: alternative,
-            category: swapEntry.category,
-            reason: reason,
-            estimatedCarbReduction: swapEntry.estimatedCarbReduction,
-          });
-          break;
-        }
-      }
-    }
-  }
-  
-  return swaps;
-}
-
-export function NeutronSuggestionCard({ 
+export function NeutronSuggestionCard({
   nutrition, 
   ingredients,
   onPreviewSwap 
 }: NeutronSuggestionCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [previewingSwap, setPreviewingSwap] = useState<SwapSuggestion | null>(null);
+  const [previewingSwap, setPreviewingSwap] = useState<KetoSwapSuggestion | null>(null);
 
-  // Get optimization result from Neutron Engine
+  // Get optimization result from Neutron Engine (includes swap suggestions)
   const optimization = useMemo(() => {
     if (!nutrition) return null;
     
@@ -211,9 +55,10 @@ export function NeutronSuggestionCard({
     return getKetoOptimization(nutrition, ingredientsWithMacros);
   }, [nutrition, ingredients]);
 
-  // Find swap suggestions
+  // Use swap suggestions from the shared Neutron Engine
   const swapSuggestions = useMemo(() => {
-    return findSwapsForIngredients(ingredients);
+    const ingredientNames = ingredients.map(ing => ing.name);
+    return findKetoSwaps(ingredientNames);
   }, [ingredients]);
 
   // Calculate current keto status
@@ -242,7 +87,7 @@ export function NeutronSuggestionCard({
   const primarySuggestion = optimization.suggestions[0];
   const hasSwaps = swapSuggestions.length > 0;
 
-  const handlePreviewSwap = (swap: SwapSuggestion) => {
+  const handlePreviewSwap = (swap: KetoSwapSuggestion) => {
     // Toggle behavior: if already previewing this swap, clear it
     if (previewingSwap?.originalIngredient === swap.originalIngredient) {
       setPreviewingSwap(null);
@@ -293,11 +138,11 @@ export function NeutronSuggestionCard({
         </button>
       </div>
 
-      {/* Primary suggestion always visible */}
-      {primarySuggestion && !isCurrentlyKeto && (
+      {/* Primary suggestion - show for non-keto OR keto with score < 100 */}
+      {primarySuggestion && (
         <div className="mt-3 p-3 bg-background/50 rounded-lg border border-border/50">
           <p className="text-sm text-foreground">{primarySuggestion.message}</p>
-      {primarySuggestion && primarySuggestion.action?.impact && (
+          {primarySuggestion.action?.impact && (
             <span className="inline-block mt-2 text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">
               {primarySuggestion.action.impact}
             </span>

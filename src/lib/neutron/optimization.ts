@@ -50,11 +50,22 @@ export interface KetoOptimizationResult {
 }
 
 // Keto Smart Swap Dictionary (mirrored from backend)
-export const KETO_SWAP_DICTIONARY = [
+interface SwapDictionaryEntry {
+  category: string;
+  highCarbItem: string;
+  keywords: string[];
+  excludeKeywords?: string[];
+  alternative: string;
+  reason: string;
+  estimatedCarbReduction: number;
+}
+
+export const KETO_SWAP_DICTIONARY: SwapDictionaryEntry[] = [
   {
     category: 'Grains',
     highCarbItem: 'Rice',
     keywords: ['rice', 'white rice', 'brown rice', 'jasmine rice', 'basmati'],
+    excludeKeywords: ['cauliflower'],
     alternative: 'Cauliflower Rice',
     reason: 'Drops net carbs by ~90%',
     estimatedCarbReduction: 40,
@@ -62,7 +73,8 @@ export const KETO_SWAP_DICTIONARY = [
   {
     category: 'Wraps',
     highCarbItem: 'Flour Tortilla / Bread',
-    keywords: ['tortilla', 'flour tortilla', 'bread', 'wrap', 'pita', 'naan', 'flatbread'],
+    keywords: ['tortilla', 'flour tortilla', 'wrap', 'pita', 'naan', 'flatbread'],
+    excludeKeywords: ['keto', 'low carb', 'low-carb'],
     alternative: 'Lettuce Wrap',
     reason: 'Eliminates nearly all grain-based carbs',
     estimatedCarbReduction: 25,
@@ -173,6 +185,11 @@ export function findKetoSwaps(ingredientNames: string[]): KetoSwapSuggestion[] {
     const lowerName = ingName.toLowerCase();
     
     for (const swapEntry of KETO_SWAP_DICTIONARY) {
+      // Check if any exclude keywords are present (ingredient is already keto-friendly)
+      if (swapEntry.excludeKeywords?.some(exclude => lowerName.includes(exclude))) {
+        continue;
+      }
+      
       for (const keyword of swapEntry.keywords) {
         if (lowerName.includes(keyword)) {
           // DEDUPLICATION: Check if ingredient is already the keto alternative
