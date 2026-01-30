@@ -2181,7 +2181,10 @@ ${transcript}`;
         carbs_g: validateNutrition(recipe.nutrition?.carbs_g, 1000),
         fat_g: validateNutrition(recipe.nutrition?.fat_g, 1000),
         fiber_g: validateNutrition(recipe.nutrition?.fiber_g, 500),
+        sugar_g: validateNutrition(recipe.nutrition?.sugar_g, 500),
         sodium_mg: validateNutrition(recipe.nutrition?.sodium_mg, 50000),
+        saturated_fat_g: validateNutrition(recipe.nutrition?.saturated_fat_g, 500),
+        cholesterol_mg: validateNutrition(recipe.nutrition?.cholesterol_mg, 5000),
       }));
 
       // Tags - combine general tags, diet_tags, and health_tags

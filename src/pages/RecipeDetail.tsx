@@ -26,6 +26,7 @@ import { RecipeEditor } from '@/components/recipe/RecipeEditor';
 import { AddToPlanModal } from '@/components/plan/AddToPlanModal';
 import { VideoHero } from '@/components/recipe/VideoHero';
 import { CookingMode } from '@/components/recipe/CookingMode';
+import { KetoLogicTooltip } from '@/components/recipe/KetoLogicTooltip';
 import { useRecipeById } from '@/hooks/useGlobalRecipes';
 import { useMealPlanStore } from '@/stores/mealPlanStore';
 import { useNeutronStore } from '@/stores/neutronStore';
@@ -89,17 +90,11 @@ const CUISINE_BADGES: Record<string, { label: string; icon: React.ReactNode; bgC
   brazilian: { label: 'Brazilian', icon: <Leaf className="w-3 h-3" />, bgClass: 'bg-yellow-500/90', textClass: 'text-white' },
 };
 
-// Diet exclusions for auto-detection
+// Diet exclusions for auto-detection (fallback for non-Neutron diets)
 const dietExclusions: Record<string, string[]> = {
   paleo: ['bread', 'pasta', 'rice', 'noodle', 'grain', 'wheat', 'oat', 'corn', 'quinoa', 'barley', 'cereal', 'granola', 'tortilla', 'bean', 'lentil', 'chickpea', 'hummus', 'peanut', 'soy', 'tofu', 'tempeh', 'edamame', 'dairy', 'milk', 'cheese', 'yogurt', 'butter', 'cream', 'sugar', 'candy', 'cake', 'cookie', 'donut', 'pastry'],
   mediterranean: ['beef', 'steak', 'pork', 'bacon', 'ham', 'sausage', 'hot dog', 'salami', 'processed meat', 'butter', 'margarine', 'sugar', 'candy', 'cake', 'cookie', 'donut', 'soda', 'fried', 'deep fried'],
 };
-
-// Strict keto thresholds
-const KETO_MAX_CARBS = 8;
-const KETO_MAX_CARB_PERCENT = 10;
-const KETO_MAX_PROTEIN_PERCENT = 25;
-const KETO_MIN_FAT_PERCENT = 70;
 
 export default function RecipeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -292,56 +287,7 @@ export default function RecipeDetail() {
     });
   }, [ingredientsBySection]);
 
-  // Helper to check if recipe meets strict keto macro criteria
-  const isKetoFriendly = useMemo(() => {
-    const nutrition = recipe?.nutrition;
-    if (!nutrition) return false;
-    
-    const carbs = nutrition.carbs_g ?? 0;
-    const protein = nutrition.protein_g ?? 0;
-    const fat = nutrition.fat_g ?? 0;
-    
-    if (carbs > KETO_MAX_CARBS) return false;
-    
-    const proteinCals = protein * 4;
-    const fatCals = fat * 9;
-    const carbCals = carbs * 4;
-    const totalMacroCals = proteinCals + fatCals + carbCals;
-    
-    if (totalMacroCals <= 0) return false;
-    
-    const carbPercent = (carbCals / totalMacroCals) * 100;
-    const proteinPercent = (proteinCals / totalMacroCals) * 100;
-    const fatPercent = (fatCals / totalMacroCals) * 100;
-    
-    return carbPercent <= KETO_MAX_CARB_PERCENT && 
-           proteinPercent <= KETO_MAX_PROTEIN_PERCENT && 
-           fatPercent >= KETO_MIN_FAT_PERCENT;
-  }, [recipe?.nutrition]);
-
-  // Helper to check if recipe is paleo-friendly based on ingredients
-  const isPaleoFriendly = useMemo(() => {
-    const ingredients = recipe?.ingredients;
-    if (!ingredients || ingredients.length === 0) return false;
-    
-    return !ingredients.some(ing => {
-      const ingName = (ing.normalized_name || ing.name || '').toLowerCase();
-      return dietExclusions.paleo.some(excluded => ingName.includes(excluded));
-    });
-  }, [recipe?.ingredients]);
-
-  // Helper to check if recipe is mediterranean-friendly
-  const isMediterraneanFriendly = useMemo(() => {
-    const ingredients = recipe?.ingredients;
-    if (!ingredients || ingredients.length === 0) return false;
-    
-    return !ingredients.some(ing => {
-      const ingName = (ing.normalized_name || ing.name || '').toLowerCase();
-      return dietExclusions.mediterranean.some(excluded => ingName.includes(excluded));
-    });
-  }, [recipe?.ingredients]);
-
-  // Build diet badges array
+  // Build diet badges array using Neutron Engine for keto + fallbacks for other diets
   const dietBadges = useMemo(() => {
     if (!recipe) return [];
     
@@ -350,15 +296,25 @@ export default function RecipeDetail() {
       .filter((t: { tag_type: string; tag_value: string }) => t.tag_type === 'diet')
       .map((t: { tag_type: string; tag_value: string }) => t.tag_value.toLowerCase());
     
-    // Keto: auto-detect from macros
-    if (isKetoFriendly) badges.push('keto');
+    // Keto: use Neutron Engine detection (single source of truth)
+    if (neutronBadges?.isKeto) {
+      badges.push('keto');
+    }
     
     // Paleo: auto-detect from ingredients or use tag
+    const isPaleoFriendly = recipe.ingredients?.length > 0 && !recipe.ingredients.some(ing => {
+      const ingName = (ing.normalized_name || ing.name || '').toLowerCase();
+      return dietExclusions.paleo.some(excluded => ingName.includes(excluded));
+    });
     if (recipeDietTags.includes('paleo') || isPaleoFriendly) badges.push('paleo');
     
     // Mediterranean: auto-detect from ingredients or use tag
     // BUT skip if cuisine is already Mediterranean (to avoid duplicate badge)
     const cuisineIsMediterranean = recipe.cuisine?.toLowerCase() === 'mediterranean';
+    const isMediterraneanFriendly = recipe.ingredients?.length > 0 && !recipe.ingredients.some(ing => {
+      const ingName = (ing.normalized_name || ing.name || '').toLowerCase();
+      return dietExclusions.mediterranean.some(excluded => ingName.includes(excluded));
+    });
     if (!cuisineIsMediterranean && (recipeDietTags.includes('mediterranean') || isMediterraneanFriendly)) {
       badges.push('mediterranean');
     }
@@ -371,7 +327,7 @@ export default function RecipeDetail() {
     });
     
     return badges;
-  }, [recipe, isKetoFriendly, isPaleoFriendly, isMediterraneanFriendly]);
+  }, [recipe, neutronBadges]);
 
   // Build health badges array using Neutron Engine
   const healthBadges = useMemo(() => {
@@ -580,6 +536,30 @@ export default function RecipeDetail() {
                   const badge = DIET_BADGES[diet];
                   if (!badge) return null;
                   const tooltip = DIET_BADGE_TOOLTIPS[diet];
+                  
+                  // Use KetoLogicTooltip for keto badge with full analysis
+                  if (diet === 'keto') {
+                    return (
+                      <KetoLogicTooltip 
+                        key={diet} 
+                        nutrition={recipe.nutrition as RawNutritionData}
+                        showScore
+                      >
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1 cursor-help ${badge.bgClass} ${badge.textClass}`}
+                        >
+                          {badge.icon}
+                          {badge.label}
+                          {/* Keto Score inline */}
+                          {neutronBadges?.ketoScore && (
+                            <span className="ml-1 bg-white/20 px-1.5 py-0.5 rounded text-2xs font-bold">
+                              {neutronBadges.ketoScore.score}
+                            </span>
+                          )}
+                        </span>
+                      </KetoLogicTooltip>
+                    );
+                  }
                   
                   if (tooltip) {
                     return (
