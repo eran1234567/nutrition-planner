@@ -218,6 +218,9 @@ const USDA_REFERENCES: Record<string, IngredientMacros> = {
   'avocado_full': { calories: 322, protein: 4, carbs: 17, fat: 29, fiber: 13 },
   'olive_oil_tbsp': { calories: 119, protein: 0, carbs: 0, fat: 13.5, fiber: 0 },
   'butter_tbsp': { calories: 102, protein: 0.1, carbs: 0, fat: 11.5, fiber: 0 },
+  // Keto bread typically has ~60 cal, ~6g protein, ~13g total carbs, ~12g fiber, ~2.5g fat per slice
+  // Net carbs = 1g per slice
+  'keto_bread_slice': { calories: 60, protein: 6, carbs: 13, fat: 2.5, fiber: 12 },
 };
 
 function parseIngredientQuantity(text: string): number {
@@ -304,6 +307,7 @@ function calculateIngredientMacros(ingredientText: string): IngredientMacros | n
   // Detect egg yolks specifically
   if (lowerText.includes('yolk') && !lowerText.includes('whole')) {
     const yolkQty = quantity;
+    console.log(`[MACROS] Detected egg yolks, qty=${yolkQty}`);
     return {
       calories: USDA_REFERENCES.egg_yolk.calories * yolkQty,
       protein: USDA_REFERENCES.egg_yolk.protein * yolkQty,
@@ -316,6 +320,7 @@ function calculateIngredientMacros(ingredientText: string): IngredientMacros | n
   // Detect egg whites specifically
   if (lowerText.includes('white') && lowerText.includes('egg')) {
     const whiteQty = quantity;
+    console.log(`[MACROS] Detected egg whites, qty=${whiteQty}`);
     return {
       calories: USDA_REFERENCES.egg_white.calories * whiteQty,
       protein: USDA_REFERENCES.egg_white.protein * whiteQty,
@@ -328,6 +333,7 @@ function calculateIngredientMacros(ingredientText: string): IngredientMacros | n
   // Detect whole eggs
   if (lowerText.includes('egg') && !lowerText.includes('yolk') && !lowerText.includes('white')) {
     const eggQty = quantity;
+    console.log(`[MACROS] Detected whole eggs, qty=${eggQty}`);
     return {
       calories: USDA_REFERENCES.egg.calories * eggQty,
       protein: USDA_REFERENCES.egg.protein * eggQty,
@@ -344,6 +350,7 @@ function calculateIngredientMacros(ingredientText: string): IngredientMacros | n
     let avocadoQty = numMatch ? parseFloat(numMatch[1]) : 1;
     
     if (isHalf) {
+      console.log(`[MACROS] Detected half avocado, qty=${avocadoQty || 1}`);
       return {
         calories: USDA_REFERENCES.avocado_half.calories * (avocadoQty || 1),
         protein: USDA_REFERENCES.avocado_half.protein * (avocadoQty || 1),
@@ -352,6 +359,7 @@ function calculateIngredientMacros(ingredientText: string): IngredientMacros | n
         fiber: USDA_REFERENCES.avocado_half.fiber * (avocadoQty || 1),
       };
     } else {
+      console.log(`[MACROS] Detected full avocado, qty=${avocadoQty}`);
       return {
         calories: USDA_REFERENCES.avocado_full.calories * avocadoQty,
         protein: USDA_REFERENCES.avocado_full.protein * avocadoQty,
@@ -362,6 +370,26 @@ function calculateIngredientMacros(ingredientText: string): IngredientMacros | n
     }
   }
   
+  // Detect keto bread / low carb bread
+  if ((lowerText.includes('keto') && lowerText.includes('bread')) || 
+      (lowerText.includes('low carb') && lowerText.includes('bread')) ||
+      (lowerText.includes('low-carb') && lowerText.includes('bread'))) {
+    // Count slices - look for "X slices" or just a leading number
+    const sliceMatch = lowerText.match(/(\d+)\s*slice/);
+    const leadingNum = ingredientText.match(/^(\d+)/);
+    const sliceQty = sliceMatch ? parseInt(sliceMatch[1]) : (leadingNum ? parseInt(leadingNum[1]) : 1);
+    
+    console.log(`[MACROS] Detected keto bread, slices=${sliceQty}`);
+    return {
+      calories: USDA_REFERENCES.keto_bread_slice.calories * sliceQty,
+      protein: USDA_REFERENCES.keto_bread_slice.protein * sliceQty,
+      carbs: USDA_REFERENCES.keto_bread_slice.carbs * sliceQty,
+      fat: USDA_REFERENCES.keto_bread_slice.fat * sliceQty,
+      fiber: USDA_REFERENCES.keto_bread_slice.fiber * sliceQty,
+    };
+  }
+  
+  console.log(`[MACROS] Unknown ingredient, returning null for: "${ingredientText}"`);
   return null; // Unknown ingredient - let AI handle it
 }
 
