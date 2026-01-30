@@ -2,8 +2,9 @@ import { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Loader2, Pencil, Leaf, Fish, Drumstick, Sun, CalendarPlus, Trash2, Heart, Droplets, Activity, Globe, Pizza, UtensilsCrossed, Soup, Cherry, PlayCircle, Zap, Sparkles } from 'lucide-react';
+import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Loader2, Pencil, Leaf, Fish, Drumstick, Sun, CalendarPlus, Trash2, Heart, Droplets, Activity, Globe, Pizza, UtensilsCrossed, Soup, Cherry, PlayCircle, Zap, Sparkles, Copy } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -121,6 +122,7 @@ export default function RecipeDetail() {
   const [showAddToPlanModal, setShowAddToPlanModal] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [showCookingMode, setShowCookingMode] = useState(false);
+  const [isSavingToMyRecipes, setIsSavingToMyRecipes] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
 
@@ -358,6 +360,139 @@ export default function RecipeDetail() {
 
   const handleRemoveClick = () => {
     setShowRemoveConfirm(true);
+  };
+
+  // Save global recipe to user's collection
+  const handleSaveToMyRecipes = async () => {
+    if (!recipe || !user) {
+      toast.error('Please sign in to save recipes');
+      return;
+    }
+
+    setIsSavingToMyRecipes(true);
+    try {
+      // 1. Insert the recipe copy with user as owner
+      const { data: newRecipe, error: recipeError } = await supabase
+        .from('recipes')
+        .insert({
+          title: recipe.title,
+          description: recipe.description,
+          image_url: recipe.image_url,
+          prep_time: recipe.prep_time,
+          cook_time: recipe.cook_time,
+          total_time: recipe.total_time,
+          servings: recipe.servings,
+          serving_size: recipe.serving_size,
+          difficulty: recipe.difficulty,
+          cuisine: recipe.cuisine,
+          source_url: recipe.source_url,
+          notes: recipe.notes,
+          is_kid_friendly: recipe.is_kid_friendly,
+          is_meal_prep_friendly: recipe.is_meal_prep_friendly,
+          is_budget_friendly: recipe.is_budget_friendly,
+          owner_user_id: user.id,
+          scope: 'private',
+        })
+        .select('id')
+        .single();
+
+      if (recipeError || !newRecipe) {
+        throw recipeError || new Error('Failed to create recipe');
+      }
+
+      // 2. Copy ingredients
+      if (recipe.ingredients && recipe.ingredients.length > 0) {
+        const ingredientsCopy = recipe.ingredients.map((ing, idx) => ({
+          recipe_id: newRecipe.id,
+          name: ing.name,
+          quantity: ing.quantity,
+          unit: ing.unit,
+          normalized_name: ing.normalized_name,
+          aisle: ing.aisle,
+          section: (ing as any).section,
+          order_index: ing.order_index ?? idx,
+        }));
+        
+        const { error: ingredientsError } = await supabase
+          .from('recipe_ingredients')
+          .insert(ingredientsCopy);
+        
+        if (ingredientsError) {
+          console.error('Error copying ingredients:', ingredientsError);
+        }
+      }
+
+      // 3. Copy steps
+      if (recipe.steps && recipe.steps.length > 0) {
+        const stepsCopy = recipe.steps.map((step) => ({
+          recipe_id: newRecipe.id,
+          step_number: step.step_number,
+          instruction: step.instruction,
+          introduces_section: step.introduces_section,
+        }));
+        
+        const { error: stepsError } = await supabase
+          .from('recipe_steps')
+          .insert(stepsCopy);
+        
+        if (stepsError) {
+          console.error('Error copying steps:', stepsError);
+        }
+      }
+
+      // 4. Copy nutrition
+      if (recipe.nutrition) {
+        const { error: nutritionError } = await supabase
+          .from('recipe_nutrition')
+          .insert({
+            recipe_id: newRecipe.id,
+            calories: recipe.nutrition.calories,
+            protein_g: recipe.nutrition.protein_g,
+            carbs_g: recipe.nutrition.carbs_g,
+            fat_g: recipe.nutrition.fat_g,
+            fiber_g: recipe.nutrition.fiber_g,
+            sugar_g: recipe.nutrition.sugar_g,
+            sodium_mg: recipe.nutrition.sodium_mg,
+            saturated_fat_g: recipe.nutrition.saturated_fat_g,
+            cholesterol_mg: recipe.nutrition.cholesterol_mg,
+          });
+        
+        if (nutritionError) {
+          console.error('Error copying nutrition:', nutritionError);
+        }
+      }
+
+      // 5. Copy tags
+      if (recipe.tags && recipe.tags.length > 0) {
+        const tagsCopy = recipe.tags.map((tag) => ({
+          recipe_id: newRecipe.id,
+          tag_type: tag.tag_type,
+          tag_value: tag.tag_value,
+        }));
+        
+        const { error: tagsError } = await supabase
+          .from('recipe_tags')
+          .insert(tagsCopy);
+        
+        if (tagsError) {
+          console.error('Error copying tags:', tagsError);
+        }
+      }
+
+      toast.success('Recipe saved to My Recipes!', {
+        description: 'Opening with Keto Sandbox...',
+        icon: <Sparkles className="w-4 h-4 text-success" />,
+      });
+
+      // Navigate to the new recipe
+      navigate(`/recipe/${newRecipe.id}`);
+
+    } catch (error) {
+      console.error('Error saving recipe:', error);
+      toast.error('Failed to save recipe');
+    } finally {
+      setIsSavingToMyRecipes(false);
+    }
   };
 
   const handleRemoveFromPlan = () => {
@@ -759,18 +894,38 @@ export default function RecipeDetail() {
           {/* Keto Mode Info for global recipes - show when Keto Mode is active but recipe is not owned */}
           {isKetoMode && neutronBadges?.isKeto && !isUserRecipe && (
             <div className="mb-6 p-4 rounded-xl bg-success/10 border border-success/30">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-success/20 flex items-center justify-center flex-shrink-0">
-                  <Sparkles className="w-5 h-5 text-success" />
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div className="flex items-start gap-3 flex-1">
+                  <div className="w-10 h-10 rounded-full bg-success/20 flex items-center justify-center flex-shrink-0">
+                    <Sparkles className="w-5 h-5 text-success" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-success">
+                      Keto Mode Active
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      Save this recipe to unlock the Keto Sandbox optimizer.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-success">
-                    Keto Mode Active
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    Viewing Net Carbs. To optimize recipes with the Keto Sandbox, save this recipe to your collection first.
-                  </p>
-                </div>
+                <Button
+                  onClick={handleSaveToMyRecipes}
+                  disabled={isSavingToMyRecipes || !user}
+                  className="bg-success hover:bg-success/90 text-white font-semibold shadow-md"
+                  size="sm"
+                >
+                  {isSavingToMyRecipes ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4 mr-2" />
+                      Save to My Recipes
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
           )}
