@@ -262,30 +262,18 @@ export function RecipeCard({
                 </span>
               );
 
-              // Use KetoLogicTooltip for keto badge ONLY in keto mode
-              if (badgeKey === 'keto' && mode === 'keto') {
+              // Keto badge: ALWAYS show KetoLogicTooltip for detailed analysis
+              // (Only show optimizer tips section when in keto mode)
+              if (badgeKey === 'keto') {
                 return (
                   <KetoLogicTooltip 
                     key={badgeKey} 
                     nutrition={recipe.nutrition as RawNutritionData}
                     showScore
+                    showOptimizer={mode === 'keto'} // Only show optimizer in keto mode
                   >
                     {badgeElement}
                   </KetoLogicTooltip>
-                );
-              }
-
-              // Keto badge without tooltip when not in keto mode
-              if (badgeKey === 'keto') {
-                return (
-                  <Tooltip key={badgeKey}>
-                    <TooltipTrigger asChild>
-                      {badgeElement}
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">
-                      {tooltip}
-                    </TooltipContent>
-                  </Tooltip>
                 );
               }
 
