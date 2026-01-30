@@ -637,6 +637,22 @@ serve(async (req) => {
       const nutritionPrompt = `You are a certified nutritionist. Calculate ACCURATE macros for this recipe per serving AND generate a human-readable serving size description.
 
 ═══════════════════════════════════════════════════════════════
+CRITICAL: SCALE ALL NUTRITION VALUES BY INGREDIENT QUANTITY
+═══════════════════════════════════════════════════════════════
+When an ingredient quantity changes, ALL its nutrition values must scale proportionally:
+
+AVOCADO SCALING EXAMPLE (CRITICAL - PAY ATTENTION!):
+- Half avocado (100g) = 160 cal, 2g protein, 8.5g carbs, 14.7g fat, 7g fiber
+- 1 full avocado (200g) = 320 cal, 4g protein, 17g carbs, 29.4g fat, 14g fiber
+
+If you change from "half avocado" to "1 avocado", you MUST:
+- DOUBLE the calories: 160 → 320
+- DOUBLE the protein: 2 → 4
+- DOUBLE the carbs: 8.5 → 17
+- DOUBLE the fat: 15 → 30
+- DOUBLE the fiber: 7 → 14 ← THIS IS CRITICAL, DO NOT FORGET FIBER!
+
+═══════════════════════════════════════════════════════════════
 USER-PROVIDED NUTRITION (HIGHEST PRIORITY - NEVER OVERRIDE!)
 ═══════════════════════════════════════════════════════════════
 CRITICAL: When a user provides specific nutrition values in the ingredient description,
@@ -659,7 +675,8 @@ CRITICAL RULES:
 3. Be EXTREMELY precise - a medium tomato is ~22 calories, an egg is ~72 calories
 4. Calculate the TOTAL recipe nutrition, then divide by servings
 5. Do NOT wildly change values for small ingredient changes
-${originalNutrition ? `6. Previous nutrition was: ${JSON.stringify(originalNutrition)} - only adjust proportionally for ingredient changes` : ''}
+6. When scaling quantities (e.g., half → full), scale ALL macros INCLUDING FIBER proportionally
+${originalNutrition ? `7. Previous nutrition was: ${JSON.stringify(originalNutrition)} - only adjust proportionally for ingredient changes` : ''}
 
 USDA STANDARD MACRO REFERENCES (for ingredients WITHOUT user-provided nutrition):
 - 1 large egg = 72 cal, 6.3g protein, 0.4g carbs, 4.8g fat, 0g fiber
@@ -681,7 +698,7 @@ When user provides carbs AND fiber (e.g., "13g carbs, 12g fiber"):
 - NET CARBS = Total Carbs - Fiber (e.g., 13g - 12g = 1g net carb)
 - CALORIES from carbs = NET CARBS × 4 (NOT total carbs × 4!)
 
-WORKED EXAMPLE - Keto Breakfast (4 eggs + half avocado + 4 slices keto bread):
+WORKED EXAMPLE #1 - Keto Breakfast (4 eggs + half avocado + 4 slices keto bread):
 If user specifies keto bread as: 60 cal, 2.5g fat, 13g carbs (12g fiber), 6g protein per slice
 
 Step 1 - Calculate per ingredient:
@@ -698,6 +715,21 @@ Step 2 - Sum ALL ingredients:
 
 Step 3 - Net carbs verification: 62g - 55g = 7g net carbs
 
+WORKED EXAMPLE #2 - Same meal but with 1 FULL avocado (instead of half):
+Step 1 - Calculate per ingredient:
+  4 eggs: 288 cal, 25g protein, 2g carbs, 0g fiber, 19g fat
+  1 full avocado: 320 cal, 4g protein, 17g carbs, 14g fiber, 29g fat ← DOUBLED from half!
+  4 slices keto bread: 240 cal, 24g protein, 52g carbs, 48g fiber, 10g fat
+
+Step 2 - Sum ALL ingredients:
+  Total calories: 288 + 320 + 240 = 848 cal
+  Total protein: 25 + 4 + 24 = 53g
+  Total carbs: 2 + 17 + 52 = 71g
+  Total fiber: 0 + 14 + 48 = 62g ← FIBER INCREASED BY 7g!
+  Total fat: 19 + 29 + 10 = 58g
+
+Step 3 - Net carbs verification: 71g - 62g = 9g net carbs
+
 CALORIE CALCULATION HIERARCHY (CRITICAL):
 1. If user provides CALORIES for an ingredient → USE THAT EXACT VALUE (do not recalculate!)
 2. If NO calories provided → Calculate: (protein × 4) + (NET carbs × 4) + (fat × 9)
@@ -706,8 +738,10 @@ CALORIE CALCULATION HIERARCHY (CRITICAL):
 CALCULATION METHOD (follow step by step):
 1. FIRST: Extract any explicit nutrition values the user provided in ingredient descriptions
 2. For EACH ingredient:
-   a. Extract protein, total carbs, fiber, fat from user OR use USDA reference
-   b. For CALORIES: check if user provided a value → if yes, use it; if no, calculate from macros
+   a. Parse the QUANTITY (e.g., "1", "half", "4 slices")
+   b. Look up per-unit nutrition values
+   c. MULTIPLY all values by the quantity - including fiber, carbs, protein, fat, calories
+   d. For CALORIES: check if user provided a value → if yes, use it; if no, calculate from macros
 3. SUM all ingredient values to get TOTAL recipe values
 4. DIVIDE by servings to get per-serving values
 5. Round to nearest integer
