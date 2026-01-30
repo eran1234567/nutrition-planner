@@ -8,6 +8,13 @@
 */
 
 @layer base {
+  /* Disable pull-to-refresh and overscroll bounce on mobile */
+  html, body {
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  
   :root {
     /* Core backgrounds - warm cream tones */
     --background: 45 30% 98%;
