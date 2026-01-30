@@ -92,6 +92,99 @@ export const HEALTH_THRESHOLDS = {
   HEART_SODIUM_MAX: 300,
 } as const;
 
+// ═══════════════════════════════════════════════════════════════════════════
+// KETO SMART SWAP DICTIONARY
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface KetoSwapEntry {
+  category: string;
+  highCarbItem: string;
+  keywords: string[]; // Keywords to match against ingredient names
+  alternative: string;
+  alternativeKeywords: string[]; // For lookup in ingredient_nutrition
+  reason: string;
+  estimatedCarbReduction: number; // Approximate net carb reduction per serving in grams
+}
+
+/**
+ * Smart Swap Dictionary for Keto Optimization
+ * Maps high-carb ingredients to keto-friendly alternatives
+ */
+export const KETO_SWAP_DICTIONARY: KetoSwapEntry[] = [
+  {
+    category: 'Grains',
+    highCarbItem: 'Rice',
+    keywords: ['rice', 'white rice', 'brown rice', 'jasmine rice', 'basmati'],
+    alternative: 'Cauliflower Rice',
+    alternativeKeywords: ['cauliflower rice', 'riced cauliflower'],
+    reason: 'Drops net carbs by ~90%',
+    estimatedCarbReduction: 40,
+  },
+  {
+    category: 'Wraps',
+    highCarbItem: 'Flour Tortilla / Bread',
+    keywords: ['tortilla', 'flour tortilla', 'bread', 'wrap', 'pita', 'naan', 'flatbread'],
+    alternative: 'Lettuce Wrap',
+    alternativeKeywords: ['lettuce', 'lettuce wrap', 'butter lettuce', 'romaine'],
+    reason: 'Eliminates nearly all grain-based carbs',
+    estimatedCarbReduction: 25,
+  },
+  {
+    category: 'Pasta',
+    highCarbItem: 'Pasta / Noodles',
+    keywords: ['pasta', 'spaghetti', 'noodle', 'noodles', 'penne', 'fettuccine', 'linguine', 'macaroni', 'lasagna'],
+    alternative: 'Zucchini Noodles (Zoodles)',
+    alternativeKeywords: ['zucchini noodles', 'zoodles', 'zucchini'],
+    reason: 'High fiber, extremely low net carbs',
+    estimatedCarbReduction: 35,
+  },
+  {
+    category: 'Sides',
+    highCarbItem: 'Potato',
+    keywords: ['potato', 'potatoes', 'fries', 'french fries', 'mashed potato', 'hash brown'],
+    alternative: 'Jicama or Zucchini',
+    alternativeKeywords: ['jicama', 'zucchini', 'radish'],
+    reason: 'Reduces starch significantly',
+    estimatedCarbReduction: 30,
+  },
+  {
+    category: 'Thickeners',
+    highCarbItem: 'Cornstarch / Flour',
+    keywords: ['cornstarch', 'corn starch', 'flour', 'all-purpose flour', 'wheat flour'],
+    alternative: 'Xanthan Gum or Almond Flour',
+    alternativeKeywords: ['xanthan gum', 'almond flour', 'coconut flour'],
+    reason: 'Removes high-glycemic thickeners',
+    estimatedCarbReduction: 10,
+  },
+  {
+    category: 'Crunch',
+    highCarbItem: 'Croutons / Crackers',
+    keywords: ['crouton', 'croutons', 'cracker', 'crackers', 'breadcrumb', 'breadcrumbs', 'panko'],
+    alternative: 'Pork Rinds or Parmesan Crisps',
+    alternativeKeywords: ['pork rinds', 'parmesan crisps', 'chicharrones'],
+    reason: 'Replaces carbs with protein/fat crunch',
+    estimatedCarbReduction: 15,
+  },
+  {
+    category: 'Sweeteners',
+    highCarbItem: 'Sugar / Honey / Maple Syrup',
+    keywords: ['sugar', 'honey', 'maple syrup', 'brown sugar', 'cane sugar', 'agave', 'molasses'],
+    alternative: 'Allulose or Monk Fruit',
+    alternativeKeywords: ['allulose', 'monk fruit', 'erythritol', 'stevia'],
+    reason: 'Zero net carb impact',
+    estimatedCarbReduction: 20,
+  },
+  {
+    category: 'Milk',
+    highCarbItem: 'Regular Milk',
+    keywords: ['milk', 'whole milk', 'skim milk', '2% milk'],
+    alternative: 'Unsweetened Almond Milk',
+    alternativeKeywords: ['almond milk', 'coconut milk', 'unsweetened almond milk'],
+    reason: 'Reduces sugar and carbs by ~75%',
+    estimatedCarbReduction: 10,
+  },
+];
+
 // USDA reference values for common ingredients (fallback if DB is empty)
 export const USDA_REFERENCES: Record<string, IngredientMacros> = {
   'egg': { calories: 72, protein: 6.3, carbs: 0.4, fat: 4.8, fiber: 0, cholesterol: 186, sodium: 71 },
@@ -108,6 +201,13 @@ export const USDA_REFERENCES: Record<string, IngredientMacros> = {
   'cheddar': { calories: 115, protein: 7, carbs: 0.5, fat: 9, fiber: 0, cholesterol: 28, sodium: 180 },
   'cream_cheese': { calories: 99, protein: 2.1, carbs: 1.2, fat: 9.9, fiber: 0, cholesterol: 29, sodium: 89 },
   'heavy_cream': { calories: 51, protein: 0.4, carbs: 0.4, fat: 5.4, fiber: 0, cholesterol: 20, sodium: 6 },
+  // Keto alternatives
+  'cauliflower_rice': { calories: 25, protein: 2, carbs: 5, fat: 0.3, fiber: 2, cholesterol: 0, sodium: 30 },
+  'zucchini_noodles': { calories: 20, protein: 1.5, carbs: 4, fat: 0.4, fiber: 1.2, cholesterol: 0, sodium: 10 },
+  'lettuce_wrap': { calories: 5, protein: 0.5, carbs: 1, fat: 0.1, fiber: 0.5, cholesterol: 0, sodium: 5 },
+  'almond_flour': { calories: 160, protein: 6, carbs: 6, fat: 14, fiber: 3, cholesterol: 0, sodium: 0 },
+  'pork_rinds': { calories: 80, protein: 9, carbs: 0, fat: 5, fiber: 0, cholesterol: 20, sodium: 270 },
+  'allulose': { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, cholesterol: 0, sodium: 0 },
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -559,6 +659,7 @@ export interface KetoOptimizationResult {
   isKeto: boolean;
   ketoScore: KetoScore;
   suggestions: KetoOptimizationSuggestion[];
+  swapSuggestions: KetoSwapSuggestion[];
   canAutoOptimize: boolean;
 }
 
@@ -574,11 +675,49 @@ export interface KetoOptimizationSuggestion {
   };
 }
 
+export interface KetoSwapSuggestion {
+  originalIngredient: string;
+  swapTo: string;
+  category: string;
+  reason: string;
+  estimatedCarbReduction: number;
+  matchedKeyword: string;
+}
+
 export interface IngredientWithMacros {
   name: string;
   macros?: IngredientMacros | null;
   quantity?: number;
   unit?: string;
+}
+
+/**
+ * Find applicable swaps for ingredients based on the KETO_SWAP_DICTIONARY
+ */
+export function findKetoSwaps(ingredientNames: string[]): KetoSwapSuggestion[] {
+  const swaps: KetoSwapSuggestion[] = [];
+  
+  for (const ingName of ingredientNames) {
+    const lowerName = ingName.toLowerCase();
+    
+    for (const swapEntry of KETO_SWAP_DICTIONARY) {
+      for (const keyword of swapEntry.keywords) {
+        if (lowerName.includes(keyword)) {
+          swaps.push({
+            originalIngredient: ingName,
+            swapTo: swapEntry.alternative,
+            category: swapEntry.category,
+            reason: swapEntry.reason,
+            estimatedCarbReduction: swapEntry.estimatedCarbReduction,
+            matchedKeyword: keyword,
+          });
+          break; // One swap per ingredient
+        }
+      }
+    }
+  }
+  
+  return swaps;
 }
 
 /**
@@ -590,6 +729,7 @@ export function getKetoOptimization(
   ingredients?: IngredientWithMacros[]
 ): KetoOptimizationResult {
   const suggestions: KetoOptimizationSuggestion[] = [];
+  let swapSuggestions: KetoSwapSuggestion[] = [];
   
   if (!nutrition) {
     return {
@@ -600,6 +740,7 @@ export function getKetoOptimization(
         priority: 'high',
         message: 'No nutrition data available. Add ingredients with macros to analyze.',
       }],
+      swapSuggestions: [],
       canAutoOptimize: false,
     };
   }
@@ -615,54 +756,92 @@ export function getKetoOptimization(
   const ketoScore = calculateKetoScore(netCarbs, fat, protein);
   const percents = calculateMacroPercents(fat, protein, netCarbs, netEnergy);
 
+  // Check for smart swaps if we have ingredients
+  if (ingredients && ingredients.length > 0) {
+    const ingredientNames = ingredients.map(ing => ing.name);
+    swapSuggestions = findKetoSwaps(ingredientNames);
+  }
+
   // === CASE 1: Not Keto due to high carbs (> 10g net carbs) ===
   if (netCarbs > KETO_BADGE_MAX_NET_CARBS) {
     const carbExcess = netCarbs - KETO_BADGE_MAX_NET_CARBS;
     
-    // Find highest-carb ingredient if available
-    let highCarbIngredient: IngredientWithMacros | null = null;
-    let highestNetCarbs = 0;
-    
-    if (ingredients && ingredients.length > 0) {
-      for (const ing of ingredients) {
-        if (ing.macros) {
-          const ingNetCarbs = calculateNetCarbs(
-            ing.macros.carbs,
-            ing.macros.fiber,
-            0
-          );
-          if (ingNetCarbs > highestNetCarbs) {
-            highestNetCarbs = ingNetCarbs;
-            highCarbIngredient = ing;
+    // Check if we have a swap suggestion that could fix this
+    if (swapSuggestions.length > 0) {
+      // Find the best swap (highest carb reduction)
+      const bestSwap = swapSuggestions.reduce((best, current) => 
+        current.estimatedCarbReduction > best.estimatedCarbReduction ? current : best
+      );
+      
+      if (bestSwap.estimatedCarbReduction >= carbExcess) {
+        const newEstimatedNetCarbs = Math.max(0, netCarbs - bestSwap.estimatedCarbReduction);
+        suggestions.push({
+          type: 'reduce_carbs',
+          priority: 'high',
+          message: `Your Net Carbs are too high (${netCarbs.toFixed(0)}g). Swap the ${bestSwap.originalIngredient} for ${bestSwap.swapTo} to drop to ~${newEstimatedNetCarbs.toFixed(0)}g and earn the KETO badge!`,
+          action: {
+            ingredient: bestSwap.swapTo,
+            impact: `-${bestSwap.estimatedCarbReduction}g net carbs`,
+          },
+        });
+      } else {
+        // Swap helps but isn't enough
+        suggestions.push({
+          type: 'reduce_carbs',
+          priority: 'high',
+          message: `Net carbs (${netCarbs.toFixed(1)}g) exceed the 10g limit. Swap ${bestSwap.originalIngredient} → ${bestSwap.swapTo} to reduce by ~${bestSwap.estimatedCarbReduction}g carbs.`,
+          action: {
+            ingredient: bestSwap.swapTo,
+            impact: `-${bestSwap.estimatedCarbReduction}g net carbs`,
+          },
+        });
+      }
+    } else {
+      // No swap available - fall back to generic reduction message
+      let highCarbIngredient: IngredientWithMacros | null = null;
+      let highestNetCarbs = 0;
+      
+      if (ingredients && ingredients.length > 0) {
+        for (const ing of ingredients) {
+          if (ing.macros) {
+            const ingNetCarbs = calculateNetCarbs(
+              ing.macros.carbs,
+              ing.macros.fiber,
+              0
+            );
+            if (ingNetCarbs > highestNetCarbs) {
+              highestNetCarbs = ingNetCarbs;
+              highCarbIngredient = ing;
+            }
           }
         }
       }
-    }
 
-    if (highCarbIngredient && highestNetCarbs > carbExcess) {
-      const reductionNeeded = Math.ceil(carbExcess);
-      const currentQty = highCarbIngredient.quantity || 1;
-      const carbsPerUnit = highestNetCarbs / currentQty;
-      const unitsToReduce = Math.ceil(carbExcess / carbsPerUnit);
-      const newQty = Math.max(0, currentQty - unitsToReduce);
-      
-      suggestions.push({
-        type: 'reduce_carbs',
-        priority: 'high',
-        message: `Reduce "${highCarbIngredient.name}" from ${currentQty} to ${newQty} ${highCarbIngredient.unit || 'units'} to earn the KETO badge.`,
-        action: {
-          ingredient: highCarbIngredient.name,
-          amount: newQty,
-          unit: highCarbIngredient.unit,
-          impact: `-${reductionNeeded}g net carbs`,
-        },
-      });
-    } else {
-      suggestions.push({
-        type: 'reduce_carbs',
-        priority: 'high',
-        message: `Net carbs (${netCarbs.toFixed(1)}g) exceed the 10g limit by ${carbExcess.toFixed(1)}g. Reduce high-carb ingredients to qualify for KETO.`,
-      });
+      if (highCarbIngredient && highestNetCarbs > carbExcess) {
+        const reductionNeeded = Math.ceil(carbExcess);
+        const currentQty = highCarbIngredient.quantity || 1;
+        const carbsPerUnit = highestNetCarbs / currentQty;
+        const unitsToReduce = Math.ceil(carbExcess / carbsPerUnit);
+        const newQty = Math.max(0, currentQty - unitsToReduce);
+        
+        suggestions.push({
+          type: 'reduce_carbs',
+          priority: 'high',
+          message: `Reduce "${highCarbIngredient.name}" from ${currentQty} to ${newQty} ${highCarbIngredient.unit || 'units'} to earn the KETO badge.`,
+          action: {
+            ingredient: highCarbIngredient.name,
+            amount: newQty,
+            unit: highCarbIngredient.unit,
+            impact: `-${reductionNeeded}g net carbs`,
+          },
+        });
+      } else {
+        suggestions.push({
+          type: 'reduce_carbs',
+          priority: 'high',
+          message: `Net carbs (${netCarbs.toFixed(1)}g) exceed the 10g limit by ${carbExcess.toFixed(1)}g. Reduce high-carb ingredients to qualify for KETO.`,
+        });
+      }
     }
   }
 
@@ -773,7 +952,8 @@ export function getKetoOptimization(
     isKeto: ketoScore.isKeto,
     ketoScore,
     suggestions,
-    canAutoOptimize: suggestions.some(s => s.action?.ingredient !== undefined),
+    swapSuggestions,
+    canAutoOptimize: suggestions.some(s => s.action?.ingredient !== undefined) || swapSuggestions.length > 0,
   };
 }
 

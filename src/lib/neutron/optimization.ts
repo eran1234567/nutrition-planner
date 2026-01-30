@@ -32,11 +32,124 @@ export interface KetoOptimizationSuggestion {
   };
 }
 
+export interface KetoSwapSuggestion {
+  originalIngredient: string;
+  swapTo: string;
+  category: string;
+  reason: string;
+  estimatedCarbReduction: number;
+  matchedKeyword: string;
+}
+
 export interface KetoOptimizationResult {
   isKeto: boolean;
   ketoScore: KetoScore;
   suggestions: KetoOptimizationSuggestion[];
+  swapSuggestions: KetoSwapSuggestion[];
   canAutoOptimize: boolean;
+}
+
+// Keto Smart Swap Dictionary (mirrored from backend)
+export const KETO_SWAP_DICTIONARY = [
+  {
+    category: 'Grains',
+    highCarbItem: 'Rice',
+    keywords: ['rice', 'white rice', 'brown rice', 'jasmine rice', 'basmati'],
+    alternative: 'Cauliflower Rice',
+    reason: 'Drops net carbs by ~90%',
+    estimatedCarbReduction: 40,
+  },
+  {
+    category: 'Wraps',
+    highCarbItem: 'Flour Tortilla / Bread',
+    keywords: ['tortilla', 'flour tortilla', 'bread', 'wrap', 'pita', 'naan', 'flatbread'],
+    alternative: 'Lettuce Wrap',
+    reason: 'Eliminates nearly all grain-based carbs',
+    estimatedCarbReduction: 25,
+  },
+  {
+    category: 'Pasta',
+    highCarbItem: 'Pasta / Noodles',
+    keywords: ['pasta', 'spaghetti', 'noodle', 'noodles', 'penne', 'fettuccine', 'linguine', 'macaroni', 'lasagna'],
+    alternative: 'Zucchini Noodles (Zoodles)',
+    reason: 'High fiber, extremely low net carbs',
+    estimatedCarbReduction: 35,
+  },
+  {
+    category: 'Sides',
+    highCarbItem: 'Potato',
+    keywords: ['potato', 'potatoes', 'fries', 'french fries', 'mashed potato', 'hash brown'],
+    alternative: 'Jicama or Zucchini',
+    reason: 'Reduces starch significantly',
+    estimatedCarbReduction: 30,
+  },
+  {
+    category: 'Thickeners',
+    highCarbItem: 'Cornstarch / Flour',
+    keywords: ['cornstarch', 'corn starch', 'flour', 'all-purpose flour', 'wheat flour'],
+    alternative: 'Xanthan Gum or Almond Flour',
+    reason: 'Removes high-glycemic thickeners',
+    estimatedCarbReduction: 10,
+  },
+  {
+    category: 'Crunch',
+    highCarbItem: 'Croutons / Crackers',
+    keywords: ['crouton', 'croutons', 'cracker', 'crackers', 'breadcrumb', 'breadcrumbs', 'panko'],
+    alternative: 'Pork Rinds or Parmesan Crisps',
+    reason: 'Replaces carbs with protein/fat crunch',
+    estimatedCarbReduction: 15,
+  },
+  {
+    category: 'Sweeteners',
+    highCarbItem: 'Sugar / Honey / Maple Syrup',
+    keywords: ['sugar', 'honey', 'maple syrup', 'brown sugar', 'cane sugar', 'agave', 'molasses'],
+    alternative: 'Allulose or Monk Fruit',
+    reason: 'Zero net carb impact',
+    estimatedCarbReduction: 20,
+  },
+  {
+    category: 'Milk',
+    highCarbItem: 'Regular Milk',
+    keywords: ['milk', 'whole milk', 'skim milk', '2% milk'],
+    alternative: 'Unsweetened Almond Milk',
+    reason: 'Reduces sugar and carbs by ~75%',
+    estimatedCarbReduction: 10,
+  },
+];
+
+/**
+ * Find applicable swaps for ingredients based on the KETO_SWAP_DICTIONARY
+ */
+export function findKetoSwaps(ingredientNames: string[]): KetoSwapSuggestion[] {
+  const swaps: KetoSwapSuggestion[] = [];
+  
+  for (const ingName of ingredientNames) {
+    const lowerName = ingName.toLowerCase();
+    
+    for (const swapEntry of KETO_SWAP_DICTIONARY) {
+      for (const keyword of swapEntry.keywords) {
+        if (lowerName.includes(keyword)) {
+          swaps.push({
+            originalIngredient: ingName,
+            swapTo: swapEntry.alternative,
+            category: swapEntry.category,
+            reason: swapEntry.reason,
+            estimatedCarbReduction: swapEntry.estimatedCarbReduction,
+            matchedKeyword: keyword,
+          });
+          break; // One swap per ingredient per entry
+        }
+      }
+    }
+  }
+  
+  return swaps;
+}
+
+interface IngredientWithMacros {
+  name: string;
+  quantity?: number;
+  unit?: string;
 }
 
 /**
@@ -44,9 +157,11 @@ export interface KetoOptimizationResult {
  * Analyzes nutrition data and provides actionable suggestions
  */
 export function getKetoOptimization(
-  nutrition: RawNutritionData | null | undefined
+  nutrition: RawNutritionData | null | undefined,
+  ingredients?: IngredientWithMacros[]
 ): KetoOptimizationResult {
   const suggestions: KetoOptimizationSuggestion[] = [];
+  let swapSuggestions: KetoSwapSuggestion[] = [];
   
   if (!nutrition) {
     return {
@@ -57,8 +172,15 @@ export function getKetoOptimization(
         priority: 'high',
         message: 'No nutrition data available.',
       }],
+      swapSuggestions: [],
       canAutoOptimize: false,
     };
+  }
+
+  // Find swap suggestions if ingredients provided
+  if (ingredients && ingredients.length > 0) {
+    const ingredientNames = ingredients.map(ing => ing.name);
+    swapSuggestions = findKetoSwaps(ingredientNames);
   }
 
   const protein = nutrition.protein_g ?? 0;
@@ -170,7 +292,8 @@ export function getKetoOptimization(
     isKeto: ketoScore.isKeto,
     ketoScore,
     suggestions,
-    canAutoOptimize: suggestions.some(s => s.action?.ingredient !== undefined),
+    swapSuggestions,
+    canAutoOptimize: suggestions.some(s => s.action?.ingredient !== undefined) || swapSuggestions.length > 0,
   };
 }
 

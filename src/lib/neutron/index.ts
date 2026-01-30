@@ -54,8 +54,11 @@ export {
 export {
   getKetoOptimization,
   getPrimaryOptimizationTip,
+  findKetoSwaps,
+  KETO_SWAP_DICTIONARY,
   type KetoOptimizationResult,
   type KetoOptimizationSuggestion,
+  type KetoSwapSuggestion,
 } from './optimization';
 
 // Import for the main engine function
