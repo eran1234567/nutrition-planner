@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -6,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "@/lib/i18n";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useAuth } from "@/hooks/useAuth";
+import { initializeNeutronMode } from "@/stores/neutronStore";
 import Auth from "./pages/Auth";
 import Discover from "./pages/Discover";
 import Recipes from "./pages/Recipes";
@@ -22,6 +24,11 @@ const App = () => {
   // Ensure auth is initialized even on public routes (like `/`) so user-scoped
   // persisted stores (meal plan + macro calculator inputs) hydrate correctly.
   useAuth();
+  
+  // Initialize Neutron mode from persisted storage on app load
+  useEffect(() => {
+    initializeNeutronMode();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

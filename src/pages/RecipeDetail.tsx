@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Loader2, Pencil, Leaf, Fish, Drumstick, Sun, CalendarPlus, Trash2, Heart, Droplets, Activity, Globe, Pizza, UtensilsCrossed, Soup, Cherry, PlayCircle, Zap } from 'lucide-react';
+import { ArrowLeft, Clock, Users, Flame, ChefHat, Plus, Loader2, Pencil, Leaf, Fish, Drumstick, Sun, CalendarPlus, Trash2, Heart, Droplets, Activity, Globe, Pizza, UtensilsCrossed, Soup, Cherry, PlayCircle, Zap, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -28,6 +29,7 @@ import { VideoHero } from '@/components/recipe/VideoHero';
 import { CookingMode } from '@/components/recipe/CookingMode';
 import { KetoLogicTooltip } from '@/components/recipe/KetoLogicTooltip';
 import { NeutronSuggestionCard } from '@/components/recipe/NeutronSuggestionCard';
+import { KetoDiscoveryBanner } from '@/components/recipe/KetoDiscoveryBanner';
 import { useRecipeById } from '@/hooks/useGlobalRecipes';
 import { useMealPlanStore } from '@/stores/mealPlanStore';
 import { useNeutronStore } from '@/stores/neutronStore';
@@ -740,18 +742,11 @@ export default function RecipeDetail() {
             />
           )}
 
-          {/* Keto Discovery Tip - show when NOT in Keto Mode but score > 70 */}
-          {!isKetoMode && neutronBadges?.ketoScore && neutronBadges.ketoScore.score > 70 && (
-            <div className="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 rounded-lg p-3 mb-6">
-              <div className="flex items-center gap-2">
-                <Zap className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                <p className="text-sm text-indigo-800 dark:text-indigo-200">
-                  <span className="font-semibold">Discovery Tip:</span>{' '}
-                  This meal is close to being Keto-friendly (Score: {neutronBadges.ketoScore.score}).{' '}
-                  <span className="text-indigo-600 dark:text-indigo-400">Switch to Keto Mode to optimize.</span>
-                </p>
-              </div>
-            </div>
+          {/* Keto Discovery Tip - Actionable Context Switcher */}
+          {!isKetoMode && neutronBadges?.ketoScore && neutronBadges.ketoScore.score >= 70 && neutronBadges.ketoScore.score < 100 && (
+            <KetoDiscoveryBanner 
+              ketoScore={neutronBadges.ketoScore.score}
+            />
           )}
 
           {/* Start Cooking Button */}
