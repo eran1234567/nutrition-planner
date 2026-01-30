@@ -643,14 +643,25 @@ CRITICAL RULES:
 4. Do NOT wildly change values for small ingredient changes
 ${originalNutrition ? `5. Previous nutrition was: ${JSON.stringify(originalNutrition)} - only adjust proportionally for ingredient changes` : ''}
 
-STANDARD CALORIE REFERENCES (use these!):
-- 1 large egg = 70 cal, 6g protein, 0.5g carbs, 5g fat
-- 1 medium tomato = 22 cal, 1g protein, 5g carbs, 0.2g fat  
-- 1 slice bread = 80 cal, 3g protein, 15g carbs, 1g fat
-- 1 tbsp olive oil = 120 cal, 0g protein, 0g carbs, 14g fat
-- 1 tbsp butter = 100 cal, 0g protein, 0g carbs, 11g fat
-- 1 medium avocado = 240 cal, 3g protein, 12g carbs, 22g fat
+USDA STANDARD MACRO REFERENCES (use these EXACT values!):
+- 1 large egg = 72 cal, 6.3g protein, 0.4g carbs, 4.8g fat
+- 1 medium tomato = 22 cal, 1.1g protein, 4.8g carbs, 0.2g fat  
+- 1 slice regular bread = 79 cal, 2.7g protein, 15g carbs, 1g fat
+- 1 tbsp olive oil = 119 cal, 0g protein, 0g carbs, 13.5g fat
+- 1 tbsp butter = 102 cal, 0.1g protein, 0g carbs, 11.5g fat
+- 1 medium avocado (201g) = 322 cal, 4g protein, 17g carbs, 29g fat
+- Half avocado (100g) = 160 cal, 2g protein, 8.5g carbs, 14.7g fat
 - 100g chicken breast = 165 cal, 31g protein, 0g carbs, 3.6g fat
+- 100g salmon = 208 cal, 20g protein, 0g carbs, 13g fat
+
+CALCULATION METHOD (CRITICAL - follow step by step):
+1. For EACH ingredient, look up or estimate its macros using USDA values
+2. WRITE OUT the calculation for each: "4 eggs = 4 × 6.3g protein = 25.2g protein"
+3. SUM all ingredient macros to get TOTAL recipe values
+4. DIVIDE by servings to get per-serving values
+5. Round to nearest integer
+
+CRITICAL: If user provides specific nutrition info in ingredient descriptions (e.g., "keto bread - 6g protein per slice"), USE THOSE EXACT VALUES, not generic estimates!
 
 SERVING SIZE DESCRIPTION RULES:
 - Describe what ONE serving looks like using discrete, countable portions
@@ -986,16 +997,32 @@ Vegetarian: No meat or fish
 Pescatarian: Fish allowed, no meat
 
 ═══════════════════════════════════════════════════════════════
-MACRO RULES
+MACRO CALCULATION RULES (CRITICAL - FOLLOW EXACTLY)
 ═══════════════════════════════════════════════════════════════
-If macros or calories are provided by the app:
-- Treat them as HARD CONSTRAINTS
-- Macros are per serving unless explicitly stated otherwise
-- Calories must match within ±2%
-- Never invent or modify provided macros
+USDA STANDARD MACRO REFERENCES (use these EXACT values!):
+- 1 large egg = 72 cal, 6.3g protein, 0.4g carbs, 4.8g fat
+- 1 medium tomato = 22 cal, 1.1g protein, 4.8g carbs, 0.2g fat
+- 1 slice regular bread = 79 cal, 2.7g protein, 15g carbs, 1g fat
+- 1 tbsp olive oil = 119 cal, 0g protein, 0g carbs, 13.5g fat
+- 1 tbsp butter = 102 cal, 0.1g protein, 0g carbs, 11.5g fat
+- 1 medium avocado (201g) = 322 cal, 4g protein, 17g carbs, 29g fat
+- Half avocado (100g) = 160 cal, 2g protein, 8.5g carbs, 14.7g fat
+- 100g chicken breast = 165 cal, 31g protein, 0g carbs, 3.6g fat
+- 100g salmon = 208 cal, 20g protein, 0g carbs, 13g fat
+- 100g ground beef 90/10 = 176 cal, 26g protein, 0g carbs, 8g fat
+
+CRITICAL: If user provides specific nutrition info in ingredient descriptions
+(e.g., "keto bread - 60 cal, 6g protein per slice"), USE THOSE EXACT VALUES!
+
+CALCULATION METHOD (step by step):
+1. For EACH ingredient, calculate its individual macros
+2. Mentally sum: "4 eggs × 6.3g = 25.2g protein" + "4 slices keto bread × 6g = 24g protein" = 49.2g total
+3. SUM all ingredient macros to get TOTAL recipe values
+4. DIVIDE total by servings to get per-serving values
+5. Round to nearest integer
 
 If macros are NOT provided:
-- Generate reasonable macros consistent with the meal type and diet
+- Generate reasonable macros by SUMMING ingredient contributions
 - Main dishes: 400-600 kcal, 25-35g protein per serving
 - Snacks: 150-300 kcal, 5-15g protein per serving
 
