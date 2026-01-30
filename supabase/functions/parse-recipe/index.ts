@@ -183,6 +183,260 @@ async function extractTextFromDocx(base64Content: string): Promise<string> {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// DETERMINISTIC NUTRITION VALIDATION & CORRECTION
+// ═══════════════════════════════════════════════════════════════
+// This function programmatically validates AI-calculated nutrition
+// and corrects it when the AI makes math errors.
+
+interface NutritionData {
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g: number;
+  sugar_g?: number;
+  sodium_mg?: number;
+  saturated_fat_g?: number;
+  cholesterol_mg?: number;
+}
+
+interface IngredientMacros {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+}
+
+// USDA reference values for common ingredients (per unit)
+const USDA_REFERENCES: Record<string, IngredientMacros> = {
+  'egg': { calories: 72, protein: 6.3, carbs: 0.4, fat: 4.8, fiber: 0 },
+  'egg_yolk': { calories: 55, protein: 2.7, carbs: 0.6, fat: 4.5, fiber: 0 },
+  'egg_white': { calories: 17, protein: 3.6, carbs: 0.2, fat: 0, fiber: 0 },
+  'avocado_half': { calories: 160, protein: 2, carbs: 8.5, fat: 14.7, fiber: 7 },
+  'avocado_full': { calories: 322, protein: 4, carbs: 17, fat: 29, fiber: 13 },
+  'olive_oil_tbsp': { calories: 119, protein: 0, carbs: 0, fat: 13.5, fiber: 0 },
+  'butter_tbsp': { calories: 102, protein: 0.1, carbs: 0, fat: 11.5, fiber: 0 },
+};
+
+function parseIngredientQuantity(text: string): number {
+  // Handle "half", "0.5", "1/2" etc.
+  const lowerText = text.toLowerCase();
+  if (lowerText.includes('half') || lowerText.includes('1/2') || lowerText.includes('0.5')) {
+    return 0.5;
+  }
+  // Extract leading number
+  const numMatch = text.match(/^(\d+\.?\d*)/);
+  return numMatch ? parseFloat(numMatch[1]) : 1;
+}
+
+function extractExplicitMacros(text: string): Partial<IngredientMacros> | null {
+  const result: Partial<IngredientMacros> = {};
+  let hasExplicit = false;
+  
+  // Match patterns like "60 cal", "60 cals", "60 calories"
+  const calMatch = text.match(/(\d+\.?\d*)\s*(?:cal(?:orie)?s?)\b/i);
+  if (calMatch) {
+    result.calories = parseFloat(calMatch[1]);
+    hasExplicit = true;
+  }
+  
+  // Match "Xg protein" or "X g protein"
+  const proteinMatch = text.match(/(\d+\.?\d*)\s*g?\s*protein/i);
+  if (proteinMatch) {
+    result.protein = parseFloat(proteinMatch[1]);
+    hasExplicit = true;
+  }
+  
+  // Match "Xg fat" or "X g fat"
+  const fatMatch = text.match(/(\d+\.?\d*)\s*g?\s*fat/i);
+  if (fatMatch) {
+    result.fat = parseFloat(fatMatch[1]);
+    hasExplicit = true;
+  }
+  
+  // Match "Xg carbs" or "X g carbohydrates"
+  const carbMatch = text.match(/(\d+\.?\d*)\s*g?\s*carb(?:ohydrate)?s?/i);
+  if (carbMatch) {
+    result.carbs = parseFloat(carbMatch[1]);
+    hasExplicit = true;
+  }
+  
+  // Match "Xg fiber"
+  const fiberMatch = text.match(/(\d+\.?\d*)\s*g?\s*fiber/i);
+  if (fiberMatch) {
+    result.fiber = parseFloat(fiberMatch[1]);
+    hasExplicit = true;
+  }
+  
+  return hasExplicit ? result : null;
+}
+
+function calculateIngredientMacros(ingredientText: string): IngredientMacros | null {
+  const lowerText = ingredientText.toLowerCase();
+  const quantity = parseIngredientQuantity(ingredientText);
+  
+  // First check for explicit macros provided by user
+  const explicitMacros = extractExplicitMacros(ingredientText);
+  
+  // Detect "per slice", "each", "per" patterns for multiplication
+  const perUnitMatch = ingredientText.match(/(?:each|per\s+(?:slice|piece|unit))\s*[:\-]?\s*/i);
+  
+  if (explicitMacros) {
+    // User provided explicit nutrition - multiply by quantity
+    const multiplier = perUnitMatch ? quantity : 1;
+    return {
+      calories: (explicitMacros.calories || 0) * multiplier,
+      protein: (explicitMacros.protein || 0) * multiplier,
+      carbs: (explicitMacros.carbs || 0) * multiplier,
+      fat: (explicitMacros.fat || 0) * multiplier,
+      fiber: (explicitMacros.fiber || 0) * multiplier,
+    };
+  }
+  
+  // Detect egg yolks specifically
+  if (lowerText.includes('yolk') && !lowerText.includes('whole')) {
+    const yolkQty = quantity;
+    return {
+      calories: USDA_REFERENCES.egg_yolk.calories * yolkQty,
+      protein: USDA_REFERENCES.egg_yolk.protein * yolkQty,
+      carbs: USDA_REFERENCES.egg_yolk.carbs * yolkQty,
+      fat: USDA_REFERENCES.egg_yolk.fat * yolkQty,
+      fiber: 0,
+    };
+  }
+  
+  // Detect egg whites specifically
+  if (lowerText.includes('white') && lowerText.includes('egg')) {
+    const whiteQty = quantity;
+    return {
+      calories: USDA_REFERENCES.egg_white.calories * whiteQty,
+      protein: USDA_REFERENCES.egg_white.protein * whiteQty,
+      carbs: USDA_REFERENCES.egg_white.carbs * whiteQty,
+      fat: 0,
+      fiber: 0,
+    };
+  }
+  
+  // Detect whole eggs
+  if (lowerText.includes('egg') && !lowerText.includes('yolk') && !lowerText.includes('white')) {
+    const eggQty = quantity;
+    return {
+      calories: USDA_REFERENCES.egg.calories * eggQty,
+      protein: USDA_REFERENCES.egg.protein * eggQty,
+      carbs: USDA_REFERENCES.egg.carbs * eggQty,
+      fat: USDA_REFERENCES.egg.fat * eggQty,
+      fiber: 0,
+    };
+  }
+  
+  // Detect avocado
+  if (lowerText.includes('avocado')) {
+    const isHalf = lowerText.includes('half') || lowerText.includes('0.5') || lowerText.includes('1/2');
+    const numMatch = ingredientText.match(/^(\d+\.?\d*)/);
+    let avocadoQty = numMatch ? parseFloat(numMatch[1]) : 1;
+    
+    if (isHalf) {
+      return {
+        calories: USDA_REFERENCES.avocado_half.calories * (avocadoQty || 1),
+        protein: USDA_REFERENCES.avocado_half.protein * (avocadoQty || 1),
+        carbs: USDA_REFERENCES.avocado_half.carbs * (avocadoQty || 1),
+        fat: USDA_REFERENCES.avocado_half.fat * (avocadoQty || 1),
+        fiber: USDA_REFERENCES.avocado_half.fiber * (avocadoQty || 1),
+      };
+    } else {
+      return {
+        calories: USDA_REFERENCES.avocado_full.calories * avocadoQty,
+        protein: USDA_REFERENCES.avocado_full.protein * avocadoQty,
+        carbs: USDA_REFERENCES.avocado_full.carbs * avocadoQty,
+        fat: USDA_REFERENCES.avocado_full.fat * avocadoQty,
+        fiber: USDA_REFERENCES.avocado_full.fiber * avocadoQty,
+      };
+    }
+  }
+  
+  return null; // Unknown ingredient - let AI handle it
+}
+
+function validateAndCorrectNutrition(
+  ingredientsContent: string, 
+  aiNutrition: NutritionData
+): { nutrition: NutritionData; wasCorrect: boolean; reason?: string } {
+  // Parse ingredients from content
+  const lines = ingredientsContent.split(/[\n,]+/).map(l => l.trim()).filter(Boolean);
+  
+  let calculatedProtein = 0;
+  let calculatedFat = 0;
+  let calculatedCarbs = 0;
+  let calculatedFiber = 0;
+  let calculatedCalories = 0;
+  let knownIngredientCount = 0;
+  
+  for (const line of lines) {
+    const macros = calculateIngredientMacros(line);
+    if (macros) {
+      calculatedProtein += macros.protein;
+      calculatedFat += macros.fat;
+      calculatedCarbs += macros.carbs;
+      calculatedFiber += macros.fiber;
+      calculatedCalories += macros.calories;
+      knownIngredientCount++;
+    }
+  }
+  
+  // Only correct if we understood most of the ingredients
+  if (knownIngredientCount < Math.ceil(lines.length * 0.5)) {
+    // Less than half of ingredients are known - trust AI
+    return { nutrition: aiNutrition, wasCorrect: true };
+  }
+  
+  // Check for significant discrepancies (>15% difference)
+  const proteinDiff = Math.abs(aiNutrition.protein_g - calculatedProtein);
+  const fatDiff = Math.abs(aiNutrition.fat_g - calculatedFat);
+  const carbsDiff = Math.abs(aiNutrition.carbs_g - calculatedCarbs);
+  
+  const proteinThreshold = Math.max(calculatedProtein * 0.15, 5);
+  const fatThreshold = Math.max(calculatedFat * 0.15, 5);
+  const carbsThreshold = Math.max(calculatedCarbs * 0.15, 5);
+  
+  const hasSignificantError = 
+    proteinDiff > proteinThreshold ||
+    fatDiff > fatThreshold ||
+    carbsDiff > carbsThreshold;
+  
+  if (!hasSignificantError) {
+    return { nutrition: aiNutrition, wasCorrect: true };
+  }
+  
+  // Calculate corrected calories using the formula
+  const netCarbs = Math.max(0, calculatedCarbs - calculatedFiber);
+  const correctedCalories = Math.round(
+    (calculatedProtein * 4) + (netCarbs * 4) + (calculatedFat * 9)
+  );
+  
+  const correctedNutrition: NutritionData = {
+    calories: correctedCalories,
+    protein_g: Math.round(calculatedProtein),
+    carbs_g: Math.round(calculatedCarbs),
+    fat_g: Math.round(calculatedFat),
+    fiber_g: Math.round(calculatedFiber),
+    sugar_g: aiNutrition.sugar_g || 0,
+    sodium_mg: aiNutrition.sodium_mg || 0,
+    saturated_fat_g: aiNutrition.saturated_fat_g || 0,
+    cholesterol_mg: aiNutrition.cholesterol_mg || 0,
+  };
+  
+  const reason = `AI calculated protein=${aiNutrition.protein_g}g fat=${aiNutrition.fat_g}g carbs=${aiNutrition.carbs_g}g, ` +
+    `but deterministic calc found protein=${Math.round(calculatedProtein)}g fat=${Math.round(calculatedFat)}g carbs=${Math.round(calculatedCarbs)}g`;
+  
+  return { 
+    nutrition: correctedNutrition, 
+    wasCorrect: false,
+    reason,
+  };
+}
+
 // YouTube channel/playlist URL patterns
 const YOUTUBE_CHANNEL_PATTERNS = [
   /^https?:\/\/(www\.)?youtube\.com\/@[\w-]+/i,           // @username format
@@ -842,13 +1096,23 @@ Respond with ONLY valid JSON (no markdown, no backticks):
         const cleanContent = aiContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
         const parsed = JSON.parse(cleanContent);
         
-        console.log('AI nutrition result:', JSON.stringify(parsed.nutrition));
+        console.log('AI nutrition result (before validation):', JSON.stringify(parsed.nutrition));
         console.log('AI serving_size:', parsed.serving_size);
+        
+        // ═══════════════════════════════════════════════════════════════
+        // DETERMINISTIC MACRO VALIDATION - Override AI if calculations are wrong
+        // ═══════════════════════════════════════════════════════════════
+        const validated = validateAndCorrectNutrition(content, parsed.nutrition);
+        
+        if (validated.wasCorrect === false) {
+          console.log('AI nutrition CORRECTED to:', JSON.stringify(validated.nutrition));
+          console.log('Correction reason:', validated.reason);
+        }
         
         return new Response(
           JSON.stringify({
             success: true,
-            nutrition: parsed.nutrition || null,
+            nutrition: validated.nutrition,
             serving_size: parsed.serving_size || null,
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
