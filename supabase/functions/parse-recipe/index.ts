@@ -353,7 +353,8 @@ function extractIngredientLinesFromContent(content: string): string[] {
 function validateAndCorrectNutrition(
   ingredientsContent: string, 
   aiNutrition: NutritionData,
-  cache: DbIngredientNutrition[]
+  cache: DbIngredientNutrition[],
+  servings: number = 1
 ): { nutrition: NutritionData; wasCorrect: boolean; reason?: string } {
   // Parse ingredient lines from the nutrition-only content.
   // IMPORTANT: the incoming "content" often contains headings like "Recipe:", "Ingredients:", "Instructions:".
@@ -362,6 +363,9 @@ function validateAndCorrectNutrition(
   if (lines.length === 0) {
     return { nutrition: aiNutrition, wasCorrect: true };
   }
+  
+  // Extract servings from content if not explicitly provided
+  const effectiveServings = servings > 0 ? servings : 1;
   
   let calculatedProtein = 0;
   let calculatedFat = 0;
@@ -390,21 +394,32 @@ function validateAndCorrectNutrition(
     }
   }
   
-  // Only correct if we understood most of the ingredients
-  if (knownIngredientCount < Math.ceil(lines.length * 0.5)) {
-    // Less than half of ingredients are known - trust AI
-    console.log(`[MACROS] Only ${knownIngredientCount}/${lines.length} ingredients matched, trusting AI`);
+  // Only correct if we understood a reasonable portion of ingredients (lowered from 50% to 30%)
+  // This helps catch more cases where deterministic calculation is possible
+  if (knownIngredientCount < Math.ceil(lines.length * 0.3)) {
+    // Less than 30% of ingredients are known - trust AI
+    console.log(`[MACROS] Only ${knownIngredientCount}/${lines.length} ingredients matched (< 30%), trusting AI`);
     return { nutrition: aiNutrition, wasCorrect: true };
   }
   
-  // Check for significant discrepancies (>15% difference)
-  const proteinDiff = Math.abs(aiNutrition.protein_g - calculatedProtein);
-  const fatDiff = Math.abs(aiNutrition.fat_g - calculatedFat);
-  const carbsDiff = Math.abs(aiNutrition.carbs_g - calculatedCarbs);
+  // Divide by servings to get per-serving values
+  const perServingProtein = calculatedProtein / effectiveServings;
+  const perServingFat = calculatedFat / effectiveServings;
+  const perServingCarbs = calculatedCarbs / effectiveServings;
+  const perServingFiber = calculatedFiber / effectiveServings;
+  const perServingSugar = calculatedSugar / effectiveServings;
+  const perServingSodium = calculatedSodium / effectiveServings;
+  const perServingSaturatedFat = calculatedSaturatedFat / effectiveServings;
+  const perServingCholesterol = calculatedCholesterol / effectiveServings;
   
-  const proteinThreshold = Math.max(calculatedProtein * 0.15, 5);
-  const fatThreshold = Math.max(calculatedFat * 0.15, 5);
-  const carbsThreshold = Math.max(calculatedCarbs * 0.15, 5);
+  // Check for significant discrepancies (>20% difference)
+  const proteinDiff = Math.abs(aiNutrition.protein_g - perServingProtein);
+  const fatDiff = Math.abs(aiNutrition.fat_g - perServingFat);
+  const carbsDiff = Math.abs(aiNutrition.carbs_g - perServingCarbs);
+  
+  const proteinThreshold = Math.max(perServingProtein * 0.20, 5);
+  const fatThreshold = Math.max(perServingFat * 0.20, 5);
+  const carbsThreshold = Math.max(perServingCarbs * 0.20, 5);
   
   const hasSignificantError = 
     proteinDiff > proteinThreshold ||
@@ -417,25 +432,25 @@ function validateAndCorrectNutrition(
   }
   
   // Calculate corrected calories using the formula
-  const netCarbs = Math.max(0, calculatedCarbs - calculatedFiber);
+  const netCarbs = Math.max(0, perServingCarbs - perServingFiber);
   const correctedCalories = Math.round(
-    (calculatedProtein * 4) + (netCarbs * 4) + (calculatedFat * 9)
+    (perServingProtein * 4) + (netCarbs * 4) + (perServingFat * 9)
   );
   
   const correctedNutrition: NutritionData = {
     calories: correctedCalories,
-    protein_g: Math.round(calculatedProtein),
-    carbs_g: Math.round(calculatedCarbs),
-    fat_g: Math.round(calculatedFat),
-    fiber_g: Math.round(calculatedFiber),
-    sugar_g: calculatedSugar > 0 ? Math.round(calculatedSugar) : (aiNutrition.sugar_g || 0),
-    sodium_mg: calculatedSodium > 0 ? Math.round(calculatedSodium) : (aiNutrition.sodium_mg || 0),
-    saturated_fat_g: calculatedSaturatedFat > 0 ? Math.round(calculatedSaturatedFat) : (aiNutrition.saturated_fat_g || 0),
-    cholesterol_mg: calculatedCholesterol > 0 ? Math.round(calculatedCholesterol) : (aiNutrition.cholesterol_mg || 0),
+    protein_g: Math.round(perServingProtein),
+    carbs_g: Math.round(perServingCarbs),
+    fat_g: Math.round(perServingFat),
+    fiber_g: Math.round(perServingFiber),
+    sugar_g: perServingSugar > 0 ? Math.round(perServingSugar) : (aiNutrition.sugar_g || 0),
+    sodium_mg: perServingSodium > 0 ? Math.round(perServingSodium) : (aiNutrition.sodium_mg || 0),
+    saturated_fat_g: perServingSaturatedFat > 0 ? Math.round(perServingSaturatedFat) : (aiNutrition.saturated_fat_g || 0),
+    cholesterol_mg: perServingCholesterol > 0 ? Math.round(perServingCholesterol) : (aiNutrition.cholesterol_mg || 0),
   };
   
   const reason = `AI calculated protein=${aiNutrition.protein_g}g fat=${aiNutrition.fat_g}g carbs=${aiNutrition.carbs_g}g, ` +
-    `but deterministic calc found protein=${Math.round(calculatedProtein)}g fat=${Math.round(calculatedFat)}g carbs=${Math.round(calculatedCarbs)}g`;
+    `but deterministic calc found protein=${Math.round(perServingProtein)}g fat=${Math.round(perServingFat)}g carbs=${Math.round(perServingCarbs)}g (${effectiveServings} servings)`;
   
   console.log(`[MACROS] Correcting AI nutrition: ${reason}`);
   
@@ -1116,7 +1131,10 @@ Respond with ONLY valid JSON (no markdown, no backticks):
         // DETERMINISTIC MACRO VALIDATION - Override AI if calculations are wrong
         // Uses database reference table for accurate ingredient lookups
         // ═══════════════════════════════════════════════════════════════
-        const validated = validateAndCorrectNutrition(content, parsed.nutrition, nutritionCache);
+        // Extract servings from the content string (format: "Servings: X")
+        const servingsMatch = content.match(/Servings:\s*(\d+)/i);
+        const servings = servingsMatch ? parseInt(servingsMatch[1], 10) : 1;
+        const validated = validateAndCorrectNutrition(content, parsed.nutrition, nutritionCache, servings);
         
         if (validated.wasCorrect === false) {
           console.log('AI nutrition CORRECTED to:', JSON.stringify(validated.nutrition));
