@@ -122,7 +122,10 @@ DO NOT say generic things like "1 chicken breast equivalent" - be SPECIFIC.
 Respond with ONLY the serving size description, no explanation. Keep it under 60 characters.`;
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-2.0-flash',
+      generationConfig: { temperature: 0 }, // Deterministic output for consistent serving sizes
+    });
     const result = await model.generateContent(prompt);
     let servingSize = result.response.text()?.trim();
     if (servingSize) {

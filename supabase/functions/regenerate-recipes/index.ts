@@ -123,7 +123,26 @@ CRITICAL REQUIREMENTS:
 4. Steps should reference the ingredients and include timing/technique details
 5. Make the recipe authentic to its cuisine
 
-For nutrition, estimate per-serving values based on the complete ingredient list.`;
+═══════════════════════════════════════════════════════════════
+FIBER AND NET CARBS - CRITICAL FOR CALORIE ACCURACY
+═══════════════════════════════════════════════════════════════
+FIBER DOES NOT CONTRIBUTE CALORIES! This is critical for keto/high-fiber foods.
+
+When calculating calories from carbs:
+- NET CARBS = Total Carbs - Fiber
+- CALORIES from carbs = NET CARBS × 4 (NOT total carbs × 4!)
+
+CALCULATION METHOD:
+1. For EACH ingredient, calculate: protein, total carbs, fiber, fat, AND calories
+2. calories = (protein × 4) + (NET carbs × 4) + (fat × 9)
+   - NET carbs = Total carbs - Fiber
+3. SUM all ingredient values, then DIVIDE by servings
+4. Round to nearest integer
+
+USDA STANDARD MACRO REFERENCES:
+- 1 large egg = 72 cal, 6.3g protein, 0.4g carbs, 4.8g fat, 0g fiber
+- Half avocado (100g) = 160 cal, 2g protein, 8.5g carbs, 14.7g fat, 7g fiber
+- 100g chicken breast = 165 cal, 31g protein, 0g carbs, 3.6g fat, 0g fiber`;
 
         const userPrompt = `Generate a complete, authentic recipe for: "${recipe.title}"
 Cuisine: ${recipe.cuisine || "International"}
@@ -157,9 +176,13 @@ IMPORTANT:
 - Include 8-15 ingredients for a complete recipe
 - Include 5-10 detailed steps
 - All nutrition values are PER SERVING
-- Be authentic to the cuisine`;
+- Be authentic to the cuisine
+- Remember: Calories from carbs = (carbs_g - fiber_g) × 4`;
 
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const model = genAI.getGenerativeModel({ 
+          model: "gemini-2.0-flash",
+          generationConfig: { temperature: 0 }, // Deterministic output for consistent macros
+        });
         const result = await model.generateContent(`${systemPrompt}\n\n${userPrompt}`);
         const content = result.response.text();
 
