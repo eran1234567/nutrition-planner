@@ -394,11 +394,12 @@ function validateAndCorrectNutrition(
     }
   }
   
-  // Only correct if we understood a reasonable portion of ingredients (lowered from 50% to 30%)
-  // This helps catch more cases where deterministic calculation is possible
-  if (knownIngredientCount < Math.ceil(lines.length * 0.3)) {
-    // Less than 30% of ingredients are known - trust AI
-    console.log(`[MACROS] Only ${knownIngredientCount}/${lines.length} ingredients matched (< 30%), trusting AI`);
+  // Only correct if we understood MOST ingredients.
+  // If we correct based on partial matches, we can *drop* macros from unknown lines
+  // (e.g., missing the fat from "keto bread").
+  if (knownIngredientCount < Math.ceil(lines.length * 0.7)) {
+    // Less than 70% of ingredients are known - trust AI
+    console.log(`[MACROS] Only ${knownIngredientCount}/${lines.length} ingredients matched (< 70%), trusting AI`);
     return { nutrition: aiNutrition, wasCorrect: true };
   }
   
@@ -412,14 +413,14 @@ function validateAndCorrectNutrition(
   const perServingSaturatedFat = calculatedSaturatedFat / effectiveServings;
   const perServingCholesterol = calculatedCholesterol / effectiveServings;
   
-  // Check for significant discrepancies (>20% difference)
+  // Check for significant discrepancies (>15% difference)
   const proteinDiff = Math.abs(aiNutrition.protein_g - perServingProtein);
   const fatDiff = Math.abs(aiNutrition.fat_g - perServingFat);
   const carbsDiff = Math.abs(aiNutrition.carbs_g - perServingCarbs);
   
-  const proteinThreshold = Math.max(perServingProtein * 0.20, 5);
-  const fatThreshold = Math.max(perServingFat * 0.20, 5);
-  const carbsThreshold = Math.max(perServingCarbs * 0.20, 5);
+  const proteinThreshold = Math.max(perServingProtein * 0.15, 5);
+  const fatThreshold = Math.max(perServingFat * 0.15, 5);
+  const carbsThreshold = Math.max(perServingCarbs * 0.15, 5);
   
   const hasSignificantError = 
     proteinDiff > proteinThreshold ||

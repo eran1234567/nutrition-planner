@@ -194,7 +194,11 @@ export const USDA_REFERENCES: Record<string, IngredientMacros> = {
   'avocado_full': { calories: 322, protein: 4, carbs: 17, fat: 29, fiber: 13, cholesterol: 0, sodium: 14 },
   'olive_oil_tbsp': { calories: 119, protein: 0, carbs: 0, fat: 13.5, fiber: 0, cholesterol: 0, sodium: 0 },
   'butter_tbsp': { calories: 102, protein: 0.1, carbs: 0, fat: 11.5, fiber: 0, cholesterol: 31, sodium: 91 },
+  // Keto bread is frequently written as "keto bread" / "keto bread slices" (no "slice" word).
+  // Add multiple keys so our simple substring matcher can still recognize it deterministically.
   'keto_bread_slice': { calories: 60, protein: 6, carbs: 13, fat: 2.5, fiber: 12, cholesterol: 0, sodium: 150 },
+  'keto bread': { calories: 60, protein: 6, carbs: 13, fat: 2.5, fiber: 12, cholesterol: 0, sodium: 150 },
+  'keto bread slices': { calories: 60, protein: 6, carbs: 13, fat: 2.5, fiber: 12, cholesterol: 0, sodium: 150 },
   'bacon_slice': { calories: 43, protein: 3, carbs: 0.1, fat: 3.3, fiber: 0, cholesterol: 9, sodium: 137 },
   'chicken_breast': { calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, cholesterol: 85, sodium: 74 },
   'salmon': { calories: 208, protein: 20, carbs: 0, fat: 13, fiber: 0, cholesterol: 55, sodium: 59 },
@@ -379,7 +383,13 @@ export function findIngredientInCache(
 export function parseIngredientQuantity(text: string): number {
   const trimmed = text.trim();
   const halfStart = /^(?:half\b|0\.5\b|1\/2\b)/i.test(trimmed);
-  if (halfStart) return 0.5;
+  if (halfStart) {
+    // Special-case: our reference table uses 100g servings for avocado.
+    // In our prompts and UX, "half avocado" is treated as ~100g (i.e., 1× the 100g reference),
+    // not 0.5× of it.
+    if (/\bavocado\b/i.test(trimmed)) return 1;
+    return 0.5;
+  }
 
   const numMatch = trimmed.match(/^(\d+\.?\d*)/);
   return numMatch ? Number.parseFloat(numMatch[1]) : 1;
