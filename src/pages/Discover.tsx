@@ -1189,6 +1189,7 @@ export default function Discover() {
                     } as any}
                     isSelected={isSelected(recipe.id)}
                     isRemovable={inCurrentPool}
+                    isUserRecipe={'isUserRecipe' in recipe && recipe.isUserRecipe === true}
                     onSelect={() => handleSelect(recipe)}
                     onClick={() => handleRecipeCardClick(recipe)}
                     compact
