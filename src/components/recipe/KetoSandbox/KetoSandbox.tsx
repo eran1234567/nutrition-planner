@@ -66,7 +66,7 @@ export function KetoSandbox({
 
   // Count active changes per section
   const swapCount = previewState.swaps.filter(s => s.enabled).length;
-  const quantityCount = previewState.quantities.filter(q => q.percentChange !== 0).length;
+  const quantityCount = previewState.quantities.filter(q => q.newQuantity !== q.originalQuantity).length;
   const additionCount = previewState.additions.filter(a => a.enabled).length;
   const totalChanges = swapCount + quantityCount + additionCount;
 
