@@ -50,6 +50,14 @@ export {
   meetsHealthConsideration,
 } from './badges';
 
+// Keto optimization
+export {
+  getKetoOptimization,
+  getPrimaryOptimizationTip,
+  type KetoOptimizationResult,
+  type KetoOptimizationSuggestion,
+} from './optimization';
+
 // Import for the main engine function
 import type { NeutronMode, RawNutritionData, NeutronResult } from './types';
 import { processNutrition } from './calculations';

@@ -1,4 +1,4 @@
-import { Check, X, AlertTriangle, Flame, Droplets, Beef, Info } from 'lucide-react';
+import { Check, X, AlertTriangle, Flame, Droplets, Beef, Info, Lightbulb } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   Tooltip,
@@ -11,18 +11,21 @@ import {
   calculateNetEnergy,
   calculateMacroPercents,
   calculateKetoScore,
+  getKetoOptimization,
   KETO_BADGE_MAX_NET_CARBS,
   KETO_BADGE_MIN_FAT_PERCENT,
   KETO_SCORE_CARB_THRESHOLD,
   KETO_SCORE_PROTEIN_THRESHOLD,
   type RawNutritionData,
   type KetoScore,
+  type KetoOptimizationSuggestion,
 } from '@/lib/neutron';
 
 interface KetoLogicTooltipProps {
   nutrition: RawNutritionData | null | undefined;
   children: React.ReactNode;
   showScore?: boolean;
+  showOptimizer?: boolean;
   className?: string;
 }
 
@@ -37,6 +40,7 @@ interface KetoMetrics {
   proteinThreshold: number;
   ketoScore: KetoScore;
   netEnergy: number;
+  optimizationTip: KetoOptimizationSuggestion | null;
 }
 
 function calculateKetoMetrics(nutrition: RawNutritionData | null | undefined): KetoMetrics | null {
@@ -52,6 +56,12 @@ function calculateKetoMetrics(nutrition: RawNutritionData | null | undefined): K
   const netEnergy = calculateNetEnergy(fat, protein, netCarbs);
   const percents = calculateMacroPercents(fat, protein, netCarbs, netEnergy);
   const ketoScore = calculateKetoScore(netCarbs, fat, protein);
+  
+  // Get optimization suggestions
+  const optimization = getKetoOptimization(nutrition);
+  const optimizationTip = optimization.suggestions.find(
+    s => s.priority !== 'low' || s.action?.ingredient
+  ) ?? null;
 
   return {
     netCarbs,
@@ -64,6 +74,7 @@ function calculateKetoMetrics(nutrition: RawNutritionData | null | undefined): K
     proteinThreshold: KETO_SCORE_PROTEIN_THRESHOLD,
     ketoScore,
     netEnergy,
+    optimizationTip,
   };
 }
 
@@ -109,6 +120,7 @@ export function KetoLogicTooltip({
   nutrition, 
   children, 
   showScore = false,
+  showOptimizer = true,
   className 
 }: KetoLogicTooltipProps) {
   const metrics = calculateKetoMetrics(nutrition);
@@ -127,6 +139,7 @@ export function KetoLogicTooltip({
     proteinPercent,
     proteinThreshold,
     ketoScore,
+    optimizationTip,
   } = metrics;
 
   // Build score breakdown message
@@ -249,6 +262,26 @@ export function KetoLogicTooltip({
                 </p>
               </div>
             </div>
+
+            {/* Optimization Tip */}
+            {showOptimizer && optimizationTip && optimizationTip.priority !== 'low' && (
+              <div className="pt-2 border-t border-border">
+                <div className="flex items-start gap-2 p-2 rounded-md bg-primary/5">
+                  <Lightbulb className="w-3.5 h-3.5 text-primary mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-2xs font-semibold text-primary mb-0.5">Optimizer Tip</p>
+                    <p className="text-2xs text-muted-foreground leading-relaxed">
+                      {optimizationTip.message}
+                    </p>
+                    {optimizationTip.action?.impact && (
+                      <span className="inline-block mt-1 text-2xs font-medium text-success">
+                        {optimizationTip.action.impact}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Badge Status */}
             <div className={cn(
