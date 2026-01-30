@@ -636,14 +636,32 @@ serve(async (req) => {
       
       const nutritionPrompt = `You are a certified nutritionist. Calculate ACCURATE macros for this recipe per serving AND generate a human-readable serving size description.
 
-CRITICAL RULES:
-1. Use USDA Food Database values as your reference
-2. Be EXTREMELY precise - a medium tomato is ~22 calories, an egg is ~70 calories
-3. Calculate the TOTAL recipe nutrition, then divide by servings
-4. Do NOT wildly change values for small ingredient changes
-${originalNutrition ? `5. Previous nutrition was: ${JSON.stringify(originalNutrition)} - only adjust proportionally for ingredient changes` : ''}
+═══════════════════════════════════════════════════════════════
+USER-PROVIDED NUTRITION (HIGHEST PRIORITY - NEVER OVERRIDE!)
+═══════════════════════════════════════════════════════════════
+CRITICAL: When a user provides specific nutrition values in the ingredient description,
+you MUST use EXACTLY those values. DO NOT estimate or look up generic values.
 
-USDA STANDARD MACRO REFERENCES (use these EXACT values!):
+Example: "4 slices keto bread (each slice: 60 cal, 2.5g fat, 13g carbs, 12g fiber, 6g protein)"
+For 4 slices, you MUST calculate:
+- Calories: 4 × 60 = 240 cal
+- Protein: 4 × 6 = 24g
+- Carbs: 4 × 13 = 52g (total carbs)
+- Fiber: 4 × 12 = 48g
+- Fat: 4 × 2.5 = 10g
+
+DO NOT substitute generic "bread" or "keto bread" values from a database!
+The user has provided EXACT per-unit values - use them!
+
+CRITICAL RULES:
+1. FIRST check if user provided nutrition values - use those EXACTLY
+2. For unlisted ingredients, use USDA Food Database values as reference
+3. Be EXTREMELY precise - a medium tomato is ~22 calories, an egg is ~72 calories
+4. Calculate the TOTAL recipe nutrition, then divide by servings
+5. Do NOT wildly change values for small ingredient changes
+${originalNutrition ? `6. Previous nutrition was: ${JSON.stringify(originalNutrition)} - only adjust proportionally for ingredient changes` : ''}
+
+USDA STANDARD MACRO REFERENCES (for ingredients WITHOUT user-provided nutrition):
 - 1 large egg = 72 cal, 6.3g protein, 0.4g carbs, 4.8g fat, 0g fiber
 - 1 medium tomato = 22 cal, 1.1g protein, 4.8g carbs, 0.2g fat, 1.5g fiber
 - 1 slice regular bread = 79 cal, 2.7g protein, 15g carbs, 1g fat, 1g fiber
@@ -663,22 +681,32 @@ When user provides carbs AND fiber (e.g., "13g carbs, 12g fiber"):
 - NET CARBS = Total Carbs - Fiber (e.g., 13g - 12g = 1g net carb)
 - CALORIES from carbs = NET CARBS × 4 (NOT total carbs × 4!)
 
-EXAMPLE - Keto Bread (4 slices, each: 60cal, 13g carbs, 12g fiber, 6g protein, 2.5g fat):
-- Total carbs: 4 × 13g = 52g (report this in carbs_g)
-- Total fiber: 4 × 12g = 48g (report this in fiber_g)
-- Net carbs: 52g - 48g = 4g (only 4g contributes to calories!)
-- Calories: 4 × 60 = 240 cal (USE the user's stated calories!)
+WORKED EXAMPLE - Keto Breakfast (4 eggs + half avocado + 4 slices keto bread):
+If user specifies keto bread as: 60 cal, 2.5g fat, 13g carbs (12g fiber), 6g protein per slice
+
+Step 1 - Calculate per ingredient:
+  4 eggs: 288 cal, 25g protein, 2g carbs, 0g fiber, 19g fat
+  Half avocado: 160 cal, 2g protein, 8g carbs, 7g fiber, 15g fat
+  4 slices keto bread: 240 cal, 24g protein, 52g carbs, 48g fiber, 10g fat
+
+Step 2 - Sum ALL ingredients:
+  Total calories: 288 + 160 + 240 = 688 cal
+  Total protein: 25 + 2 + 24 = 51g
+  Total carbs: 2 + 8 + 52 = 62g
+  Total fiber: 0 + 7 + 48 = 55g
+  Total fat: 19 + 15 + 10 = 44g
+
+Step 3 - Net carbs verification: 62g - 55g = 7g net carbs
 
 CALCULATION METHOD (CRITICAL - follow step by step):
-1. For EACH ingredient, calculate: protein, total carbs, fiber, fat, AND calories
-2. If user provides calories for an ingredient, USE THAT EXACT VALUE
-3. If calculating calories yourself: calories = (protein × 4) + (NET carbs × 4) + (fat × 9)
+1. FIRST: Extract any explicit nutrition values the user provided in ingredient descriptions
+2. For EACH ingredient, calculate: protein, total carbs, fiber, fat, AND calories
+3. If user provides calories for an ingredient, USE THAT EXACT VALUE
+4. If calculating calories yourself: calories = (protein × 4) + (NET carbs × 4) + (fat × 9)
    - NET carbs = Total carbs - Fiber
-4. SUM all ingredient values to get TOTAL recipe values
-5. DIVIDE by servings to get per-serving values
-6. Round to nearest integer
-
-CRITICAL: If user provides specific nutrition info in ingredient descriptions (e.g., "keto bread - 60 cal, 13g carbs, 12g fiber, 6g protein per slice"), USE THOSE EXACT VALUES, not generic estimates!
+5. SUM all ingredient values to get TOTAL recipe values
+6. DIVIDE by servings to get per-serving values
+7. Round to nearest integer
 
 SERVING SIZE DESCRIPTION RULES:
 - Describe what ONE serving looks like using discrete, countable portions
@@ -1028,9 +1056,22 @@ USDA STANDARD MACRO REFERENCES (use these EXACT values!):
 - 100g salmon = 208 cal, 20g protein, 0g carbs, 13g fat, 0g fiber
 - 100g ground beef 90/10 = 176 cal, 26g protein, 0g carbs, 8g fat, 0g fiber
 
-CRITICAL: If user provides specific nutrition info in ingredient descriptions
-(e.g., "keto bread - 60 cal, 13g carbs, 12g fiber, 6g protein per slice"),
-USE THOSE EXACT VALUES including the fiber!
+═══════════════════════════════════════════════════════════════
+USER-PROVIDED NUTRITION (HIGHEST PRIORITY - NEVER OVERRIDE!)
+═══════════════════════════════════════════════════════════════
+CRITICAL: When a user provides specific nutrition values in the ingredient description,
+you MUST use EXACTLY those values. DO NOT estimate or look up generic values.
+
+Example: "4 slices keto bread (each slice: 60 cal, 2.5g fat, 13g carbs, 12g fiber, 6g protein)"
+For 4 slices, you MUST calculate:
+- Calories: 4 × 60 = 240 cal
+- Protein: 4 × 6 = 24g
+- Carbs: 4 × 13 = 52g (total carbs)
+- Fiber: 4 × 12 = 48g
+- Fat: 4 × 2.5 = 10g
+
+DO NOT substitute generic "bread" or "keto bread" values from a database!
+The user has provided EXACT per-unit values - use them!
 
 ═══════════════════════════════════════════════════════════════
 FIBER AND NET CARBS - CRITICAL FOR CALORIE ACCURACY
@@ -1041,19 +1082,31 @@ When user provides carbs AND fiber (e.g., "13g carbs, 12g fiber"):
 - NET CARBS = Total Carbs - Fiber (e.g., 13g - 12g = 1g net carb)
 - CALORIES from carbs = NET CARBS × 4 (NOT total carbs × 4!)
 
-EXAMPLE - Keto Bread (4 slices, each: 60cal, 13g carbs, 12g fiber, 6g protein, 2.5g fat):
-- Total carbs: 4 × 13g = 52g (report this in carbs_g)
-- Total fiber: 4 × 12g = 48g (report this in fiber_g)
-- Net carbs: 52g - 48g = 4g (only 4g × 4 = 16 cal from carbs!)
-- Calories: 4 × 60 = 240 cal (USE the user's stated calories!)
+WORKED EXAMPLE - Keto Breakfast (4 eggs + half avocado + 4 slices keto bread):
+If user specifies keto bread as: 60 cal, 2.5g fat, 13g carbs (12g fiber), 6g protein per slice
+
+Step 1 - Calculate per ingredient:
+  4 eggs: 288 cal, 25g protein, 2g carbs, 0g fiber, 19g fat
+  Half avocado: 160 cal, 2g protein, 8g carbs, 7g fiber, 15g fat
+  4 slices keto bread: 240 cal, 24g protein, 52g carbs, 48g fiber, 10g fat
+
+Step 2 - Sum ALL ingredients:
+  Total calories: 288 + 160 + 240 = 688 cal
+  Total protein: 25 + 2 + 24 = 51g
+  Total carbs: 2 + 8 + 52 = 62g
+  Total fiber: 0 + 7 + 48 = 55g
+  Total fat: 19 + 15 + 10 = 44g
+
+Step 3 - Net carbs verification: 62g - 55g = 7g net carbs
 
 CALCULATION METHOD (step by step):
-1. For EACH ingredient, calculate: protein, total carbs, fiber, fat, AND calories
-2. If user provides calories for an ingredient, USE THAT EXACT VALUE
-3. If calculating calories yourself: calories = (protein × 4) + (NET carbs × 4) + (fat × 9)
-4. SUM all ingredient values to get TOTAL recipe values
-5. DIVIDE total by servings to get per-serving values
-6. Round to nearest integer
+1. FIRST: Extract any explicit nutrition values the user provided in ingredient descriptions
+2. For each ingredient, calculate: protein, total carbs, fiber, fat, AND calories
+3. If user provides calories for an ingredient, USE THAT EXACT VALUE
+4. If calculating calories yourself: calories = (protein × 4) + (NET carbs × 4) + (fat × 9)
+5. SUM all ingredient values to get TOTAL recipe values
+6. DIVIDE total by servings to get per-serving values
+7. Round to nearest integer
 
 If macros are NOT provided:
 - Generate reasonable macros by SUMMING ingredient contributions
