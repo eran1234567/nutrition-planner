@@ -224,14 +224,14 @@ const USDA_REFERENCES: Record<string, IngredientMacros> = {
 };
 
 function parseIngredientQuantity(text: string): number {
-  // Handle "half", "0.5", "1/2" etc.
-  const lowerText = text.toLowerCase();
-  if (lowerText.includes('half') || lowerText.includes('1/2') || lowerText.includes('0.5')) {
-    return 0.5;
-  }
-  // Extract leading number
-  const numMatch = text.match(/^(\d+\.?\d*)/);
-  return numMatch ? parseFloat(numMatch[1]) : 1;
+  // IMPORTANT: only treat "half"/"0.5" as quantity when it appears at the start.
+  // Ingredient lines can contain other numbers (e.g., "13g carbs, 12g fiber") that must NOT affect quantity.
+  const trimmed = text.trim();
+  const halfStart = /^(?:half\b|0\.5\b|1\/2\b)/i.test(trimmed);
+  if (halfStart) return 0.5;
+
+  const numMatch = trimmed.match(/^(\d+\.?\d*)/);
+  return numMatch ? Number.parseFloat(numMatch[1]) : 1;
 }
 
 function extractExplicitMacros(text: string): Partial<IngredientMacros> | null {
@@ -345,40 +345,26 @@ function calculateIngredientMacros(ingredientText: string): IngredientMacros | n
   
   // Detect avocado
   if (lowerText.includes('avocado')) {
-    const isHalf = lowerText.includes('half') || lowerText.includes('0.5') || lowerText.includes('1/2');
-    const numMatch = ingredientText.match(/^(\d+\.?\d*)/);
-    let avocadoQty = numMatch ? parseFloat(numMatch[1]) : 1;
-    
-    if (isHalf) {
-      console.log(`[MACROS] Detected half avocado, qty=${avocadoQty || 1}`);
-      return {
-        calories: USDA_REFERENCES.avocado_half.calories * (avocadoQty || 1),
-        protein: USDA_REFERENCES.avocado_half.protein * (avocadoQty || 1),
-        carbs: USDA_REFERENCES.avocado_half.carbs * (avocadoQty || 1),
-        fat: USDA_REFERENCES.avocado_half.fat * (avocadoQty || 1),
-        fiber: USDA_REFERENCES.avocado_half.fiber * (avocadoQty || 1),
-      };
-    } else {
-      console.log(`[MACROS] Detected full avocado, qty=${avocadoQty}`);
-      return {
-        calories: USDA_REFERENCES.avocado_full.calories * avocadoQty,
-        protein: USDA_REFERENCES.avocado_full.protein * avocadoQty,
-        carbs: USDA_REFERENCES.avocado_full.carbs * avocadoQty,
-        fat: USDA_REFERENCES.avocado_full.fat * avocadoQty,
-        fiber: USDA_REFERENCES.avocado_full.fiber * avocadoQty,
-      };
-    }
+    // Treat avocado reference as PER ONE WHOLE avocado and multiply by the parsed quantity.
+    // This fixes the previous bug where "0.5 avocado" was interpreted as "half" AND multiplied by 0.5 again.
+    console.log(`[MACROS] Detected avocado, qty=${quantity}`);
+    return {
+      calories: USDA_REFERENCES.avocado_full.calories * quantity,
+      protein: USDA_REFERENCES.avocado_full.protein * quantity,
+      carbs: USDA_REFERENCES.avocado_full.carbs * quantity,
+      fat: USDA_REFERENCES.avocado_full.fat * quantity,
+      fiber: USDA_REFERENCES.avocado_full.fiber * quantity,
+    };
   }
   
   // Detect keto bread / low carb bread
   if ((lowerText.includes('keto') && lowerText.includes('bread')) || 
       (lowerText.includes('low carb') && lowerText.includes('bread')) ||
       (lowerText.includes('low-carb') && lowerText.includes('bread'))) {
-    // Count slices - look for "X slices" or just a leading number
-    const sliceMatch = lowerText.match(/(\d+)\s*slice/);
-    const leadingNum = ingredientText.match(/^(\d+)/);
-    const sliceQty = sliceMatch ? parseInt(sliceMatch[1]) : (leadingNum ? parseInt(leadingNum[1]) : 1);
-    
+    // Quantity already represents slice count for lines like "4 slices keto bread".
+    // Re-parsing slice count here can go wrong if the line contains multiple quantities.
+    const sliceQty = quantity;
+
     console.log(`[MACROS] Detected keto bread, slices=${sliceQty}`);
     return {
       calories: USDA_REFERENCES.keto_bread_slice.calories * sliceQty,
@@ -393,12 +379,117 @@ function calculateIngredientMacros(ingredientText: string): IngredientMacros | n
   return null; // Unknown ingredient - let AI handle it
 }
 
+function extractIngredientLinesFromContent(content: string): string[] {
+  const normalized = content.replace(/\r\n/g, '\n');
+  const lower = normalized.toLowerCase();
+
+  const splitTopLevel = (text: string, delimiter: '+'): string[] => {
+    const out: string[] = [];
+    let buf = '';
+    let depth = 0;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === '(') depth++;
+      if (ch === ')' && depth > 0) depth--;
+
+      const isDelimiter = ch === delimiter && depth === 0;
+      if (isDelimiter) {
+        const t = buf.trim();
+        if (t) out.push(t);
+        buf = '';
+        continue;
+      }
+      buf += ch;
+    }
+    const t = buf.trim();
+    if (t) out.push(t);
+    return out;
+  };
+
+  // Prefer the explicit "Ingredients:" section when present.
+  let section = normalized;
+  const ingredientsIdx = lower.indexOf('ingredients:');
+  if (ingredientsIdx !== -1) {
+    section = normalized.slice(ingredientsIdx + 'ingredients:'.length);
+
+    // Stop at common next headings.
+    const stop = section.match(/\n\s*(instructions|directions|method|steps|notes)\s*:/i);
+    if (stop?.index != null) {
+      section = section.slice(0, stop.index);
+    }
+  }
+
+  const lines: string[] = [];
+  const rawLines = section.split('\n');
+
+  // Some clients/writers end up wrapping parenthetical nutrition onto new lines:
+  // "4 slices keto bread (each bread is 60 cals\n6g protein\n2.5g fat\n13g carbs but 12g fiber)"
+  // If we treat those wrapped fragments as separate ingredients, we will massively over-multiply.
+  let pending: string | null = null;
+
+  const pushLine = (line: string) => {
+    // Only split on '+' at the top level. We intentionally do NOT split on commas,
+    // because commas are frequently used inside macro notes and will create fake
+    // "ingredient" lines like "6g protein" that then get multiplied.
+    const parts = splitTopLevel(line, '+');
+    for (const p of parts) {
+      const cleaned = p.trim();
+      if (cleaned) lines.push(cleaned);
+    }
+  };
+
+  for (const rawLine of rawLines) {
+    let line = rawLine.trim();
+    if (!line) continue;
+
+    // Remove bullet markers but keep quantities.
+    line = line.replace(/^[-•*]\s+/, '').trim();
+
+    // Drop headings that sometimes leak in.
+    if (/^(recipe|ingredients|instructions|directions|steps|servings)\s*:/i.test(line)) continue;
+    if (/^[A-Za-z\s]+:\s*$/.test(line)) continue;
+
+    if (pending) {
+      pending = `${pending}, ${line}`;
+
+      // Keep accumulating until the parens close.
+      if (pending.includes('(') && !pending.includes(')')) {
+        continue;
+      }
+
+      pushLine(pending);
+      pending = null;
+      continue;
+    }
+
+    // Start accumulating when we see an opening paren without a close.
+    if (line.includes('(') && !line.includes(')')) {
+      pending = line;
+      continue;
+    }
+
+    pushLine(line);
+  }
+
+  if (pending) {
+    // Best-effort: push even if unclosed.
+    pushLine(pending);
+  }
+
+  return lines;
+}
+
 function validateAndCorrectNutrition(
   ingredientsContent: string, 
   aiNutrition: NutritionData
 ): { nutrition: NutritionData; wasCorrect: boolean; reason?: string } {
-  // Parse ingredients from content
-  const lines = ingredientsContent.split(/[\n,]+/).map(l => l.trim()).filter(Boolean);
+  // Parse ingredient lines from the nutrition-only content.
+  // IMPORTANT: the incoming "content" often contains headings like "Recipe:", "Ingredients:", "Instructions:".
+  // If we treat the whole thing as ingredients, we can grossly miscalculate and incorrectly override AI nutrition.
+  const lines = extractIngredientLinesFromContent(ingredientsContent);
+  if (lines.length === 0) {
+    return { nutrition: aiNutrition, wasCorrect: true };
+  }
   
   let calculatedProtein = 0;
   let calculatedFat = 0;
