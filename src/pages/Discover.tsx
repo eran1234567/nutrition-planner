@@ -352,12 +352,12 @@ export default function Discover() {
   // Strict Keto meal criteria (carb-defined first, not fat-defined):
   // 1. Net carbs under 8g per serving (strict keto aims for ~20-30g/day total across 3 meals)
   // 2. Carbs must be under 10% of total calories (filters out carb-dense low-cal foods)
-  // 3. Protein should not be excessive (avoid gluconeogenesis) - max 35% of calories from protein
-  // 4. Fat must provide majority of energy - at least 60% of calories from fat
+  // 3. Protein should not be excessive (avoid gluconeogenesis) - max 25% of calories from protein
+  // 4. Fat must provide majority of energy - at least 70% of calories from fat
   const KETO_MAX_CARBS = 8; // Stricter: 8g instead of 10g
   const KETO_MAX_CARB_PERCENT = 10; // Max % of calories from carbs
-  const KETO_MAX_PROTEIN_PERCENT = 35; // Max % of calories from protein
-  const KETO_MIN_FAT_PERCENT = 60; // Min % of calories from fat (raised from 50%)
+  const KETO_MAX_PROTEIN_PERCENT = 25; // Max % of calories from protein (stricter for true keto)
+  const KETO_MIN_FAT_PERCENT = 70; // Min % of calories from fat (raised to 70% for strict keto)
   
   // Helper to check if a recipe meets strict keto macro criteria
   const isKetoFriendly = (nutrition: { calories?: number | null; carbs_g?: number | null; protein_g?: number | null; fat_g?: number | null } | undefined): boolean => {

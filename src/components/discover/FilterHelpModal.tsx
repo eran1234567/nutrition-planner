@@ -21,7 +21,7 @@ const DIET_CRITERIA: CriteriaItem[] = [
     label: 'Keto',
     icon: <Flame className="w-4 h-4" />,
     bgClass: 'bg-emerald-500',
-    criteria: '≤ 8g net carbs per serving, ≥ 60% calories from fat, ≤ 35% calories from protein',
+    criteria: '≤ 8g net carbs per serving, ≥ 70% calories from fat, ≤ 25% calories from protein',
   },
   {
     label: 'Paleo',
