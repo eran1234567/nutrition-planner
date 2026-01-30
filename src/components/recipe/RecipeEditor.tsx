@@ -471,81 +471,115 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
         }
       }
 
-      // Recalculate and update nutrition via AI
-      const aiResult = await calculateNutritionViaAI(activeIngredients, activeSteps);
+      // Detect if ingredients or steps actually changed (not just title/description/image)
+      const prevIngredients = (recipe.ingredients || []).filter((i: any) => (i?.name || '').trim());
+      const prevSteps = (recipe.steps || []).filter((s: any) => (s?.instruction || '').trim());
       
-      if (aiResult) {
-        const { nutrition: rawNutrition, serving_size: rawServingSize } = aiResult;
-
-        // If the user only added/increased ingredients (no removals/decreases), nutrition should not go down.
-        // This prevents counter-intuitive swings from the AI when making small additions (e.g. adding tomato).
-        const prevIngredients = (recipe.ingredients || []).filter((i: any) => (i?.name || '').trim());
+      // Check if any ingredient was added, removed, or modified
+      const ingredientsChanged = (() => {
+        if (prevIngredients.length !== activeIngredients.filter(i => i.name.trim()).length) return true;
         const prevById = new Map<string, any>(prevIngredients.map((i: any) => [i.id, i]));
-        const activeById = new Map<string, EditableIngredient>(
-          activeIngredients.filter(i => !!i.id).map(i => [i.id as string, i])
-        );
-
-        const didAddOrIncrease = activeIngredients.some((ing) => {
-          if (!ing.name.trim()) return false;
-          if (!ing.id) return true; // new ingredient row
+        for (const ing of activeIngredients) {
+          if (!ing.name.trim()) continue;
+          if (!ing.id) return true; // new ingredient
           const prev = prevById.get(ing.id);
-          if (!prev) return true;
+          if (!prev) return true; // not found in prev
+          if (prev.name.trim().toLowerCase() !== ing.name.trim().toLowerCase()) return true;
           const prevQty = typeof prev.quantity === 'number' ? prev.quantity : Number(prev.quantity);
           const nextQty = Number.parseFloat(ing.quantity);
-          return Number.isFinite(prevQty) && Number.isFinite(nextQty) && nextQty > prevQty + 1e-6;
-        });
-
-        const didRemoveOrDecrease = prevIngredients.some((prev: any) => {
-          const next = activeById.get(prev.id);
-          if (!next) return true; // removed
-          // Also treat ingredient name changes as a modification (e.g., "eggs" → "egg yolks")
-          const prevName = (prev.name || '').trim().toLowerCase();
-          const nextName = (next.name || '').trim().toLowerCase();
-          if (prevName !== nextName) return true; // ingredient was effectively replaced
-          const prevQty = typeof prev.quantity === 'number' ? prev.quantity : Number(prev.quantity);
-          const nextQty = Number.parseFloat(next.quantity);
-          return Number.isFinite(prevQty) && Number.isFinite(nextQty) && nextQty < prevQty - 1e-6;
-        });
-
-        // Only clamp nutrition when PURELY adding (no removals, no decreases, no name changes)
-        // This ensures that modifying ingredients (like replacing eggs with egg yolks) gets fresh calculation
-        const newNutrition = { ...rawNutrition };
-        if (didAddOrIncrease && !didRemoveOrDecrease && recipe.nutrition) {
-          const prevCals = Math.round((recipe.nutrition.calories ?? 0) as number);
-          const prevP = Math.round((recipe.nutrition.protein_g ?? 0) as number);
-          const prevC = Math.round((recipe.nutrition.carbs_g ?? 0) as number);
-          const prevF = Math.round((recipe.nutrition.fat_g ?? 0) as number);
-          newNutrition.calories = Math.max(newNutrition.calories, prevCals);
-          newNutrition.protein_g = Math.max(newNutrition.protein_g, prevP);
-          newNutrition.carbs_g = Math.max(newNutrition.carbs_g, prevC);
-          newNutrition.fat_g = Math.max(newNutrition.fat_g, prevF);
+          if (Math.abs(prevQty - nextQty) > 1e-6) return true;
+          if ((prev.unit || '').trim() !== ing.unit.trim()) return true;
         }
-
-        const newServingSize = (rawServingSize || '')
-          .replace(/^\s*1\s*serving\s*=\s*/i, '')
-          .trim();
-        
-        // Update nutrition
-        if (recipe.nutrition?.id) {
-          await supabase
-            .from('recipe_nutrition')
-            .update(newNutrition)
-            .eq('id', recipe.nutrition.id);
-        } else {
-          await supabase
-            .from('recipe_nutrition')
-            .insert({
-              recipe_id: recipe.id,
-              ...newNutrition,
-            });
+        return false;
+      })();
+      
+      // Check if any step was added, removed, or modified
+      const stepsChanged = (() => {
+        if (prevSteps.length !== activeSteps.filter(s => s.instruction.trim()).length) return true;
+        const prevById = new Map<string, any>(prevSteps.map((s: any) => [s.id, s]));
+        for (const step of activeSteps) {
+          if (!step.instruction.trim()) continue;
+          if (!step.id) return true; // new step
+          const prev = prevById.get(step.id);
+          if (!prev) return true;
+          if (prev.instruction.trim() !== step.instruction.trim()) return true;
         }
+        return false;
+      })();
+      
+      // Only recalculate nutrition if ingredients or steps changed
+      if (ingredientsChanged || stepsChanged) {
+        const aiResult = await calculateNutritionViaAI(activeIngredients, activeSteps);
         
-        // Update serving_size on the recipe if changed
-        if (newServingSize) {
-          await supabase
-            .from('recipes')
-            .update({ serving_size: newServingSize })
-            .eq('id', recipe.id);
+        if (aiResult) {
+          const { nutrition: rawNutrition, serving_size: rawServingSize } = aiResult;
+
+          // Determine if we should clamp (only adding, no modifications)
+          const prevById = new Map<string, any>(prevIngredients.map((i: any) => [i.id, i]));
+          const activeById = new Map<string, EditableIngredient>(
+            activeIngredients.filter(i => !!i.id).map(i => [i.id as string, i])
+          );
+
+          const didAddOrIncrease = activeIngredients.some((ing) => {
+            if (!ing.name.trim()) return false;
+            if (!ing.id) return true; // new ingredient row
+            const prev = prevById.get(ing.id);
+            if (!prev) return true;
+            const prevQty = typeof prev.quantity === 'number' ? prev.quantity : Number(prev.quantity);
+            const nextQty = Number.parseFloat(ing.quantity);
+            return Number.isFinite(prevQty) && Number.isFinite(nextQty) && nextQty > prevQty + 1e-6;
+          });
+
+          const didRemoveOrDecrease = prevIngredients.some((prev: any) => {
+            const next = activeById.get(prev.id);
+            if (!next) return true; // removed
+            const prevName = (prev.name || '').trim().toLowerCase();
+            const nextName = (next.name || '').trim().toLowerCase();
+            if (prevName !== nextName) return true; // ingredient was effectively replaced
+            const prevQty = typeof prev.quantity === 'number' ? prev.quantity : Number(prev.quantity);
+            const nextQty = Number.parseFloat(next.quantity);
+            return Number.isFinite(prevQty) && Number.isFinite(nextQty) && nextQty < prevQty - 1e-6;
+          });
+
+          // Only clamp nutrition when PURELY adding (no removals, no decreases, no name changes)
+          const newNutrition = { ...rawNutrition };
+          if (didAddOrIncrease && !didRemoveOrDecrease && recipe.nutrition) {
+            const prevCals = Math.round((recipe.nutrition.calories ?? 0) as number);
+            const prevP = Math.round((recipe.nutrition.protein_g ?? 0) as number);
+            const prevC = Math.round((recipe.nutrition.carbs_g ?? 0) as number);
+            const prevF = Math.round((recipe.nutrition.fat_g ?? 0) as number);
+            newNutrition.calories = Math.max(newNutrition.calories, prevCals);
+            newNutrition.protein_g = Math.max(newNutrition.protein_g, prevP);
+            newNutrition.carbs_g = Math.max(newNutrition.carbs_g, prevC);
+            newNutrition.fat_g = Math.max(newNutrition.fat_g, prevF);
+          }
+
+          const newServingSize = (rawServingSize || '')
+            .replace(/^\s*1\s*serving\s*=\s*/i, '')
+            .trim();
+          
+          // Update nutrition
+          if (recipe.nutrition?.id) {
+            await supabase
+              .from('recipe_nutrition')
+              .update(newNutrition)
+              .eq('id', recipe.nutrition.id);
+          } else {
+            await supabase
+              .from('recipe_nutrition')
+              .insert({
+                recipe_id: recipe.id,
+                ...newNutrition,
+              });
+          }
+          
+          // Update serving_size on the recipe if changed
+          if (newServingSize) {
+            await supabase
+              .from('recipes')
+              .update({ serving_size: newServingSize })
+              .eq('id', recipe.id);
+          }
         }
       }
 
