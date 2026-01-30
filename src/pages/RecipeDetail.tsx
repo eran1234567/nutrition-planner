@@ -354,6 +354,30 @@ export default function RecipeDetail() {
     return formatted.toString();
   };
 
+  // Format ingredient display with quantity and unit
+  // Handles compound units like "6 oz fillets" -> "4 fillets (6 oz each)"
+  const formatIngredient = (qty: number | null, unit: string | null, name: string) => {
+    if (qty === null && !unit) return name;
+    
+    const formattedQty = formatQuantity(qty);
+    const unitStr = unit || '';
+    
+    // Check for compound units like "6 oz fillets" or "12 oz can"
+    const compoundUnitMatch = unitStr.match(/^(\d+\s*(?:oz|g|lb|ml|fl oz))\s+(.+)$/i);
+    
+    if (compoundUnitMatch && qty !== null) {
+      const [, size, baseUnit] = compoundUnitMatch;
+      return `${formattedQty} ${baseUnit} (${size} each)`;
+    }
+    
+    // Standard format: "2 cups milk"
+    const parts: string[] = [];
+    if (formattedQty) parts.push(formattedQty);
+    if (unitStr) parts.push(unitStr);
+    
+    return parts.length > 0 ? `${parts.join(' ')} ${name}` : name;
+  };
+
   const handleAddToPlan = () => {
     setShowAddToPlanModal(true);
   };
@@ -1009,9 +1033,7 @@ export default function RecipeDetail() {
                           <li key={index} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
                             <div className="w-2 h-2 rounded-full bg-primary" />
                             <span className="flex-1 text-foreground">
-                              {ing.quantity && `${formatQuantity(ing.quantity)} `}
-                              {ing.unit && `${ing.unit} `}
-                              {ing.name}
+                              {formatIngredient(ing.quantity, ing.unit, ing.name)}
                             </span>
                             {ing.aisle && (
                               <span className="text-xs text-muted-foreground">{ing.aisle}</span>
