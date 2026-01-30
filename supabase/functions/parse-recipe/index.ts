@@ -280,12 +280,18 @@ function calculateIngredientMacros(ingredientText: string): IngredientMacros | n
   // First check for explicit macros provided by user
   const explicitMacros = extractExplicitMacros(ingredientText);
   
-  // Detect "per slice", "each", "per" patterns for multiplication
-  const perUnitMatch = ingredientText.match(/(?:each|per\s+(?:slice|piece|unit))\s*[:\-]?\s*/i);
+  // Detect if the macros are "per unit" vs "total"
+  // Keywords like "each", "per slice", "per piece" mean macros are PER UNIT
+  // Otherwise, if user says "2 slices bread (60 cal, 2.5g fat)" these are PER SLICE
+  // We assume explicit macros in parentheses after quantity are PER UNIT unless they say "total"
+  const isTotalMacros = lowerText.includes('total') || lowerText.includes('combined');
   
   if (explicitMacros) {
-    // User provided explicit nutrition - multiply by quantity
-    const multiplier = perUnitMatch ? quantity : 1;
+    // User provided explicit nutrition
+    // If quantity > 1 and macros are not marked as "total", multiply by quantity
+    // This handles "4 slices bread (60 cal each)" AND "4 slices bread (60 cal, 2.5g fat)"
+    const multiplier = isTotalMacros ? 1 : quantity;
+    console.log(`[MACROS] Ingredient: "${ingredientText}" qty=${quantity}, multiplier=${multiplier}, explicitMacros:`, explicitMacros);
     return {
       calories: (explicitMacros.calories || 0) * multiplier,
       protein: (explicitMacros.protein || 0) * multiplier,
