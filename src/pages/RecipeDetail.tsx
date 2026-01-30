@@ -728,8 +728,8 @@ export default function RecipeDetail() {
             </div>
           )}
 
-          {/* Neutron Optimizer Suggestions - only show in Keto Mode */}
-          {isKetoMode && !neutronBadges?.isKeto && recipe?.ingredients && (
+          {/* Neutron Optimizer Suggestions - show in Keto Mode for any recipe with a ketoScore < 100 */}
+          {isKetoMode && recipe?.ingredients && neutronBadges?.ketoScore && neutronBadges.ketoScore.score < 100 && (
             <NeutronSuggestionCard
               nutrition={recipe.nutrition as RawNutritionData}
               ingredients={recipe.ingredients.map(ing => ({
