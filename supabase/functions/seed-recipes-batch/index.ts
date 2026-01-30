@@ -7,7 +7,68 @@ import {
   buildNutritionPromptInstructions,
   KETO_BADGE_MAX_NET_CARBS,
   KETO_BADGE_MIN_FAT_PERCENT,
+  findKetoSwaps,
+  KETO_SWAP_DICTIONARY,
+  calculateNetCarbs,
+  isKetoBadgeEligible,
+  autoOptimizeForKeto,
+  type RawNutritionData,
 } from "../_shared/neutron.ts";
+
+/**
+ * Apply keto swaps to ingredients if the recipe is keto-intended but fails the badge
+ */
+function applyKetoSwapsIfNeeded(
+  ingredients: Array<{ name: string; quantity: number; unit: string; aisle: string }>,
+  nutrition: { carbs_g: number; fiber_g: number; fat_g: number; protein_g: number },
+  isKetoIntended: boolean
+): { 
+  ingredients: Array<{ name: string; quantity: number; unit: string; aisle: string }>;
+  wasSwapped: boolean;
+  swapDetails: string[];
+} {
+  if (!isKetoIntended) {
+    return { ingredients, wasSwapped: false, swapDetails: [] };
+  }
+
+  const netCarbs = calculateNetCarbs(nutrition.carbs_g, nutrition.fiber_g, 0);
+  const isAlreadyKeto = isKetoBadgeEligible(netCarbs, nutrition.fat_g, nutrition.protein_g);
+  
+  if (isAlreadyKeto) {
+    return { ingredients, wasSwapped: false, swapDetails: [] };
+  }
+
+  // Find swaps for current ingredients
+  const ingredientNames = ingredients.map(ing => ing.name);
+  const swaps = findKetoSwaps(ingredientNames);
+  
+  if (swaps.length === 0) {
+    return { ingredients, wasSwapped: false, swapDetails: [] };
+  }
+
+  const swapDetails: string[] = [];
+  const swappedIngredients = ingredients.map(ing => {
+    const swap = swaps.find(s => s.originalIngredient === ing.name);
+    if (swap) {
+      swapDetails.push(`${ing.name} → ${swap.swapTo}`);
+      return {
+        ...ing,
+        name: swap.swapTo,
+        // Adjust aisle based on swap category
+        aisle: swap.category === 'Grains' ? 'Produce' : 
+               swap.category === 'Pasta' ? 'Produce' :
+               swap.category === 'Wraps' ? 'Produce' : ing.aisle,
+      };
+    }
+    return ing;
+  });
+
+  return { 
+    ingredients: swappedIngredients, 
+    wasSwapped: swapDetails.length > 0, 
+    swapDetails 
+  };
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

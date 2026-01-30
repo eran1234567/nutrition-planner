@@ -27,6 +27,7 @@ import { AddToPlanModal } from '@/components/plan/AddToPlanModal';
 import { VideoHero } from '@/components/recipe/VideoHero';
 import { CookingMode } from '@/components/recipe/CookingMode';
 import { KetoLogicTooltip } from '@/components/recipe/KetoLogicTooltip';
+import { NeutronSuggestionCard } from '@/components/recipe/NeutronSuggestionCard';
 import { useRecipeById } from '@/hooks/useGlobalRecipes';
 import { useMealPlanStore } from '@/stores/mealPlanStore';
 import { useNeutronStore } from '@/stores/neutronStore';
@@ -707,6 +708,18 @@ export default function RecipeDetail() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Neutron Optimizer Suggestions */}
+          {!neutronBadges?.isKeto && recipe?.ingredients && (
+            <NeutronSuggestionCard
+              nutrition={recipe.nutrition as RawNutritionData}
+              ingredients={recipe.ingredients.map(ing => ({
+                name: ing.name,
+                quantity: ing.quantity,
+                unit: ing.unit,
+              }))}
+            />
           )}
 
           {/* Start Cooking Button */}
