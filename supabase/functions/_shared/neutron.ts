@@ -550,3 +550,299 @@ KETO BADGE CRITERIA (auto-detected):
 - Net Carbs ≤ ${KETO_BADGE_MAX_NET_CARBS}g per serving
 - Fat ≥ ${KETO_BADGE_MIN_FAT_PERCENT}% of net energy`;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// KETO OPTIMIZATION ENGINE
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface KetoOptimizationResult {
+  isKeto: boolean;
+  ketoScore: KetoScore;
+  suggestions: KetoOptimizationSuggestion[];
+  canAutoOptimize: boolean;
+}
+
+export interface KetoOptimizationSuggestion {
+  type: 'reduce_carbs' | 'add_fat' | 'balance_protein';
+  priority: 'high' | 'medium' | 'low';
+  message: string;
+  action?: {
+    ingredient?: string;
+    amount?: number;
+    unit?: string;
+    impact?: string;
+  };
+}
+
+export interface IngredientWithMacros {
+  name: string;
+  macros?: IngredientMacros | null;
+  quantity?: number;
+  unit?: string;
+}
+
+/**
+ * Keto Optimization Engine
+ * Analyzes nutrition data and provides actionable suggestions to achieve/improve keto compliance
+ */
+export function getKetoOptimization(
+  nutrition: RawNutritionData | null | undefined,
+  ingredients?: IngredientWithMacros[]
+): KetoOptimizationResult {
+  const suggestions: KetoOptimizationSuggestion[] = [];
+  
+  if (!nutrition) {
+    return {
+      isKeto: false,
+      ketoScore: { score: 0, isKeto: false, penalties: { carbPenalty: 0, proteinPenalty: 0 } },
+      suggestions: [{
+        type: 'reduce_carbs',
+        priority: 'high',
+        message: 'No nutrition data available. Add ingredients with macros to analyze.',
+      }],
+      canAutoOptimize: false,
+    };
+  }
+
+  const protein = nutrition.protein_g ?? 0;
+  const fat = nutrition.fat_g ?? 0;
+  const totalCarbs = nutrition.carbs_g ?? 0;
+  const fiber = nutrition.fiber_g ?? 0;
+  const sugarAlcohols = nutrition.sugar_alcohols_g ?? 0;
+
+  const netCarbs = calculateNetCarbs(totalCarbs, fiber, sugarAlcohols);
+  const netEnergy = calculateNetEnergy(fat, protein, netCarbs);
+  const ketoScore = calculateKetoScore(netCarbs, fat, protein);
+  const percents = calculateMacroPercents(fat, protein, netCarbs, netEnergy);
+
+  // === CASE 1: Not Keto due to high carbs (> 10g net carbs) ===
+  if (netCarbs > KETO_BADGE_MAX_NET_CARBS) {
+    const carbExcess = netCarbs - KETO_BADGE_MAX_NET_CARBS;
+    
+    // Find highest-carb ingredient if available
+    let highCarbIngredient: IngredientWithMacros | null = null;
+    let highestNetCarbs = 0;
+    
+    if (ingredients && ingredients.length > 0) {
+      for (const ing of ingredients) {
+        if (ing.macros) {
+          const ingNetCarbs = calculateNetCarbs(
+            ing.macros.carbs,
+            ing.macros.fiber,
+            0
+          );
+          if (ingNetCarbs > highestNetCarbs) {
+            highestNetCarbs = ingNetCarbs;
+            highCarbIngredient = ing;
+          }
+        }
+      }
+    }
+
+    if (highCarbIngredient && highestNetCarbs > carbExcess) {
+      const reductionNeeded = Math.ceil(carbExcess);
+      const currentQty = highCarbIngredient.quantity || 1;
+      const carbsPerUnit = highestNetCarbs / currentQty;
+      const unitsToReduce = Math.ceil(carbExcess / carbsPerUnit);
+      const newQty = Math.max(0, currentQty - unitsToReduce);
+      
+      suggestions.push({
+        type: 'reduce_carbs',
+        priority: 'high',
+        message: `Reduce "${highCarbIngredient.name}" from ${currentQty} to ${newQty} ${highCarbIngredient.unit || 'units'} to earn the KETO badge.`,
+        action: {
+          ingredient: highCarbIngredient.name,
+          amount: newQty,
+          unit: highCarbIngredient.unit,
+          impact: `-${reductionNeeded}g net carbs`,
+        },
+      });
+    } else {
+      suggestions.push({
+        type: 'reduce_carbs',
+        priority: 'high',
+        message: `Net carbs (${netCarbs.toFixed(1)}g) exceed the 10g limit by ${carbExcess.toFixed(1)}g. Reduce high-carb ingredients to qualify for KETO.`,
+      });
+    }
+  }
+
+  // === CASE 2: Not Keto due to low fat (< 60%) ===
+  if (percents.fatPercent < KETO_BADGE_MIN_FAT_PERCENT) {
+    // Calculate fat needed to reach 60.1%
+    // Target: fat_cals / (fat_cals + protein_cals + carb_cals) = 0.601
+    // Let x = additional fat grams needed
+    // (fat + x) * 9 / ((fat + x) * 9 + protein * 4 + netCarbs * 4) = 0.601
+    // Solve for x:
+    const targetFatPercent = 0.601;
+    const proteinCals = protein * CALORIES_PER_GRAM.protein;
+    const carbCals = netCarbs * CALORIES_PER_GRAM.carbs;
+    const nonFatCals = proteinCals + carbCals;
+    
+    // fat_cals = 0.601 * (fat_cals + nonFatCals)
+    // fat_cals = 0.601 * fat_cals + 0.601 * nonFatCals
+    // fat_cals - 0.601 * fat_cals = 0.601 * nonFatCals
+    // fat_cals * (1 - 0.601) = 0.601 * nonFatCals
+    // fat_cals = (0.601 * nonFatCals) / 0.399
+    const targetFatCals = (targetFatPercent * nonFatCals) / (1 - targetFatPercent);
+    const currentFatCals = fat * CALORIES_PER_GRAM.fat;
+    const additionalFatCalsNeeded = Math.max(0, targetFatCals - currentFatCals);
+    const additionalFatGrams = Math.ceil(additionalFatCalsNeeded / CALORIES_PER_GRAM.fat);
+
+    if (additionalFatGrams > 0) {
+      // Suggest olive oil (1 tbsp = 13.5g fat) or butter (1 tbsp = 11.5g fat)
+      const oliveOilTbsp = Math.ceil(additionalFatGrams / 13.5);
+      
+      suggestions.push({
+        type: 'add_fat',
+        priority: 'high',
+        message: `Add ${additionalFatGrams}g of fat (${oliveOilTbsp} tbsp olive oil) to reach the 60% Fat Fuel target.`,
+        action: {
+          ingredient: 'Olive Oil',
+          amount: oliveOilTbsp,
+          unit: 'tbsp',
+          impact: `+${additionalFatGrams}g fat → ${Math.round((currentFatCals + additionalFatCalsNeeded) / (currentFatCals + additionalFatCalsNeeded + nonFatCals) * 100)}% fat`,
+        },
+      });
+    }
+  }
+
+  // === CASE 3: Keto but Score < 100 (has penalties) ===
+  if (ketoScore.isKeto && ketoScore.score < 100) {
+    // Carb penalty: net carbs > 5g
+    if (ketoScore.penalties.carbPenalty > 0) {
+      const carbsOver = netCarbs - KETO_SCORE_CARB_THRESHOLD;
+      
+      suggestions.push({
+        type: 'reduce_carbs',
+        priority: 'medium',
+        message: `Reduce net carbs by ${carbsOver.toFixed(1)}g (to under 5g) to eliminate the -${ketoScore.penalties.carbPenalty} carb penalty and hit a perfect score.`,
+        action: {
+          impact: `+${ketoScore.penalties.carbPenalty} score points`,
+        },
+      });
+    }
+
+    // Protein penalty: protein > 35% of net energy
+    if (ketoScore.penalties.proteinPenalty > 0) {
+      // Calculate fat needed to bring protein below 35%
+      // protein_cals / (fat_cals + protein_cals + carb_cals) < 0.35
+      const proteinCals = protein * CALORIES_PER_GRAM.protein;
+      const carbCals = netCarbs * CALORIES_PER_GRAM.carbs;
+      
+      // target: proteinCals < 0.35 * (fatCals + proteinCals + carbCals)
+      // proteinCals < 0.35 * fatCals + 0.35 * proteinCals + 0.35 * carbCals
+      // 0.65 * proteinCals < 0.35 * fatCals + 0.35 * carbCals
+      // fatCals > (0.65 * proteinCals - 0.35 * carbCals) / 0.35
+      const targetFatCals = (0.65 * proteinCals - 0.35 * carbCals) / 0.35;
+      const currentFatCals = fat * CALORIES_PER_GRAM.fat;
+      const additionalFatCalsNeeded = Math.max(0, targetFatCals - currentFatCals);
+      const additionalFatGrams = Math.ceil(additionalFatCalsNeeded / CALORIES_PER_GRAM.fat);
+
+      if (additionalFatGrams > 0 && additionalFatGrams <= 50) {
+        suggestions.push({
+          type: 'balance_protein',
+          priority: 'low',
+          message: `Add ${additionalFatGrams}g of fat (butter/oil) to balance the protein ratio below 35% and earn +5 score points.`,
+          action: {
+            ingredient: 'Butter',
+            amount: Math.ceil(additionalFatGrams / 11.5),
+            unit: 'tbsp',
+            impact: `+${ketoScore.penalties.proteinPenalty} score points`,
+          },
+        });
+      } else {
+        suggestions.push({
+          type: 'balance_protein',
+          priority: 'low',
+          message: `Protein is ${percents.proteinPercent}% of net energy (>${KETO_SCORE_PROTEIN_THRESHOLD}%). Consider adding more fat or reducing protein.`,
+        });
+      }
+    }
+  }
+
+  // === CASE 4: Perfect Keto (Score = 100) ===
+  if (ketoScore.isKeto && ketoScore.score === 100) {
+    suggestions.push({
+      type: 'reduce_carbs',
+      priority: 'low',
+      message: '✨ Perfect keto compliance! No optimization needed.',
+    });
+  }
+
+  return {
+    isKeto: ketoScore.isKeto,
+    ketoScore,
+    suggestions,
+    canAutoOptimize: suggestions.some(s => s.action?.ingredient !== undefined),
+  };
+}
+
+/**
+ * Auto-optimize a recipe's nutrition to be keto compliant
+ * Returns suggested additions/modifications
+ */
+export function autoOptimizeForKeto(
+  nutrition: RawNutritionData,
+  servings: number = 1
+): { 
+  addOns: Array<{ name: string; amount: number; unit: string; macros: IngredientMacros }>;
+  resultingNutrition: RawNutritionData;
+} {
+  const addOns: Array<{ name: string; amount: number; unit: string; macros: IngredientMacros }> = [];
+  let workingNutrition = { ...nutrition };
+
+  const protein = workingNutrition.protein_g ?? 0;
+  let fat = workingNutrition.fat_g ?? 0;
+  const totalCarbs = workingNutrition.carbs_g ?? 0;
+  const fiber = workingNutrition.fiber_g ?? 0;
+
+  const netCarbs = calculateNetCarbs(totalCarbs, fiber, 0);
+  
+  // If net carbs are too high, we can't auto-optimize (need to reduce ingredients)
+  if (netCarbs > KETO_BADGE_MAX_NET_CARBS) {
+    return { addOns: [], resultingNutrition: workingNutrition };
+  }
+
+  // Calculate fat needed to reach 60% threshold
+  const netEnergy = calculateNetEnergy(fat, protein, netCarbs);
+  const percents = calculateMacroPercents(fat, protein, netCarbs, netEnergy);
+
+  if (percents.fatPercent < KETO_BADGE_MIN_FAT_PERCENT) {
+    const proteinCals = protein * CALORIES_PER_GRAM.protein;
+    const carbCals = netCarbs * CALORIES_PER_GRAM.carbs;
+    const nonFatCals = proteinCals + carbCals;
+    
+    const targetFatPercent = 0.61;
+    const targetFatCals = (targetFatPercent * nonFatCals) / (1 - targetFatPercent);
+    const currentFatCals = fat * CALORIES_PER_GRAM.fat;
+    const additionalFatCalsNeeded = Math.max(0, targetFatCals - currentFatCals);
+    const additionalFatGrams = Math.ceil(additionalFatCalsNeeded / CALORIES_PER_GRAM.fat);
+
+    if (additionalFatGrams > 0) {
+      // Use olive oil as default fat add-on
+      const oliveOilTbsp = Math.ceil(additionalFatGrams / 13.5);
+      const oliveOilMacros = USDA_REFERENCES['olive_oil_tbsp'];
+      
+      addOns.push({
+        name: 'Olive Oil',
+        amount: oliveOilTbsp,
+        unit: 'tbsp',
+        macros: {
+          ...oliveOilMacros,
+          calories: oliveOilMacros.calories * oliveOilTbsp,
+          fat: oliveOilMacros.fat * oliveOilTbsp,
+        },
+      });
+
+      // Update working nutrition
+      fat += oliveOilMacros.fat * oliveOilTbsp;
+      workingNutrition.fat_g = fat;
+      workingNutrition.calories = (workingNutrition.calories ?? 0) + (oliveOilMacros.calories * oliveOilTbsp);
+    }
+  }
+
+  return {
+    addOns,
+    resultingNutrition: workingNutrition,
+  };
+}
