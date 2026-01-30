@@ -37,6 +37,7 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
   const { t } = useTranslation();
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [title, setTitle] = useState(recipe.title || '');
   const [imageUrl, setImageUrl] = useState<string | undefined>(recipe.image_url);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -545,11 +546,21 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
         }
       }
 
-      // Update recipe image_url if changed
+      // Update recipe title and image_url if changed
+      const recipeUpdates: Record<string, string | null> = {};
+      
+      if (title.trim() && title.trim() !== recipe.title) {
+        recipeUpdates.title = title.trim();
+      }
+      
       if (imageUrl !== recipe.image_url) {
+        recipeUpdates.image_url = imageUrl || null;
+      }
+      
+      if (Object.keys(recipeUpdates).length > 0) {
         await supabase
           .from('recipes')
-          .update({ image_url: imageUrl || null })
+          .update(recipeUpdates)
           .eq('id', recipe.id);
       }
 
@@ -600,6 +611,17 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
         className="hidden"
         onChange={onFileSelect}
       />
+
+      {/* Title Section */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3">{t('recipes.title', 'Recipe Name')}</h3>
+        <Input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder={t('recipes.titlePlaceholder', 'Enter recipe name...')}
+          className="text-lg font-medium"
+        />
+      </div>
 
       {/* Photo Section */}
       <div>
