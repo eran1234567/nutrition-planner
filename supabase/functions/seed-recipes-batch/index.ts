@@ -2,6 +2,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.21.0";
 
+// Import shared Neutron Engine - single source of truth
+import {
+  buildNutritionPromptInstructions,
+  KETO_BADGE_MAX_NET_CARBS,
+  KETO_BADGE_MIN_FAT_PERCENT,
+} from "../_shared/neutron.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-lovable-internal",
@@ -85,7 +92,7 @@ No text, no extra garnish or props not in the recipe. Natural lighting, overhead
   return null;
 }
 
-// Calculate serving_size using AI Chef rules
+// Calculate serving_size using AI Chef rules with Neutron Engine context
 async function calculateServingSize(
   title: string,
   servings: number,
@@ -118,6 +125,8 @@ CRITICAL CALCULATION RULES:
    - Combine protein count + sides: "3 chicken tenders + 1 cup vegetables"
 
 DO NOT say generic things like "1 chicken breast equivalent" - be SPECIFIC.
+
+${buildNutritionPromptInstructions()}
 
 Respond with ONLY the serving size description, no explanation. Keep it under 60 characters.`;
 

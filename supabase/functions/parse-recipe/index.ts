@@ -4,6 +4,19 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.21.0";
 import JSZip from 'https://esm.sh/jszip@3.10.1';
 
+// Import shared Neutron Engine - single source of truth for all nutrition calculations
+import {
+  buildNutritionPromptInstructions,
+  calculateIngredientMacros,
+  findIngredientInCache,
+  parseIngredientQuantity,
+  extractExplicitMacros,
+  calculateNetCarbs,
+  USDA_REFERENCES,
+  type DbIngredientNutrition,
+  type IngredientMacros,
+  type RawNutritionData,
+} from "../_shared/neutron.ts";
 // Declare EdgeRuntime for background tasks
 declare const EdgeRuntime: { waitUntil: (promise: Promise<any>) => void };
 
@@ -185,9 +198,8 @@ async function extractTextFromDocx(base64Content: string): Promise<string> {
 
 // ═══════════════════════════════════════════════════════════════
 // DETERMINISTIC NUTRITION VALIDATION & CORRECTION
+// Uses shared Neutron Engine from _shared/neutron.ts
 // ═══════════════════════════════════════════════════════════════
-// This function programmatically validates AI-calculated nutrition
-// and corrects it when the AI makes math errors.
 
 interface NutritionData {
   calories: number;
@@ -199,33 +211,6 @@ interface NutritionData {
   sodium_mg?: number;
   saturated_fat_g?: number;
   cholesterol_mg?: number;
-}
-
-interface IngredientMacros {
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  fiber: number;
-  sugar?: number;
-  sodium?: number;
-  saturated_fat?: number;
-  cholesterol?: number;
-}
-
-interface DbIngredientNutrition {
-  name: string;
-  keywords: string[];
-  serving_description: string;
-  calories: number;
-  protein_g: number;
-  carbs_g: number;
-  fat_g: number;
-  fiber_g: number;
-  sugar_g: number;
-  sodium_mg: number;
-  saturated_fat_g: number;
-  cholesterol_mg: number;
 }
 
 // Cache for ingredient_nutrition table data (loaded once per function invocation)
@@ -257,202 +242,12 @@ async function loadIngredientNutritionCache(supabase: any): Promise<DbIngredient
   }
 }
 
-function findIngredientInCache(text: string, cache: DbIngredientNutrition[]): DbIngredientNutrition | null {
-  const lowerText = text.toLowerCase();
-  
-  // Score-based matching: prefer more specific matches
-  let bestMatch: DbIngredientNutrition | null = null;
-  let bestScore = 0;
-  
-  for (const item of cache) {
-    for (const keyword of item.keywords) {
-      const lowerKeyword = keyword.toLowerCase();
-      
-      // Check if keyword appears in the ingredient text
-      if (lowerText.includes(lowerKeyword)) {
-        // Score by keyword length (longer = more specific)
-        const score = lowerKeyword.length;
-        if (score > bestScore) {
-          bestScore = score;
-          bestMatch = item;
-        }
-      }
-    }
-  }
-  
-  return bestMatch;
-}
-
-// USDA reference values for common ingredients (per unit) - FALLBACK if DB is empty
-const USDA_REFERENCES: Record<string, IngredientMacros> = {
-  'egg': { calories: 72, protein: 6.3, carbs: 0.4, fat: 4.8, fiber: 0 },
-  'egg_yolk': { calories: 55, protein: 2.7, carbs: 0.6, fat: 4.5, fiber: 0 },
-  'egg_white': { calories: 17, protein: 3.6, carbs: 0.2, fat: 0, fiber: 0 },
-  'avocado_half': { calories: 160, protein: 2, carbs: 8.5, fat: 14.7, fiber: 7 },
-  'avocado_full': { calories: 322, protein: 4, carbs: 17, fat: 29, fiber: 13 },
-  'olive_oil_tbsp': { calories: 119, protein: 0, carbs: 0, fat: 13.5, fiber: 0 },
-  'butter_tbsp': { calories: 102, protein: 0.1, carbs: 0, fat: 11.5, fiber: 0 },
-  'keto_bread_slice': { calories: 60, protein: 6, carbs: 13, fat: 2.5, fiber: 12 },
-};
-
-function parseIngredientQuantity(text: string): number {
-  // IMPORTANT: only treat "half"/"0.5" as quantity when it appears at the start.
-  // Ingredient lines can contain other numbers (e.g., "13g carbs, 12g fiber") that must NOT affect quantity.
-  const trimmed = text.trim();
-  const halfStart = /^(?:half\b|0\.5\b|1\/2\b)/i.test(trimmed);
-  if (halfStart) return 0.5;
-
-  const numMatch = trimmed.match(/^(\d+\.?\d*)/);
-  return numMatch ? Number.parseFloat(numMatch[1]) : 1;
-}
-
-function extractExplicitMacros(text: string): Partial<IngredientMacros> | null {
-  const result: Partial<IngredientMacros> = {};
-  let hasExplicit = false;
-  
-  // Match patterns like "60 cal", "60 cals", "60 calories"
-  const calMatch = text.match(/(\d+\.?\d*)\s*(?:cal(?:orie)?s?)\b/i);
-  if (calMatch) {
-    result.calories = parseFloat(calMatch[1]);
-    hasExplicit = true;
-  }
-  
-  // Match "Xg protein" or "X g protein"
-  const proteinMatch = text.match(/(\d+\.?\d*)\s*g?\s*protein/i);
-  if (proteinMatch) {
-    result.protein = parseFloat(proteinMatch[1]);
-    hasExplicit = true;
-  }
-  
-  // Match "Xg fat" or "X g fat"
-  const fatMatch = text.match(/(\d+\.?\d*)\s*g?\s*fat/i);
-  if (fatMatch) {
-    result.fat = parseFloat(fatMatch[1]);
-    hasExplicit = true;
-  }
-  
-  // Match "Xg carbs" or "X g carbohydrates"
-  const carbMatch = text.match(/(\d+\.?\d*)\s*g?\s*carb(?:ohydrate)?s?/i);
-  if (carbMatch) {
-    result.carbs = parseFloat(carbMatch[1]);
-    hasExplicit = true;
-  }
-  
-  // Match "Xg fiber"
-  const fiberMatch = text.match(/(\d+\.?\d*)\s*g?\s*fiber/i);
-  if (fiberMatch) {
-    result.fiber = parseFloat(fiberMatch[1]);
-    hasExplicit = true;
-  }
-  
-  return hasExplicit ? result : null;
-}
-
+// calculateIngredientMacrosFromCache now uses the shared Neutron Engine
 function calculateIngredientMacrosFromCache(
   ingredientText: string, 
   cache: DbIngredientNutrition[]
 ): IngredientMacros | null {
-  const lowerText = ingredientText.toLowerCase();
-  const quantity = parseIngredientQuantity(ingredientText);
-  
-  // First check for explicit macros provided by user (highest priority)
-  const explicitMacros = extractExplicitMacros(ingredientText);
-  const isTotalMacros = lowerText.includes('total') || lowerText.includes('combined');
-  
-  if (explicitMacros) {
-    const multiplier = isTotalMacros ? 1 : quantity;
-    console.log(`[MACROS] Explicit macros in "${ingredientText}" qty=${quantity}, multiplier=${multiplier}:`, explicitMacros);
-    return {
-      calories: (explicitMacros.calories || 0) * multiplier,
-      protein: (explicitMacros.protein || 0) * multiplier,
-      carbs: (explicitMacros.carbs || 0) * multiplier,
-      fat: (explicitMacros.fat || 0) * multiplier,
-      fiber: (explicitMacros.fiber || 0) * multiplier,
-    };
-  }
-  
-  // Try to find in database cache
-  const dbMatch = findIngredientInCache(ingredientText, cache);
-  if (dbMatch) {
-    console.log(`[MACROS] DB match "${dbMatch.name}" for "${ingredientText}", qty=${quantity}`);
-    return {
-      calories: dbMatch.calories * quantity,
-      protein: Number(dbMatch.protein_g) * quantity,
-      carbs: Number(dbMatch.carbs_g) * quantity,
-      fat: Number(dbMatch.fat_g) * quantity,
-      fiber: Number(dbMatch.fiber_g) * quantity,
-      sugar: Number(dbMatch.sugar_g) * quantity,
-      sodium: Number(dbMatch.sodium_mg) * quantity,
-      saturated_fat: Number(dbMatch.saturated_fat_g) * quantity,
-      cholesterol: Number(dbMatch.cholesterol_mg) * quantity,
-    };
-  }
-  
-  // Fallback to hardcoded USDA references for very common items
-  // Detect egg yolks specifically
-  if (lowerText.includes('yolk') && !lowerText.includes('whole')) {
-    console.log(`[MACROS] Fallback: egg yolks, qty=${quantity}`);
-    return {
-      calories: USDA_REFERENCES.egg_yolk.calories * quantity,
-      protein: USDA_REFERENCES.egg_yolk.protein * quantity,
-      carbs: USDA_REFERENCES.egg_yolk.carbs * quantity,
-      fat: USDA_REFERENCES.egg_yolk.fat * quantity,
-      fiber: 0,
-    };
-  }
-  
-  // Detect egg whites
-  if (lowerText.includes('white') && lowerText.includes('egg')) {
-    console.log(`[MACROS] Fallback: egg whites, qty=${quantity}`);
-    return {
-      calories: USDA_REFERENCES.egg_white.calories * quantity,
-      protein: USDA_REFERENCES.egg_white.protein * quantity,
-      carbs: USDA_REFERENCES.egg_white.carbs * quantity,
-      fat: 0,
-      fiber: 0,
-    };
-  }
-  
-  // Detect whole eggs
-  if (lowerText.includes('egg') && !lowerText.includes('yolk') && !lowerText.includes('white')) {
-    console.log(`[MACROS] Fallback: whole eggs, qty=${quantity}`);
-    return {
-      calories: USDA_REFERENCES.egg.calories * quantity,
-      protein: USDA_REFERENCES.egg.protein * quantity,
-      carbs: USDA_REFERENCES.egg.carbs * quantity,
-      fat: USDA_REFERENCES.egg.fat * quantity,
-      fiber: 0,
-    };
-  }
-  
-  // Detect avocado
-  if (lowerText.includes('avocado')) {
-    console.log(`[MACROS] Fallback: avocado, qty=${quantity}`);
-    return {
-      calories: USDA_REFERENCES.avocado_full.calories * quantity,
-      protein: USDA_REFERENCES.avocado_full.protein * quantity,
-      carbs: USDA_REFERENCES.avocado_full.carbs * quantity,
-      fat: USDA_REFERENCES.avocado_full.fat * quantity,
-      fiber: USDA_REFERENCES.avocado_full.fiber * quantity,
-    };
-  }
-  
-  // Detect keto bread / low carb bread
-  if ((lowerText.includes('keto') && lowerText.includes('bread')) || 
-      (lowerText.includes('low carb') && lowerText.includes('bread')) ||
-      (lowerText.includes('low-carb') && lowerText.includes('bread'))) {
-    console.log(`[MACROS] Fallback: keto bread, qty=${quantity}`);
-    return {
-      calories: USDA_REFERENCES.keto_bread_slice.calories * quantity,
-      protein: USDA_REFERENCES.keto_bread_slice.protein * quantity,
-      carbs: USDA_REFERENCES.keto_bread_slice.carbs * quantity,
-      fat: USDA_REFERENCES.keto_bread_slice.fat * quantity,
-      fiber: USDA_REFERENCES.keto_bread_slice.fiber * quantity,
-    };
-  }
-  
-  console.log(`[MACROS] No match found for: "${ingredientText}"`);
-  return null; // Unknown ingredient - let AI handle it
+  return calculateIngredientMacros(ingredientText, cache);
 }
 
 function extractIngredientLinesFromContent(content: string): string[] {
