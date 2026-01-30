@@ -1,12 +1,6 @@
 import { useState } from 'react';
 import { Play, ExternalLink, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 
 interface VideoHeroProps {
   sourceUrl: string | null;
@@ -76,18 +70,10 @@ export function VideoHero({ sourceUrl, imageUrl, title, isUserRecipe = false, cl
             
             {/* Source badge - show My Recipe badge for user recipes, YouTube otherwise */}
             {isUserRecipe ? (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="absolute top-4 left-4 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg">
-                      <User className="w-4 h-4" />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" className="text-xs">
-                    My Recipe
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <div className="absolute top-4 left-16 px-2.5 py-1 rounded-full bg-primary text-primary-foreground text-xs font-semibold flex items-center gap-1.5 shadow-lg">
+                <User className="w-3.5 h-3.5" />
+                My Recipe
+              </div>
             ) : (
               <div className="absolute top-4 left-4 px-2 py-1 rounded bg-red-600 text-white text-xs font-semibold flex items-center gap-1">
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -147,18 +133,10 @@ export function VideoHero({ sourceUrl, imageUrl, title, isUserRecipe = false, cl
         
         {/* Source badge - show My Recipe badge for user recipes, Instagram otherwise */}
         {isUserRecipe ? (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="absolute top-4 left-4 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg">
-                  <User className="w-4 h-4" />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="text-xs">
-                My Recipe
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <div className="absolute top-4 left-16 px-2.5 py-1 rounded-full bg-primary text-primary-foreground text-xs font-semibold flex items-center gap-1.5 shadow-lg">
+            <User className="w-3.5 h-3.5" />
+            My Recipe
+          </div>
         ) : (
           <div className="absolute top-4 left-4 px-2 py-1 rounded bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-semibold">
             Instagram
