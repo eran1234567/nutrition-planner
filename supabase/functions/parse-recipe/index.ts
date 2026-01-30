@@ -1141,26 +1141,48 @@ FIBER AND NET CARBS - CRITICAL FOR CALORIE ACCURACY
 ═══════════════════════════════════════════════════════════════
 FIBER DOES NOT CONTRIBUTE CALORIES! This is critical for keto/high-fiber foods.
 
+⚠️⚠️⚠️ CRITICAL DISTINCTION - DO NOT CONFUSE THESE ⚠️⚠️⚠️
+- "carbs_g" in JSON = TOTAL CARBOHYDRATES (includes fiber!)
+- "fiber_g" in JSON = FIBER (subset of total carbs)
+- Net Carbs = carbs_g - fiber_g (calculated by the UI, NOT stored in JSON)
+
+WRONG: Setting carbs_g to (total carbs - fiber) ← THIS IS NET CARBS, NOT TOTAL!
+RIGHT: Setting carbs_g to the FULL carb count including fiber
+
+EXAMPLE - Keto bread labeled "13g carbs (12g fiber)":
+- carbs_g should be 13 (the TOTAL including fiber)
+- fiber_g should be 12
+- Net carbs would be 13 - 12 = 1g (calculated later by UI, not stored)
+
+COMMON MISTAKE: If bread has 13g carbs with 12g fiber, do NOT set carbs_g to 1!
+
 When user provides carbs AND fiber (e.g., "13g carbs, 12g fiber"):
-- NET CARBS = Total Carbs - Fiber (e.g., 13g - 12g = 1g net carb)
-- CALORIES from carbs = NET CARBS × 4 (NOT total carbs × 4!)
+- The "13g carbs" IS the total carbs → set carbs_g = 13
+- The "12g fiber" is fiber → set fiber_g = 12
+- NET CARBS = 13 - 12 = 1g (used only for calorie calculation, not stored)
+- CALORIES from carbs = NET CARBS × 4 = 1 × 4 = 4 cal
 
 WORKED EXAMPLE - Keto Breakfast (4 eggs + half avocado + 4 slices keto bread):
-If user specifies keto bread as: 60 cal, 2.5g fat, 13g carbs (12g fiber), 6g protein per slice
+If user specifies keto bread as: 69 cal, 2.5g fat, 13g carbs (12g fiber), 6g protein per slice
 
-Step 1 - Calculate per ingredient:
-  4 eggs: 288 cal, 25g protein, 2g carbs, 0g fiber, 19g fat
-  Half avocado: 160 cal, 2g protein, 8g carbs, 7g fiber, 15g fat
-  4 slices keto bread: 240 cal, 24g protein, 52g carbs, 48g fiber, 10g fat
+Step 1 - Calculate per ingredient (TOTAL CARBS, not net!):
+  4 eggs: 288 cal, 25g protein, 2g TOTAL carbs, 0g fiber, 19g fat
+  Half avocado: 160 cal, 2g protein, 9g TOTAL carbs, 7g fiber, 15g fat
+  4 slices keto bread: 4 × (69cal, 6g pro, 13g TOTAL carbs, 12g fiber, 2.5g fat)
+                     = 276 cal, 24g protein, 52g TOTAL carbs, 48g fiber, 10g fat
 
 Step 2 - Sum ALL ingredients:
-  Total calories: 288 + 160 + 240 = 688 cal
+  Total calories: 288 + 160 + 276 = 724 cal
   Total protein: 25 + 2 + 24 = 51g
-  Total carbs: 2 + 8 + 52 = 62g
-  Total fiber: 0 + 7 + 48 = 55g
+  Total CARBS (carbs_g): 2 + 9 + 52 = 63g ← THIS IS WHAT carbs_g SHOULD BE!
+  Total fiber (fiber_g): 0 + 7 + 48 = 55g
   Total fat: 19 + 15 + 10 = 44g
 
-Step 3 - Net carbs verification: 62g - 55g = 7g net carbs
+Step 3 - Net carbs verification: 63g - 55g = 8g net carbs
+
+⚠️ FINAL VALIDATION - BEFORE RETURNING JSON:
+1. Check: Is carbs_g >= fiber_g? (If not, you've made an error!)
+2. If carbs_g < fiber_g, you accidentally used net carbs instead of total carbs. FIX IT!
 
 CALORIE CALCULATION HIERARCHY (CRITICAL):
 1. If user provides CALORIES for an ingredient → USE THAT EXACT VALUE (do not recalculate!)
@@ -1170,8 +1192,10 @@ CALORIE CALCULATION HIERARCHY (CRITICAL):
 CALCULATION METHOD (follow step by step):
 1. FIRST: Extract any explicit nutrition values the user provided in ingredient descriptions
 2. For EACH ingredient:
-   a. Extract protein, total carbs, fiber, fat from user OR use USDA reference
-   b. For CALORIES: check if user provided a value → if yes, use it; if no, calculate from macros
+   a. Parse the QUANTITY (e.g., "1", "half", "4 slices")
+   b. Look up per-unit nutrition values from user input OR use USDA reference
+   c. MULTIPLY all values by the quantity - including fiber, carbs, protein, fat, calories
+   d. For CALORIES: check if user provided a value → if yes, use it; if no, calculate from macros
 3. SUM all ingredient values to get TOTAL recipe values
 4. DIVIDE total by servings to get per-serving values
 5. Round to nearest integer
@@ -1378,6 +1402,7 @@ Always respond with valid JSON only, no markdown code blocks or explanation.`;
         "saturated_fat_g": 8,
         "cholesterol_mg": 85
       },
+      "NOTE_FOR_AI": "carbs_g MUST be TOTAL carbs including fiber. If fiber_g > carbs_g, you have an error!",
       "tags": ["dinner", "high-protein", "meal-prep"],
       "diet_tags": ["mediterranean"],
       "health_tags": ["diabetes-friendly"],
