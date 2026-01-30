@@ -28,7 +28,7 @@ import { AddToPlanModal } from '@/components/plan/AddToPlanModal';
 import { VideoHero } from '@/components/recipe/VideoHero';
 import { CookingMode } from '@/components/recipe/CookingMode';
 import { KetoLogicTooltip } from '@/components/recipe/KetoLogicTooltip';
-import { NeutronSuggestionCard } from '@/components/recipe/NeutronSuggestionCard';
+import { KetoSandbox } from '@/components/recipe/KetoSandbox';
 import { KetoDiscoveryBanner } from '@/components/recipe/KetoDiscoveryBanner';
 import { useRecipeById } from '@/hooks/useGlobalRecipes';
 import { useMealPlanStore } from '@/stores/mealPlanStore';
@@ -730,15 +730,29 @@ export default function RecipeDetail() {
             </div>
           )}
 
-          {/* Neutron Optimizer Suggestions - show in Keto Mode for any recipe with a ketoScore < 100 */}
-          {isKetoMode && recipe?.ingredients && neutronBadges?.ketoScore && neutronBadges.ketoScore.score < 100 && (
-            <NeutronSuggestionCard
-              nutrition={recipe.nutrition as RawNutritionData}
+          {/* Keto Sandbox - show in Keto Mode for any recipe with a ketoScore < 100 */}
+          {isKetoMode && recipe?.ingredients && neutronBadges?.ketoScore && neutronBadges.ketoScore.score < 100 && isUserRecipe && (
+            <KetoSandbox
+              recipeId={recipe.id}
+              nutrition={recipe.nutrition as any}
               ingredients={recipe.ingredients.map(ing => ({
+                id: ing.id,
                 name: ing.name,
                 quantity: ing.quantity,
                 unit: ing.unit,
+                normalized_name: ing.normalized_name,
+                order_index: ing.order_index,
               }))}
+              steps={recipe.steps?.map(step => ({
+                id: step.id,
+                instruction: step.instruction,
+                step_number: step.step_number,
+              })) || []}
+              servings={recipe.servings || 1}
+              onCommit={() => {
+                // Refresh the recipe data
+                queryClient.invalidateQueries({ queryKey: ['recipe', recipe.id] });
+              }}
             />
           )}
 
