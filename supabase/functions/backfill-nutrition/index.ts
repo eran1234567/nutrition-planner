@@ -70,7 +70,10 @@ serve(async (req) => {
     console.log(`Found ${recipesToBackfill.length} recipes to backfill`);
 
     const results: Array<{ id: string; title: string; status: string; data?: any }> = [];
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-2.0-flash',
+      generationConfig: { temperature: 0 }, // Deterministic output for consistent macros
+    });
 
     for (const nutritionRow of recipesToBackfill) {
       const recipe = nutritionRow.recipes as any;
@@ -93,10 +96,16 @@ serve(async (req) => {
         const prompt = `You are a nutrition expert. Given a recipe and its ingredients, estimate TOTAL values for the ENTIRE recipe (not per serving). Return ONLY a JSON object:
 {"sugar_g": <number>, "saturated_fat_g": <number>, "cholesterol_mg": <number|}
 
+CRITICAL - FIBER AND NET CARBS:
+Fiber does NOT contribute calories! When calculating any calorie-related values:
+- NET CARBS = Total Carbs - Fiber
+- CALORIES from carbs = NET CARBS × 4 (NOT total carbs × 4!)
+
 Examples:
 - 1 tbsp sugar = 12g sugar
 - 1 egg = 186mg cholesterol, 1.6g saturated fat
 - Vegan = 0 cholesterol
+- Keto bread (13g carbs, 12g fiber) = only 1g net carb = 4 calories from carbs
 No explanation, just JSON.
 
 Recipe: ${recipe.title}
