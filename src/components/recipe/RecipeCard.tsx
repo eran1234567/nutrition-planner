@@ -332,24 +332,24 @@ export function RecipeCard({
 
         {/* Nutrition per serving - Neutron-aware */}
         {hasNutrition && (
-          <div className="bg-muted/50 rounded-lg p-2 mt-1">
-            <p className="text-2xs text-muted-foreground mb-1.5 font-medium">Per serving</p>
-            <div className="flex items-center justify-between gap-1">
-              <div className="text-center flex-1">
+          <div className="bg-muted/50 rounded-lg px-1.5 py-2 mt-1">
+            <p className="text-2xs text-muted-foreground mb-1.5 font-medium text-center">Per serving</p>
+            <div className="flex items-center justify-around">
+              <div className="text-center">
                 <p className="text-sm font-bold text-[hsl(var(--calories))]">{Math.round(nutrition.calories)}</p>
-                <p className="text-2xs text-muted-foreground">kcal</p>
+                <p className="text-2xs text-muted-foreground whitespace-nowrap">kcal</p>
               </div>
-              <div className="text-center flex-1">
+              <div className="text-center">
                 <p className="text-sm font-bold text-[hsl(var(--protein))]">{Math.round(nutrition.protein)}g</p>
-                <p className="text-2xs text-muted-foreground">protein</p>
+                <p className="text-2xs text-muted-foreground whitespace-nowrap">protein</p>
               </div>
-              <div className="text-center flex-1">
+              <div className="text-center">
                 <p className="text-sm font-bold text-[hsl(var(--fat))]">{Math.round(nutrition.fat)}g</p>
-                <p className="text-2xs text-muted-foreground">fat</p>
+                <p className="text-2xs text-muted-foreground whitespace-nowrap">fat</p>
               </div>
-              <div className="text-center flex-1">
+              <div className="text-center">
                 <p className="text-sm font-bold text-[hsl(var(--carbs))]">{Math.round(nutrition.displayCarbs)}g</p>
-                <p className="text-2xs text-muted-foreground whitespace-nowrap">{mode === 'keto' ? 'net' : 'carbs'}</p>
+                <p className="text-2xs text-muted-foreground whitespace-nowrap">{mode === 'keto' ? 'net carbs' : 'carbs'}</p>
               </div>
             </div>
           </div>
