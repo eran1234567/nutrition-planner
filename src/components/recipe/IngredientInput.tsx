@@ -70,23 +70,63 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
         const product = data.product;
         const nutriments = product.nutriments || {};
         
-        // Show review modal instead of adding directly
+        // Extract serving quantity in grams (for scaling 100g values)
+        const servingQuantityGrams = product.serving_quantity || null;
+        const hasServingData = nutriments['energy-kcal_serving'] !== undefined;
+        
+        // Calculate nutrition values - prefer per-serving, otherwise scale from 100g
+        let calories: number | undefined;
+        let protein: number | undefined;
+        let carbs: number | undefined;
+        let fat: number | undefined;
+        
+        if (hasServingData) {
+          // Use per-serving values directly
+          calories = nutriments['energy-kcal_serving'];
+          protein = nutriments.proteins_serving;
+          carbs = nutriments.carbohydrates_serving;
+          fat = nutriments.fat_serving;
+        } else if (servingQuantityGrams && nutriments['energy-kcal_100g'] !== undefined) {
+          // Scale 100g values to serving size: (value_per_100g / 100) * serving_grams
+          const scaleFactor = servingQuantityGrams / 100;
+          calories = Math.round((nutriments['energy-kcal_100g'] || 0) * scaleFactor);
+          protein = Math.round(((nutriments.proteins_100g || 0) * scaleFactor) * 10) / 10;
+          carbs = Math.round(((nutriments.carbohydrates_100g || 0) * scaleFactor) * 10) / 10;
+          fat = Math.round(((nutriments.fat_100g || 0) * scaleFactor) * 10) / 10;
+        } else {
+          // No serving quantity available - use 100g values as-is (user can edit)
+          calories = nutriments['energy-kcal_100g'];
+          protein = nutriments.proteins_100g;
+          carbs = nutriments.carbohydrates_100g;
+          fat = nutriments.fat_100g;
+        }
+        
+        // Parse serving size to extract natural unit (e.g., "2 Rounded Teaspoons (11.7g)" -> "2 Rounded Teaspoons")
+        let naturalUnit = 'serving';
+        const servingSizeRaw = product.serving_size || '';
+        if (servingSizeRaw) {
+          // Remove weight in parentheses: "2 Rounded Teaspoons (11.7g)" -> "2 Rounded Teaspoons"
+          const withoutWeight = servingSizeRaw.replace(/\s*\([^)]*g\)/gi, '').trim();
+          if (withoutWeight) {
+            naturalUnit = withoutWeight;
+          }
+        }
+        
+        // Show review modal
         setPendingProduct({
           barcode,
           name: product.product_name || product.generic_name || barcode,
           servingSize: product.serving_size,
-          nutrition: {
-            calories: nutriments['energy-kcal_serving'] || nutriments['energy-kcal_100g'],
-            protein: nutriments.proteins_serving || nutriments.proteins_100g,
-            carbs: nutriments.carbohydrates_serving || nutriments.carbohydrates_100g,
-            fat: nutriments.fat_serving || nutriments.fat_100g,
-          }
+          servingQuantityGrams,
+          naturalUnit,
+          nutrition: { calories, protein, carbs, fat }
         });
       } else {
         // Product not found - show review with placeholder
         setPendingProduct({
           barcode,
           name: `Product (${barcode})`,
+          naturalUnit: 'serving',
           nutrition: {}
         });
         toast.info(t('recipes.productNotFound', 'Product not in database. You can enter details manually.'));
@@ -97,6 +137,7 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
       setPendingProduct({
         barcode,
         name: `Scanned item (${barcode})`,
+        naturalUnit: 'serving',
         nutrition: {}
       });
       toast.error(t('recipes.lookupFailed', 'Could not look up product. Enter details manually.'));
@@ -105,7 +146,7 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
     }
   };
 
-  const handleConfirmProduct = (quantity: string, unit: string) => {
+  const handleConfirmProduct = (quantity: string, unit: string, nutrition: ScannedProduct['nutrition']) => {
     if (!pendingProduct) return;
     
     const newIngredient: IngredientItem = {
@@ -114,7 +155,7 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
       quantity,
       unit,
       barcode: pendingProduct.barcode,
-      nutrition: pendingProduct.nutrition,
+      nutrition, // Use the edited nutrition values from the modal
     };
 
     onChange([...ingredients, newIngredient]);
