@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { useTranslation } from 'react-i18next';
-import { X, Loader2, Camera, ScanBarcode, Play } from 'lucide-react';
+import { X, Loader2, Play, Flashlight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -51,6 +51,8 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
       if (containerRef.current && !document.getElementById(scannerId)) {
         const scannerDiv = document.createElement('div');
         scannerDiv.id = scannerId;
+        scannerDiv.style.width = '100%';
+        scannerDiv.style.height = '100%';
         containerRef.current.appendChild(scannerDiv);
       }
 
@@ -67,20 +69,17 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
 
       const scanner = new Html5Qrcode(scannerId, {
         formatsToSupport,
-        // Improves barcode detection on platforms where BarcodeDetector exists.
-        // (On iOS/Safari this can make a huge difference.)
         useBarCodeDetectorIfSupported: true,
         verbose: false,
       });
       scannerRef.current = scanner;
 
       const qrbox = (viewfinderWidth: number, viewfinderHeight: number) => {
-        // Make the scan window large for 1D barcodes (helps on mobile cameras).
-        const width = Math.floor(viewfinderWidth * 0.95);
-        const height = Math.floor(viewfinderHeight * 0.45);
+        const width = Math.floor(viewfinderWidth * 0.85);
+        const height = Math.floor(viewfinderHeight * 0.25);
         return {
-          width: Math.min(width, 500),
-          height: Math.min(height, 250),
+          width: Math.min(width, 320),
+          height: Math.min(height, 120),
         };
       };
 
@@ -90,12 +89,17 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
         {
           fps: 15,
           qrbox,
-          aspectRatio: 1.777,
+          aspectRatio: 1.0, // Square aspect for full-screen feel
         },
         (decodedText, decodedResult) => {
-          // Barcode scanned successfully
           console.log('[BarcodeScanner] Scanned:', decodedText, decodedResult.result.format);
           const format = decodedResult.result.format?.formatName || 'unknown';
+          
+          // Vibrate on successful scan if available
+          if ('vibrate' in navigator) {
+            navigator.vibrate(100);
+          }
+          
           onScan(decodedText, format);
           
           // Stop scanner after successful scan
@@ -104,8 +108,6 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
           onClose();
         },
         (errorMessage) => {
-          // Scan failure (expected during continuous scanning)
-          // Only log periodically to avoid console spam
           if (Math.random() < 0.01) {
             console.debug('[BarcodeScanner] Scan attempt (no match):', errorMessage);
           }
@@ -118,7 +120,6 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
     } catch (err) {
       console.error('Scanner init error:', err);
       
-      // Check for specific error types
       if (err instanceof Error) {
         if (err.name === 'NotAllowedError') {
           setError(t('recipes.cameraPermissionDenied', 'Camera permission denied. Please allow camera access and try again.'));
@@ -141,7 +142,6 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
       scannerRef.current.stop().catch(() => {});
       scannerRef.current = null;
     }
-    // Clean up scanner element
     const el = document.getElementById(scannerIdRef.current);
     if (el) el.remove();
     setIsScanning(false);
@@ -160,42 +160,45 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/90 flex flex-col"
+        className="fixed inset-0 z-50 bg-black flex flex-col"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 text-white">
-          <div className="flex items-center gap-3">
-            <ScanBarcode className="w-6 h-6" />
-            <div>
-              <h2 className="font-semibold">{t('recipes.scanBarcode', 'Scan Barcode')}</h2>
+        {/* Full-screen camera container */}
+        <div 
+          ref={containerRef} 
+          className="absolute inset-0 [&>div]:!w-full [&>div]:!h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover"
+        />
+
+        {/* Overlay controls */}
+        <div className="relative z-10 flex flex-col h-full">
+          {/* Top bar */}
+          <div className="flex items-center justify-between p-4 pt-safe">
+            <div className="text-white">
+              <h2 className="font-semibold text-lg">{t('recipes.scanBarcode', 'Scan Barcode')}</h2>
               <p className="text-xs text-white/70">
                 {t('recipes.scanBarcodeHint', 'Point camera at product barcode')}
               </p>
             </div>
+            <button
+              onClick={handleClose}
+              className="w-10 h-10 rounded-full bg-black/50 backdrop-blur-sm text-white flex items-center justify-center"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-white hover:bg-white/20"
-            onClick={handleClose}
-          >
-            <X className="w-5 h-5" />
-          </Button>
-        </div>
 
-        {/* Scanner area */}
-        <div className="flex-1 flex items-center justify-center p-4">
-          <div className="relative w-full max-w-md aspect-video rounded-xl overflow-hidden bg-black">
+          {/* Center content */}
+          <div className="flex-1 flex items-center justify-center">
             {/* Initial state - show start button */}
             {!isScanning && !isInitializing && !error && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-white gap-4">
-                <Camera className="w-16 h-16 text-white/50" />
-                <p className="text-sm text-white/70 text-center px-4">
-                  {t('recipes.tapToStartCamera', 'Tap the button below to start the camera')}
-                </p>
+              <div className="flex flex-col items-center justify-center text-white gap-6 p-4">
+                <div className="w-64 h-32 border-2 border-white/50 rounded-xl flex items-center justify-center">
+                  <p className="text-sm text-white/70 text-center px-4">
+                    {t('recipes.tapToStartCamera', 'Tap below to start scanning')}
+                  </p>
+                </div>
                 <Button
                   onClick={startScanner}
-                  className="gap-2"
+                  className="gap-2 bg-white text-black hover:bg-white/90"
                   size="lg"
                 >
                   <Play className="w-5 h-5" />
@@ -205,15 +208,14 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
             )}
 
             {isInitializing && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-white gap-3">
+              <div className="flex flex-col items-center justify-center text-white gap-3">
                 <Loader2 className="w-8 h-8 animate-spin" />
                 <p className="text-sm">{t('recipes.initializingCamera', 'Initializing camera...')}</p>
               </div>
             )}
 
             {error && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-white gap-3 p-4 text-center">
-                <Camera className="w-12 h-12 text-white/50" />
+              <div className="flex flex-col items-center justify-center text-white gap-3 p-4 text-center">
                 <p className="text-sm text-destructive">{error}</p>
                 {!hasCamera && (
                   <p className="text-xs text-white/70">
@@ -226,38 +228,60 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
                     startScanner();
                   }}
                   variant="outline"
-                  className="mt-2"
+                  className="mt-2 bg-white/10 border-white/20 text-white hover:bg-white/20"
                 >
                   {t('common.tryAgain', 'Try Again')}
                 </Button>
               </div>
             )}
 
-            {/* Scanner will be mounted here */}
-            <div 
-              ref={containerRef} 
-              className="w-full h-full [&>div]:!border-0 [&_video]:object-cover [&_video]:rounded-xl"
-            />
+            {/* Scan frame overlay when scanning */}
+            {isScanning && !error && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                {/* Darkened corners */}
+                <div className="absolute inset-0 bg-black/40" />
+                
+                {/* Scan window cutout */}
+                <div className="relative w-72 h-28">
+                  {/* Clear the center */}
+                  <div className="absolute inset-0 bg-black/0" style={{ boxShadow: '0 0 0 9999px rgba(0,0,0,0.4)' }} />
+                  
+                  {/* Corner brackets */}
+                  <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-white rounded-tl-lg" />
+                  <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-white rounded-tr-lg" />
+                  <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-white rounded-bl-lg" />
+                  <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-white rounded-br-lg" />
+                  
+                  {/* Scanning line animation */}
+                  <motion.div
+                    className="absolute left-2 right-2 h-0.5 bg-primary"
+                    initial={{ top: '10%' }}
+                    animate={{ top: '90%' }}
+                    transition={{ duration: 2, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
-        </div>
 
-        {/* No scan hint */}
-        {isScanning && !error && showNoScanHint && (
-          <div className="absolute bottom-20 left-4 right-4 text-center text-white/90 pointer-events-none">
-            <p className="text-sm bg-black/50 rounded-lg px-4 py-2">
-              {t(
-                'recipes.noScanHint',
-                'Not scanning yet? Move closer, increase light, and keep the barcode inside the box.'
-              )}
+          {/* No scan hint */}
+          {isScanning && !error && showNoScanHint && (
+            <div className="absolute bottom-32 left-4 right-4 text-center">
+              <p className="text-sm text-white/90 bg-black/50 backdrop-blur-sm rounded-lg px-4 py-2">
+                {t(
+                  'recipes.noScanHint',
+                  'Not scanning? Move closer, increase lighting, and keep barcode steady.'
+                )}
+              </p>
+            </div>
+          )}
+
+          {/* Bottom info */}
+          <div className="p-4 pb-safe text-center">
+            <p className="text-sm text-white/70">
+              {t('recipes.supportedBarcodes', 'Supports UPC, EAN, and QR codes')}
             </p>
           </div>
-        )}
-
-        {/* Bottom info */}
-        <div className="p-4 text-center text-white/70">
-          <p className="text-sm">
-            {t('recipes.supportedBarcodes', 'Supports UPC, EAN, and QR codes')}
-          </p>
         </div>
       </motion.div>
     </AnimatePresence>
