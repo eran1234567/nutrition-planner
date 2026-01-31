@@ -5,6 +5,7 @@ import { Check, X, Package, Flame, Drumstick, Droplet, Wheat, Minus, Plus, Penci
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 export interface ScannedProduct {
   barcode: string;
@@ -12,6 +13,7 @@ export interface ScannedProduct {
   servingSize?: string;
   servingQuantityGrams?: number;
   naturalUnit?: string;
+  imageUrl?: string;
   nutrition: {
     calories?: number;
     protein?: number;
@@ -38,6 +40,8 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
     fat: 0,
   });
   const [isEditingMacros, setIsEditingMacros] = useState(false);
+  const [showFullImage, setShowFullImage] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   // Reset state when product changes
   useEffect(() => {
@@ -51,6 +55,8 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
         fat: product.nutrition.fat || 0,
       });
       setIsEditingMacros(false);
+      setImageError(false);
+      setShowFullImage(false);
     }
   }, [product]);
 
@@ -141,17 +147,32 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
           {/* Header */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Package className="w-6 h-6 text-primary" />
-              </div>
-              <div>
+              {/* Product thumbnail */}
+              <button
+                type="button"
+                onClick={() => product.imageUrl && !imageError && setShowFullImage(true)}
+                className="w-16 h-16 rounded-xl bg-muted/50 border border-border flex items-center justify-center overflow-hidden flex-shrink-0"
+                disabled={!product.imageUrl || imageError}
+              >
+                {product.imageUrl && !imageError ? (
+                  <img
+                    src={product.imageUrl}
+                    alt={product.name}
+                    className="w-full h-full object-cover"
+                    onError={() => setImageError(true)}
+                  />
+                ) : (
+                  <Package className="w-7 h-7 text-muted-foreground" />
+                )}
+              </button>
+              <div className="flex-1 min-w-0">
                 <p className="text-xs text-muted-foreground">{t('recipes.productFound', 'Product Found')}</p>
                 <h3 className="font-semibold text-lg leading-tight line-clamp-2">{product.name}</h3>
               </div>
             </div>
             <button
               onClick={onCancel}
-              className="w-8 h-8 rounded-full bg-muted flex items-center justify-center"
+              className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
@@ -266,6 +287,22 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
           </div>
         </motion.div>
       </motion.div>
+
+      {/* Full-size image dialog */}
+      <Dialog open={showFullImage} onOpenChange={setShowFullImage}>
+        <DialogContent className="max-w-sm p-2 bg-background">
+          {product.imageUrl && (
+            <img
+              src={product.imageUrl}
+              alt={product.name}
+              className="w-full h-auto rounded-lg"
+            />
+          )}
+          <p className="text-center text-sm text-muted-foreground mt-2 px-2">
+            {product.name}
+          </p>
+        </DialogContent>
+      </Dialog>
     </AnimatePresence>
   );
 }

@@ -179,11 +179,19 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
           }
         }
         
+        // Get product image (prefer front image, fallback to others)
+        const imageUrl = product.image_front_small_url 
+          || product.image_front_url 
+          || product.image_small_url 
+          || product.image_url 
+          || null;
+        
         // Show review modal
         setPendingProduct({
           barcode,
           name: product.product_name || product.generic_name || barcode,
           servingSize: product.serving_size,
+          imageUrl,
           servingQuantityGrams,
           naturalUnit,
           nutrition: { calories, protein, carbs, fat }
