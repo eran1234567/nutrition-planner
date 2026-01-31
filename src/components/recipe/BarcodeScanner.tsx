@@ -79,12 +79,10 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
       scannerRef.current = scanner;
 
       const qrbox = (viewfinderWidth: number, viewfinderHeight: number) => {
-        const width = Math.floor(viewfinderWidth * 0.85);
-        const height = Math.floor(viewfinderHeight * 0.25);
-        return {
-          width: Math.min(width, 320),
-          height: Math.min(height, 120),
-        };
+        // Large scanning area like reference - ~95% width, ~45% height
+        const width = Math.floor(viewfinderWidth * 0.95);
+        const height = Math.floor(viewfinderHeight * 0.45);
+        return { width, height };
       };
 
       // CRITICAL: getUserMedia is called here, directly in the click handler chain
