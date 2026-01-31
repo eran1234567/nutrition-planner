@@ -841,19 +841,19 @@ export default function RecipeDetail() {
               <div className="grid grid-cols-4 gap-3 mb-4">
                 <div className="text-center bg-background rounded-lg p-2">
                   <p className="text-xl font-bold text-primary">{perServingNutrition.calories}</p>
-                  <p className="text-xs text-muted-foreground">kcal</p>
+                  <p className="text-xs text-muted-foreground">Kcal</p>
                 </div>
                 <div className="text-center bg-background rounded-lg p-2">
                   <p className="text-xl font-bold text-protein">{perServingNutrition.protein_g}g</p>
-                  <p className="text-xs text-muted-foreground">protein</p>
+                  <p className="text-xs text-muted-foreground">Protein</p>
                 </div>
                 <div className="text-center bg-background rounded-lg p-2">
                   <p className="text-xl font-bold text-fat">{perServingNutrition.fat_g}g</p>
-                  <p className="text-xs text-muted-foreground">fat</p>
+                  <p className="text-xs text-muted-foreground">Fat</p>
                 </div>
                 <div className="text-center bg-background rounded-lg p-2">
                   <p className="text-xl font-bold text-carbs">{perServingNutrition.displayCarbs_g}g</p>
-                  <p className="text-xs text-muted-foreground">{isKetoMode ? 'net carbs' : 'carbs'}</p>
+                  <p className="text-xs text-muted-foreground">{isKetoMode ? 'Net Carbs' : 'Carbs'}</p>
                 </div>
               </div>
               

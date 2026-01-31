@@ -337,19 +337,19 @@ export function RecipeCard({
             <div className="flex items-center justify-around">
               <div className="text-center">
                 <p className="text-sm font-bold text-[hsl(var(--calories))]">{Math.round(nutrition.calories)}</p>
-                <p className="text-2xs text-muted-foreground whitespace-nowrap">kcal</p>
+                <p className="text-2xs text-muted-foreground whitespace-nowrap">Kcal</p>
               </div>
               <div className="text-center">
                 <p className="text-sm font-bold text-[hsl(var(--protein))]">{Math.round(nutrition.protein)}g</p>
-                <p className="text-2xs text-muted-foreground whitespace-nowrap">protein</p>
+                <p className="text-2xs text-muted-foreground whitespace-nowrap">Protein</p>
               </div>
               <div className="text-center">
                 <p className="text-sm font-bold text-[hsl(var(--fat))]">{Math.round(nutrition.fat)}g</p>
-                <p className="text-2xs text-muted-foreground whitespace-nowrap">fat</p>
+                <p className="text-2xs text-muted-foreground whitespace-nowrap">Fat</p>
               </div>
               <div className="text-center">
                 <p className="text-sm font-bold text-[hsl(var(--carbs))]">{Math.round(nutrition.displayCarbs)}g</p>
-                <p className="text-2xs text-muted-foreground whitespace-nowrap">{mode === 'keto' ? 'net carbs' : 'carbs'}</p>
+                <p className="text-2xs text-muted-foreground whitespace-nowrap">{mode === 'keto' ? 'Net Carbs' : 'Carbs'}</p>
               </div>
             </div>
           </div>
