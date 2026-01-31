@@ -214,6 +214,21 @@ Respond with ONLY the serving size, nothing else.`;
 }
 
 // Comprehensive recipe database organized by cuisine
+// Ingredient with section support for multi-part recipes
+interface SeedIngredient {
+  name: string;
+  quantity: number;
+  unit: string;
+  aisle: string;
+  section?: string; // e.g., "Main", "Marinade", "Sauce"
+}
+
+// Step with introduces_section support for contextual ingredient display
+interface SeedStep {
+  instruction: string;
+  introduces_section?: string | null; // Section name to show above this step
+}
+
 const recipesByCuisine: Record<string, Array<{
   title: string;
   description: string;
@@ -234,8 +249,8 @@ const recipesByCuisine: Record<string, Array<{
   sugar_g?: number;
   saturated_fat_g?: number;
   cholesterol_mg?: number;
-  ingredients: Array<{ name: string; quantity: number; unit: string; aisle: string }>;
-  steps: string[];
+  ingredients: SeedIngredient[];
+  steps: SeedStep[];
   tags: Array<{ tag_type: string; tag_value: string }>;
   image_prompt: string;
 }>> = {
@@ -247,11 +262,15 @@ const recipesByCuisine: Record<string, Array<{
       is_kid_friendly: true, is_meal_prep_friendly: false, is_budget_friendly: true,
       calories: 450, protein_g: 18, carbs_g: 32, fat_g: 28, fiber_g: 2, sodium_mg: 780,
       ingredients: [
-        { name: "Bread slices", quantity: 2, unit: "slices", aisle: "Bakery" },
-        { name: "Cheddar cheese", quantity: 2, unit: "slices", aisle: "Dairy" },
-        { name: "Butter", quantity: 2, unit: "tbsp", aisle: "Dairy" }
+        { name: "Bread slices", quantity: 2, unit: "slices", aisle: "Bakery", section: "Main" },
+        { name: "Cheddar cheese", quantity: 2, unit: "slices", aisle: "Dairy", section: "Main" },
+        { name: "Butter", quantity: 2, unit: "tbsp", aisle: "Dairy", section: "Main" }
       ],
-      steps: ["Butter one side of each bread slice.", "Place cheese between unbuttered sides.", "Cook in skillet until golden on both sides."],
+      steps: [
+        { instruction: "Butter one side of each bread slice.", introduces_section: "Main" },
+        { instruction: "Place cheese between unbuttered sides.", introduces_section: null },
+        { instruction: "Cook in skillet until golden on both sides.", introduces_section: null }
+      ],
       tags: [{ tag_type: "meal", tag_value: "lunch" }, { tag_type: "quick", tag_value: "under-15" }],
       image_prompt: "Golden crispy grilled cheese sandwich cut in half showing melted cheese stretching, on a white plate, food photography"
     }
@@ -369,23 +388,25 @@ serve(async (req) => {
           throw new Error(`Failed to insert recipe: ${recipeError.message}`);
         }
 
-        // Insert ingredients
+        // Insert ingredients with section support
         const ingredientsToInsert = recipe.ingredients.map((ing, index) => ({
           recipe_id: newRecipe.id,
           name: ing.name,
           quantity: ing.quantity,
           unit: ing.unit,
           aisle: ing.aisle,
+          section: ing.section || "Main",
           order_index: index,
         }));
 
         await supabase.from("recipe_ingredients").insert(ingredientsToInsert);
 
-        // Insert steps
+        // Insert steps with introduces_section support for contextual ingredient display
         const stepsToInsert = recipe.steps.map((step, index) => ({
           recipe_id: newRecipe.id,
           step_number: index + 1,
-          instruction: step,
+          instruction: step.instruction,
+          introduces_section: step.introduces_section || null,
         }));
 
         await supabase.from("recipe_steps").insert(stepsToInsert);
