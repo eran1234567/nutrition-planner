@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useScanFeedback } from '@/hooks/useScanFeedback';
+import { useHybridBarcodeScanner } from '@/hooks/useHybridBarcodeScanner';
 
 interface BarcodeScannerProps {
   open: boolean;
@@ -14,157 +13,52 @@ interface BarcodeScannerProps {
 
 export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
   const { t } = useTranslation();
-  const [isInitializing, setIsInitializing] = useState(false);
-  const [isScanning, setIsScanning] = useState(false);
-  const [showNoScanHint, setShowNoScanHint] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [hasCamera, setHasCamera] = useState(true);
-  const scannerRef = useRef<Html5Qrcode | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const scannerIdRef = useRef<string>('barcode-scanner-' + Date.now());
-  
-  // Haptic and sound feedback
-  const { triggerSuccessFeedback, cleanup: cleanupFeedback } = useScanFeedback();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const handleScan = useCallback((result: { barcode: string; format: string }) => {
+    console.log('[BarcodeScanner] Scanned:', result.barcode, result.format);
+    onScan(result.barcode, result.format);
+    onClose();
+  }, [onScan, onClose]);
+
+  const {
+    start,
+    stop,
+    isScanning,
+    isInitializing,
+    error,
+    engineType,
+    setError,
+  } = useHybridBarcodeScanner({
+    onScan: handleScan,
+  });
 
   // Auto-start scanner when modal opens
   useEffect(() => {
-    if (open && !isScanning && !isInitializing && !error) {
-      startScanner();
+    if (open && videoRef.current && canvasRef.current) {
+      start(videoRef.current, canvasRef.current);
     }
     
     return () => {
       if (!open) {
-        stopScanner();
+        stop();
       }
     };
-  }, [open]);
+  }, [open, start, stop]);
 
-  useEffect(() => {
-    if (!open) {
-      setShowNoScanHint(false);
-      return;
-    }
-    if (!isScanning) {
-      setShowNoScanHint(false);
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      setShowNoScanHint(true);
-    }, 9000);
-
-    return () => window.clearTimeout(timeout);
-  }, [open, isScanning]);
-
-  // CRITICAL: Camera must be started directly from user click to satisfy browser security
-  const startScanner = useCallback(async () => {
-    setIsInitializing(true);
-    setError(null);
-    
-    const scannerId = scannerIdRef.current;
-
-    try {
-      // Create scanner container if not exists
-      if (containerRef.current && !document.getElementById(scannerId)) {
-        const scannerDiv = document.createElement('div');
-        scannerDiv.id = scannerId;
-        scannerDiv.style.width = '100%';
-        scannerDiv.style.height = '100%';
-        containerRef.current.appendChild(scannerDiv);
-      }
-
-      // Configure for barcode formats (UPC, EAN for food products)
-      const formatsToSupport = [
-        Html5QrcodeSupportedFormats.UPC_A,
-        Html5QrcodeSupportedFormats.UPC_E,
-        Html5QrcodeSupportedFormats.EAN_13,
-        Html5QrcodeSupportedFormats.EAN_8,
-        Html5QrcodeSupportedFormats.CODE_128,
-        Html5QrcodeSupportedFormats.CODE_39,
-        Html5QrcodeSupportedFormats.QR_CODE,
-      ];
-
-      const scanner = new Html5Qrcode(scannerId, {
-        formatsToSupport,
-        useBarCodeDetectorIfSupported: true,
-        verbose: false,
-      });
-      scannerRef.current = scanner;
-
-      const qrbox = (viewfinderWidth: number, viewfinderHeight: number) => {
-        // Large scanning area like reference - ~95% width, ~45% height
-        const width = Math.floor(viewfinderWidth * 0.95);
-        const height = Math.floor(viewfinderHeight * 0.45);
-        return { width, height };
-      };
-
-      // CRITICAL: getUserMedia is called here, directly in the click handler chain
-      await scanner.start(
-        { facingMode: 'environment' },
-        {
-          fps: 15,
-          qrbox,
-          aspectRatio: 1.0, // Square aspect for full-screen feel
-        },
-        (decodedText, decodedResult) => {
-          console.log('[BarcodeScanner] Scanned:', decodedText, decodedResult.result.format);
-          const format = decodedResult.result.format?.formatName || 'unknown';
-          
-          // Trigger haptic feedback and success sound
-          triggerSuccessFeedback();
-          
-          onScan(decodedText, format);
-          
-          // Stop scanner after successful scan
-          scanner.stop().catch(console.error);
-          setIsScanning(false);
-          onClose();
-        },
-        (errorMessage) => {
-          if (Math.random() < 0.01) {
-            console.debug('[BarcodeScanner] Scan attempt (no match):', errorMessage);
-          }
-        }
-      );
-
-      setIsInitializing(false);
-      setIsScanning(true);
-      console.log('[BarcodeScanner] Started scanning with formats:', formatsToSupport.map(f => Html5QrcodeSupportedFormats[f]));
-    } catch (err) {
-      console.error('Scanner init error:', err);
-      
-      if (err instanceof Error) {
-        if (err.name === 'NotAllowedError') {
-          setError(t('recipes.cameraPermissionDenied', 'Camera permission denied. Please allow camera access and try again.'));
-        } else if (err.message.includes('No camera')) {
-          setHasCamera(false);
-          setError(t('recipes.noCameraFound', 'No camera found on this device'));
-        } else {
-          setError(err.message);
-        }
-      } else {
-        setError(t('recipes.scannerError', 'Failed to initialize camera'));
-      }
-      
-      setIsInitializing(false);
-    }
-  }, [onClose, onScan, t, triggerSuccessFeedback]);
-
-  const stopScanner = useCallback(() => {
-    if (scannerRef.current) {
-      scannerRef.current.stop().catch(() => {});
-      scannerRef.current = null;
-    }
-    const el = document.getElementById(scannerIdRef.current);
-    if (el) el.remove();
-    setIsScanning(false);
-    cleanupFeedback();
-  }, [cleanupFeedback]);
-
+  // Stop when closing
   const handleClose = useCallback(() => {
-    stopScanner();
+    stop();
     onClose();
-  }, [stopScanner, onClose]);
+  }, [stop, onClose]);
+
+  const handleRetry = useCallback(() => {
+    setError(null);
+    if (videoRef.current && canvasRef.current) {
+      start(videoRef.current, canvasRef.current);
+    }
+  }, [setError, start]);
 
   if (!open) return null;
 
@@ -176,20 +70,30 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-50 bg-black flex flex-col"
       >
-        {/* Full-screen camera container */}
-        <div 
-          ref={containerRef} 
-          className="absolute inset-0 [&>div]:!w-full [&>div]:!h-full [&_video]:w-full [&_video]:h-full [&_video]:object-cover"
+        {/* Full-screen video container */}
+        <video
+          ref={videoRef}
+          className="absolute inset-0 w-full h-full object-cover"
+          playsInline
+          muted
+          autoPlay
         />
+        
+        {/* Hidden canvas for frame processing */}
+        <canvas ref={canvasRef} className="hidden" />
 
         {/* Overlay controls */}
         <div className="relative z-10 flex flex-col h-full">
           {/* Top bar */}
-          <div className="flex items-center justify-between p-4 pt-safe">
+          <div className="flex items-center justify-between p-4 pt-safe bg-gradient-to-b from-black/60 to-transparent">
             <div className="text-white">
               <h2 className="font-semibold text-lg">{t('recipes.scanBarcode', 'Scan Barcode')}</h2>
               <p className="text-xs text-white/70">
-                {t('recipes.scanBarcodeHint', 'Point camera at product barcode')}
+                {engineType === 'native' 
+                  ? t('recipes.nativeScanner', 'Using native scanner')
+                  : engineType === 'zxing'
+                  ? t('recipes.wasmScanner', 'Using WASM scanner')
+                  : t('recipes.initializingScanner', 'Initializing...')}
               </p>
             </div>
             <button
@@ -213,16 +117,8 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
             {error && (
               <div className="flex flex-col items-center justify-center text-white gap-3 p-4 text-center">
                 <p className="text-sm text-destructive">{error}</p>
-                {!hasCamera && (
-                  <p className="text-xs text-white/70">
-                    {t('recipes.tryScanningImage', 'Try scanning from an image instead')}
-                  </p>
-                )}
                 <Button
-                  onClick={() => {
-                    setError(null);
-                    startScanner();
-                  }}
+                  onClick={handleRetry}
                   variant="outline"
                   className="mt-2 bg-white/10 border-white/20 text-white hover:bg-white/20"
                 >
@@ -231,51 +127,67 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
               </div>
             )}
 
-            {/* Scan frame overlay when scanning */}
+            {/* Static Green Scan Box - Amazon-like focus area */}
             {isScanning && !error && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                {/* Darkened corners */}
-                <div className="absolute inset-0 bg-black/40" />
+                {/* Darkened area outside the scan zone */}
+                <div className="absolute inset-0">
+                  {/* Top dark area */}
+                  <div className="absolute top-0 left-0 right-0 h-[30%] bg-black/50" />
+                  {/* Bottom dark area */}
+                  <div className="absolute bottom-0 left-0 right-0 h-[30%] bg-black/50" />
+                  {/* Left dark area */}
+                  <div className="absolute top-[30%] left-0 w-[10%] h-[40%] bg-black/50" />
+                  {/* Right dark area */}
+                  <div className="absolute top-[30%] right-0 w-[10%] h-[40%] bg-black/50" />
+                </div>
                 
-                {/* Scan window cutout */}
-                <div className="relative w-72 h-28">
-                  {/* Clear the center */}
-                  <div className="absolute inset-0 bg-black/0" style={{ boxShadow: '0 0 0 9999px rgba(0,0,0,0.4)' }} />
+                {/* Green scan zone box - using inline styles for scanner-specific colors */}
+                <div className="relative w-[80%] h-[20%] max-w-md">
+                  {/* Main border with glow effect */}
+                  <div 
+                    className="absolute inset-0 rounded-lg" 
+                    style={{ 
+                      border: '4px solid #22c55e',
+                      boxShadow: '0 0 20px rgba(34, 197, 94, 0.5)'
+                    }} 
+                  />
                   
-                  {/* Corner brackets */}
-                  <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-white rounded-tl-lg" />
-                  <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-white rounded-tr-lg" />
-                  <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-white rounded-bl-lg" />
-                  <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-white rounded-br-lg" />
+                  {/* Corner accents for visual pop */}
+                  <div className="absolute -top-1 -left-1 w-8 h-8 rounded-tl-lg" style={{ borderTop: '4px solid #4ade80', borderLeft: '4px solid #4ade80' }} />
+                  <div className="absolute -top-1 -right-1 w-8 h-8 rounded-tr-lg" style={{ borderTop: '4px solid #4ade80', borderRight: '4px solid #4ade80' }} />
+                  <div className="absolute -bottom-1 -left-1 w-8 h-8 rounded-bl-lg" style={{ borderBottom: '4px solid #4ade80', borderLeft: '4px solid #4ade80' }} />
+                  <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-br-lg" style={{ borderBottom: '4px solid #4ade80', borderRight: '4px solid #4ade80' }} />
                   
                   {/* Scanning line animation */}
                   <motion.div
-                    className="absolute left-2 right-2 h-0.5 bg-primary"
+                    className="absolute left-2 right-2 h-1 rounded-full"
+                    style={{ background: 'linear-gradient(to right, transparent, #4ade80, transparent)' }}
                     initial={{ top: '10%' }}
                     animate={{ top: '90%' }}
-                    transition={{ duration: 2, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
+                    transition={{ 
+                      duration: 1.5, 
+                      repeat: Infinity, 
+                      repeatType: 'reverse', 
+                      ease: 'easeInOut' 
+                    }}
                   />
+                </div>
+                
+                {/* Instruction text below scan zone */}
+                <div className="absolute bottom-[25%] left-0 right-0 text-center">
+                  <p className="text-sm font-medium mx-auto px-4 py-2 rounded-full inline-block" style={{ color: 'rgba(255,255,255,0.9)', background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)' }}>
+                    {t('recipes.alignBarcode', 'Align barcode within the green box')}
+                  </p>
                 </div>
               </div>
             )}
           </div>
 
-          {/* No scan hint */}
-          {isScanning && !error && showNoScanHint && (
-            <div className="absolute bottom-32 left-4 right-4 text-center">
-              <p className="text-sm text-white/90 bg-black/50 backdrop-blur-sm rounded-lg px-4 py-2">
-                {t(
-                  'recipes.noScanHint',
-                  'Not scanning? Move closer, increase lighting, and keep barcode steady.'
-                )}
-              </p>
-            </div>
-          )}
-
           {/* Bottom info */}
-          <div className="p-4 pb-safe text-center">
+          <div className="p-4 pb-safe text-center bg-gradient-to-t from-black/60 to-transparent">
             <p className="text-sm text-white/70">
-              {t('recipes.supportedBarcodes', 'Supports UPC, EAN, and QR codes')}
+              {t('recipes.supportedBarcodes', 'Supports UPC, EAN, and Code128')}
             </p>
           </div>
         </div>
