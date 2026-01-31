@@ -27,7 +27,7 @@ export function CelebrationState({ score, onCelebrationComplete, show }: Celebra
       const originX = rect ? (rect.left + rect.width / 2) / window.innerWidth : 0.5;
       const originY = rect ? (rect.top + rect.height / 2) / window.innerHeight : 0.3;
 
-      // First burst - emerald and gold colors
+      // First burst - emerald and gold colors with fixed z-index canvas
       confetti({
         particleCount: 80,
         spread: 70,
@@ -37,6 +37,7 @@ export function CelebrationState({ score, onCelebrationComplete, show }: Celebra
         gravity: 0.8,
         scalar: 1.2,
         ticks: 100,
+        zIndex: 9999,
       });
 
       // Second burst with slight delay
@@ -50,6 +51,7 @@ export function CelebrationState({ score, onCelebrationComplete, show }: Celebra
           gravity: 0.6,
           scalar: 0.8,
           ticks: 80,
+          zIndex: 9999,
         });
       }, 150);
 
