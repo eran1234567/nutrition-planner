@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { useTranslation } from 'react-i18next';
 import { X, Loader2, Camera, ScanBarcode, Play } from 'lucide-react';
@@ -15,11 +15,29 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
   const { t } = useTranslation();
   const [isInitializing, setIsInitializing] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [showNoScanHint, setShowNoScanHint] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasCamera, setHasCamera] = useState(true);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const scannerIdRef = useRef<string>('barcode-scanner-' + Date.now());
+
+  useEffect(() => {
+    if (!open) {
+      setShowNoScanHint(false);
+      return;
+    }
+    if (!isScanning) {
+      setShowNoScanHint(false);
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setShowNoScanHint(true);
+    }, 9000);
+
+    return () => window.clearTimeout(timeout);
+  }, [open, isScanning]);
 
   // CRITICAL: Camera must be started directly from user click to satisfy browser security
   const startScanner = useCallback(async () => {
@@ -47,18 +65,31 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
         Html5QrcodeSupportedFormats.QR_CODE,
       ];
 
-      const scanner = new Html5Qrcode(scannerId, { 
+      const scanner = new Html5Qrcode(scannerId, {
         formatsToSupport,
-        verbose: false 
+        // Improves barcode detection on platforms where BarcodeDetector exists.
+        // (On iOS/Safari this can make a huge difference.)
+        useBarCodeDetectorIfSupported: true,
+        verbose: false,
       });
       scannerRef.current = scanner;
+
+      const qrbox = (viewfinderWidth: number, viewfinderHeight: number) => {
+        // Make the scan window large for 1D barcodes (helps on mobile cameras).
+        const width = Math.floor(viewfinderWidth * 0.85);
+        const height = Math.floor(viewfinderHeight * 0.35);
+        return {
+          width: Math.min(width, 360),
+          height: Math.min(height, 200),
+        };
+      };
 
       // CRITICAL: getUserMedia is called here, directly in the click handler chain
       await scanner.start(
         { facingMode: 'environment' },
         {
-          fps: 10,
-          qrbox: { width: 280, height: 150 },
+          fps: 15,
+          qrbox,
           aspectRatio: 1.777,
         },
         (decodedText, decodedResult) => {
@@ -177,7 +208,7 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
             {error && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white gap-3 p-4 text-center">
                 <Camera className="w-12 h-12 text-white/50" />
-                <p className="text-sm text-red-400">{error}</p>
+                <p className="text-sm text-destructive">{error}</p>
                 {!hasCamera && (
                   <p className="text-xs text-white/70">
                     {t('recipes.tryScanningImage', 'Try scanning from an image instead')}
@@ -213,6 +244,17 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
               <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-primary rounded-bl-lg" />
               <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-primary rounded-br-lg" />
             </div>
+
+            {showNoScanHint && (
+              <div className="absolute bottom-24 left-4 right-4 text-center text-white/80">
+                <p className="text-xs">
+                  {t(
+                    'recipes.noScanHint',
+                    'Not scanning yet? Move closer, increase light, and keep the barcode inside the box.'
+                  )}
+                </p>
+              </div>
+            )}
           </div>
         )}
 
