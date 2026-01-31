@@ -192,7 +192,7 @@ serve(async (req) => {
           .map((step) => `Step ${step.step_number}: ${step.instruction}`)
           .join("\n");
 
-        const prompt = `Analyze this recipe and assign section groupings for ingredients and steps.
+        const prompt = `Analyze this recipe and assign section groupings for ingredients based on WHICH STEP THEY ARE FIRST USED IN.
 
 RECIPE: ${recipe.title}
 
@@ -202,39 +202,42 @@ ${ingredientsList}
 STEPS:
 ${stepsList}
 
-TASK:
-1. Group ingredients into logical sections based on how they're used in the recipe
-2. Determine which step FIRST uses each section's ingredients
+CRITICAL TASK - READ EACH STEP CAREFULLY:
+1. For EACH step, identify which ingredients are mentioned or used in that step
+2. Group ingredients by the STEP NUMBER where they FIRST appear
+3. Ingredients used at different steps MUST be in different sections, even if they're both "main" ingredients
 
-SECTION NAMING RULES:
-- Use "Main" for primary dish ingredients (proteins, main vegetables, base starches)
-- Use specific names for sub-components: "Marinade", "Sauce", "Dressing", "Glaze", "Spice Rub", "Topping", "Garnish"
-- Look at the steps to understand ingredient groupings
-- If step 1 says "mix marinade ingredients" and lists specific items, those are "Marinade"
-- If a sauce is made separately, group those as "Sauce"
+STEP-BASED SECTIONING RULES:
+- Read step 2: "Wash the asparagus" → Asparagus is first used here, create section for step 2
+- Read step 4: "Wrap bacon around asparagus" → Bacon is first used HERE (step 4), NOT step 2!
+- Even if asparagus and bacon are both "main" ingredients, they go in SEPARATE sections because they're used at different steps
 
-INTRODUCES_SECTION RULES (CRITICAL):
-- Set "introduces_section" on the FIRST step where that section's ingredients are actually used
-- DO NOT default "Main" to step 1 automatically
-- Example: If step 1 is "Make the marinade by mixing...", that step introduces "Marinade"
-- Example: If step 2 is "Add the chicken to the marinade", that step introduces "Main"
-- Example: If step 5 is "Meanwhile, prepare the sauce...", that step introduces "Sauce"
+SECTION NAMING:
+- If an ingredient is used with a specific technique, name it: "Spice Rub", "Marinade", "Sauce", "Coating"
+- If it's just a main ingredient at a later step, use the step context: "For Wrapping", "For Serving", "For Assembly"
+- Only use "Main" for ingredients that are ALL used together in the same step
 
-Return JSON with this exact structure:
+INTRODUCES_SECTION RULES:
+- Each section MUST be introduced at the step where its ingredients are FIRST mentioned
+- Example: If asparagus is first mentioned in step 2 and bacon in step 4:
+  - Step 2 introduces "Main" (asparagus only)
+  - Step 4 introduces "For Wrapping" (bacon)
+- NEVER group ingredients together if they're first used in different steps!
+
+Return JSON:
 {
   "ingredients": [
-    { "index": 1, "section": "Marinade" },
-    { "index": 2, "section": "Marinade" },
-    { "index": 3, "section": "Main" }
+    { "index": 1, "section": "Main" },
+    { "index": 2, "section": "For Wrapping" }
   ],
   "steps": [
-    { "step_number": 1, "introduces_section": "Marinade" },
+    { "step_number": 1, "introduces_section": null },
     { "step_number": 2, "introduces_section": "Main" },
-    { "step_number": 3, "introduces_section": null }
+    { "step_number": 4, "introduces_section": "For Wrapping" }
   ]
 }
 
-IMPORTANT: Only return the JSON, no explanation. Use 1-based indexing matching the ingredient/step numbers above.`;
+IMPORTANT: Only return JSON. Use 1-based indexing.`;
 
         const model = genAI.getGenerativeModel({
           model: "gemini-2.0-flash",
