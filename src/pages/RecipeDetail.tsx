@@ -990,33 +990,20 @@ export default function RecipeDetail() {
                   )}
                 </h3>
                 
-                {sectionOrder.map((section) => {
-                  const sectionIngredients = ingredientsBySection[section];
-                  const showSectionHeader = sectionOrder.length > 1 || section !== 'Main';
-                  
-                  return (
-                    <div key={section} className="mb-4 last:mb-0">
-                      {showSectionHeader && (
-                        <h4 className="text-xs font-medium text-primary uppercase tracking-wide mb-2 mt-3 first:mt-0">
-                          {section}
-                        </h4>
+                {/* Flat list of all ingredients - no section grouping */}
+                <ul className="space-y-2">
+                  {adjustedIngredients.map((ing, index) => (
+                    <li key={index} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
+                      <div className="w-2 h-2 rounded-full bg-primary" />
+                      <span className="flex-1 text-foreground">
+                        {formatIngredient(ing.quantity, ing.unit, ing.name)}
+                      </span>
+                      {ing.aisle && (
+                        <span className="text-xs text-muted-foreground">{ing.aisle}</span>
                       )}
-                      <ul className="space-y-2">
-                        {sectionIngredients.map((ing, index) => (
-                          <li key={index} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
-                            <div className="w-2 h-2 rounded-full bg-primary" />
-                            <span className="flex-1 text-foreground">
-                              {formatIngredient(ing.quantity, ing.unit, ing.name)}
-                            </span>
-                            {ing.aisle && (
-                              <span className="text-xs text-muted-foreground">{ing.aisle}</span>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  );
-                })}
+                    </li>
+                  ))}
+                </ul>
               </div>
 
               {/* Steps with contextual ingredient sections */}
