@@ -17,10 +17,30 @@ interface CelebrationStateProps {
 export function CelebrationState({ score, onCelebrationComplete, show }: CelebrationStateProps) {
   const [hasTriggeredConfetti, setHasTriggeredConfetti] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const confettiInstanceRef = useRef<ReturnType<typeof confetti.create> | null>(null);
+  const confettiCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     if (show && score >= 100 && !hasTriggeredConfetti) {
       setHasTriggeredConfetti(true);
+
+      // Force confetti canvas to full-screen fixed overlay so it can't be hidden by stacking contexts.
+      if (!confettiInstanceRef.current) {
+        const canvas = document.createElement('canvas');
+        canvas.style.position = 'fixed';
+        canvas.style.top = '0';
+        canvas.style.left = '0';
+        canvas.style.width = '100vw';
+        canvas.style.height = '100vh';
+        canvas.style.pointerEvents = 'none';
+        canvas.style.zIndex = '9999';
+        document.body.appendChild(canvas);
+        confettiCanvasRef.current = canvas;
+        confettiInstanceRef.current = confetti.create(canvas, { resize: true, useWorker: true });
+      }
+
+      const fire = confettiInstanceRef.current;
+      if (!fire) return;
       
       // Trigger confetti explosion
       const rect = containerRef.current?.getBoundingClientRect();
@@ -28,7 +48,7 @@ export function CelebrationState({ score, onCelebrationComplete, show }: Celebra
       const originY = rect ? (rect.top + rect.height / 2) / window.innerHeight : 0.3;
 
       // First burst - emerald and gold colors with fixed z-index canvas
-      confetti({
+      fire({
         particleCount: 80,
         spread: 70,
         origin: { x: originX, y: originY },
@@ -42,7 +62,7 @@ export function CelebrationState({ score, onCelebrationComplete, show }: Celebra
 
       // Second burst with slight delay
       setTimeout(() => {
-        confetti({
+        fire({
           particleCount: 40,
           spread: 100,
           origin: { x: originX, y: originY },
@@ -58,6 +78,14 @@ export function CelebrationState({ score, onCelebrationComplete, show }: Celebra
       // Callback after animation
       setTimeout(() => {
         onCelebrationComplete?.();
+
+        // Cleanup canvas shortly after the celebration completes.
+        const canvas = confettiCanvasRef.current;
+        if (canvas) {
+          canvas.remove();
+          confettiCanvasRef.current = null;
+          confettiInstanceRef.current = null;
+        }
       }, 2000);
     }
   }, [show, score, hasTriggeredConfetti, onCelebrationComplete]);

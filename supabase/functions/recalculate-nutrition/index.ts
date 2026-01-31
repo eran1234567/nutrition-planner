@@ -5,6 +5,7 @@ import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.21.0"
 // Import shared Neutron Engine
 import {
   buildNutritionPromptInstructions,
+  calculateIngredientMacros,
   validateAndCorrectNutrition,
   type DbIngredientNutrition,
 } from "../_shared/neutron.ts";
@@ -36,19 +37,257 @@ serve(async (req) => {
   }
 
   try {
-    // Verify internal seed header for admin access
-    const internalHeader = req.headers.get('X-Lovable-Internal-Seed');
-    if (internalHeader !== 'true') {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const { batchSize = 10, offset = 0 } = await req.json().catch(() => ({}));
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+
+    // If internal seed header is present, keep legacy batch behavior (global recipes).
+    const internalHeader = req.headers.get('X-Lovable-Internal-Seed');
+    if (internalHeader !== 'true') {
+      // User-triggered single-recipe recalculation
+      const authHeader = req.headers.get('Authorization') || '';
+      if (!authHeader) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { recipeId } = await req.json().catch(() => ({}));
+      if (!recipeId) {
+        return new Response(JSON.stringify({ error: 'Missing recipeId' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Verify user
+      const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
+        auth: { persistSession: false },
+      });
+      const { data: userData, error: userError } = await userClient.auth.getUser();
+      const user = userData?.user;
+      if (userError || !user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Use service role for deterministic recalculation + write, but enforce ownership manually.
+      const admin = createClient(supabaseUrl, supabaseServiceKey, {
+        auth: { persistSession: false },
+      });
+
+      const { data: recipe, error: recipeError } = await admin
+        .from('recipes')
+        .select('id, title, owner_user_id, servings, is_deleted')
+        .eq('id', recipeId)
+        .maybeSingle();
+
+      if (recipeError || !recipe || recipe.is_deleted) {
+        return new Response(JSON.stringify({ error: 'Recipe not found' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (recipe.owner_user_id !== user.id) {
+        return new Response(JSON.stringify({ error: 'Forbidden' }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const [ingredientsRes, existingNutritionRes] = await Promise.all([
+        admin
+          .from('recipe_ingredients')
+          .select('name, quantity, unit')
+          .eq('recipe_id', recipeId),
+        admin
+          .from('recipe_nutrition')
+          .select('*')
+          .eq('recipe_id', recipeId)
+          .maybeSingle(),
+      ]);
+
+      const ingredients = (ingredientsRes.data || []) as Array<{ name: string; quantity: number | null; unit: string | null }>;
+      if (ingredientsRes.error || ingredients.length === 0) {
+        return new Response(JSON.stringify({ error: 'No ingredients found' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Load ingredient nutrition cache
+      const nutritionCache = await loadIngredientNutritionCache(admin);
+
+      // IMPORTANT: feed quantity+unit into the Neutron matcher/quantity parser
+      const ingredientTexts = ingredients.map((i) => ({
+        name: `${i.quantity ?? ''} ${i.unit ?? ''} ${i.name}`.trim(),
+      }));
+
+      const baseNutrition = (existingNutritionRes.data || {}) as any;
+      const servings = recipe.servings || 1;
+
+      // Fast-path: if most ingredients are covered by deterministic references, compute without AI.
+      let knownCount = 0;
+      const deterministicTotal: any = {
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+        fiber: 0,
+        sugar: 0,
+        sodium: 0,
+        saturated_fat: 0,
+        cholesterol: 0,
+      };
+
+      for (const ing of ingredientTexts) {
+        const macros = calculateIngredientMacros(ing.name, nutritionCache);
+        if (macros) {
+          deterministicTotal.calories += macros.calories;
+          deterministicTotal.protein += macros.protein;
+          deterministicTotal.carbs += macros.carbs;
+          deterministicTotal.fat += macros.fat;
+          deterministicTotal.fiber += macros.fiber;
+          deterministicTotal.sugar += macros.sugar ?? 0;
+          deterministicTotal.sodium += macros.sodium ?? 0;
+          deterministicTotal.saturated_fat += macros.saturated_fat ?? 0;
+          deterministicTotal.cholesterol += macros.cholesterol ?? 0;
+          knownCount++;
+        }
+      }
+
+      const coverage = ingredientTexts.length > 0 ? knownCount / ingredientTexts.length : 0;
+
+      let corrected: any;
+      if (coverage >= 0.7) {
+        corrected = {
+          calories: Math.round(deterministicTotal.calories / servings),
+          protein_g: Math.round(deterministicTotal.protein / servings),
+          carbs_g: Math.round(deterministicTotal.carbs / servings),
+          fat_g: Math.round(deterministicTotal.fat / servings),
+          fiber_g: Math.round(deterministicTotal.fiber / servings),
+          sugar_g: Math.round(deterministicTotal.sugar / servings),
+          sodium_mg: Math.round(deterministicTotal.sodium / servings),
+          saturated_fat_g: Math.round(deterministicTotal.saturated_fat / servings),
+          cholesterol_mg: Math.round(deterministicTotal.cholesterol / servings),
+        };
+      } else {
+        // Fallback: use AI to estimate the missing macros reliably.
+        const geminiApiKey = Deno.env.get('GOOGLE_AI_STUDIO_GEMINI_API_KEY')!;
+        if (!geminiApiKey) {
+          // As a last resort, return the existing values.
+          corrected = baseNutrition;
+        } else {
+          const genAI = new GoogleGenerativeAI(geminiApiKey);
+          const model = genAI.getGenerativeModel({
+            model: 'gemini-2.0-flash',
+            generationConfig: { temperature: 0 },
+          });
+
+          const ingredientList = ingredients
+            .map((i) => `${i.quantity || ''} ${i.unit || ''} ${i.name}`.trim())
+            .join('\n- ');
+
+          const prompt = `You are a certified nutritionist. Calculate ACCURATE macros for this recipe PER SERVING.
+
+RECIPE: ${recipe.title ?? 'Recipe'}
+SERVINGS: ${servings}
+
+INGREDIENTS:
+- ${ingredientList}
+
+${buildNutritionPromptInstructions()}
+
+CALCULATION METHOD:
+1. For EACH ingredient, extract: protein, total carbs, fiber, fat, and calories (if provided)
+2. SUM all ingredient values to get TOTAL recipe values
+3. If no calories provided, calculate: (protein × 4) + ((total_carbs - fiber) × 4) + (fat × 9)
+4. DIVIDE all totals by servings to get per-serving values
+5. Round to nearest integer
+
+Return ONLY valid JSON (no markdown, no backticks):
+{
+  "calories": <integer>,
+  "protein_g": <integer>,
+  "carbs_g": <integer>,
+  "fat_g": <integer>,
+  "fiber_g": <integer>,
+  "sugar_g": <integer>,
+  "sodium_mg": <integer>,
+  "saturated_fat_g": <integer>,
+  "cholesterol_mg": <integer>
+}`;
+
+          const result = await model.generateContent(prompt);
+          const content = result.response.text();
+          if (!content) throw new Error('No AI response');
+
+          let aiNutrition: any;
+          const cleanedJson = content.replace(/```json\s*|\s*```/g, '').trim();
+          const jsonMatch = cleanedJson.match(/\{[\s\S]*\}/);
+          if (!jsonMatch) throw new Error('No JSON found');
+          aiNutrition = JSON.parse(jsonMatch[0]);
+
+          // Keep deterministic correction behavior consistent with the rest of the system.
+          corrected = validateAndCorrectNutrition(aiNutrition, ingredientTexts, nutritionCache, servings);
+        }
+      }
+
+      // Persist to recipe_nutrition (insert if missing)
+      if (existingNutritionRes.data) {
+        const { error: updateError } = await admin
+          .from('recipe_nutrition')
+          .update({
+            calories: corrected.calories ?? null,
+            protein_g: corrected.protein_g ?? null,
+            carbs_g: corrected.carbs_g ?? null,
+            fat_g: corrected.fat_g ?? null,
+            fiber_g: corrected.fiber_g ?? null,
+            sugar_g: corrected.sugar_g ?? 0,
+            sodium_mg: corrected.sodium_mg ?? 0,
+            saturated_fat_g: corrected.saturated_fat_g ?? 0,
+            cholesterol_mg: corrected.cholesterol_mg ?? 0,
+          })
+          .eq('recipe_id', recipeId);
+
+        if (updateError) {
+          throw new Error(`DB update failed: ${updateError.message}`);
+        }
+      } else {
+        const { error: insertError } = await admin
+          .from('recipe_nutrition')
+          .insert({
+            recipe_id: recipeId,
+            calories: corrected.calories ?? null,
+            protein_g: corrected.protein_g ?? null,
+            carbs_g: corrected.carbs_g ?? null,
+            fat_g: corrected.fat_g ?? null,
+            fiber_g: corrected.fiber_g ?? null,
+            sugar_g: corrected.sugar_g ?? 0,
+            sodium_mg: corrected.sodium_mg ?? 0,
+            saturated_fat_g: corrected.saturated_fat_g ?? 0,
+            cholesterol_mg: corrected.cholesterol_mg ?? 0,
+          });
+
+        if (insertError) {
+          throw new Error(`DB insert failed: ${insertError.message}`);
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ nutrition: corrected }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Legacy batch mode for global recipes (admin/internal)
+    const { batchSize = 10, offset = 0 } = await req.json().catch(() => ({}));
+
     const geminiApiKey = Deno.env.get('GOOGLE_AI_STUDIO_GEMINI_API_KEY')!;
 
     if (!geminiApiKey) {

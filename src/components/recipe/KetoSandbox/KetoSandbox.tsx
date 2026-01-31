@@ -127,7 +127,7 @@ export function KetoSandbox({
       const { data: session } = await supabase.auth.getSession();
       if (!session?.session?.access_token) return;
       
-      await fetch(
+      const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/recalculate-nutrition`,
         {
           method: 'POST',
@@ -138,6 +138,15 @@ export function KetoSandbox({
           body: JSON.stringify({ recipeId }),
         }
       );
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        console.error('Nutrition recalculation failed:', res.status, text);
+        return;
+      }
+
+      const json = await res.json().catch(() => null);
+      return (json?.nutrition ?? null) as any;
     } catch (error) {
       console.error('Nutrition recalculation failed:', error);
     }
@@ -221,6 +230,10 @@ export function KetoSandbox({
     undoSnapshotRef.current = createSnapshot();
 
     try {
+      // Optimistically patch local cache so the parent macro card + score update immediately.
+      // We still hard-refetch after the backend recalculation for authoritative values.
+      let nextIngredients = ingredients;
+
       // Direct database updates based on action type
       switch (action.type) {
         case 'swap':
@@ -229,6 +242,10 @@ export function KetoSandbox({
               .from('recipe_ingredients')
               .update({ name: action.swapTo })
               .eq('id', action.ingredientId);
+
+            nextIngredients = ingredients.map(i =>
+              i.id === action.ingredientId ? { ...i, name: action.swapTo! } : i
+            );
           }
           break;
 
@@ -244,6 +261,10 @@ export function KetoSandbox({
                 .from('recipe_ingredients')
                 .update({ quantity: finalQuantity })
                 .eq('id', action.ingredientId);
+
+              nextIngredients = ingredients.map(i =>
+                i.id === action.ingredientId ? { ...i, quantity: finalQuantity } : i
+              );
             }
           }
           break;
@@ -259,6 +280,10 @@ export function KetoSandbox({
                 .from('recipe_ingredients')
                 .update({ quantity: minQty })
                 .eq('id', action.ingredientId);
+
+              nextIngredients = ingredients.map(i =>
+                i.id === action.ingredientId ? { ...i, quantity: minQty } : i
+              );
             }
           }
           break;
@@ -271,7 +296,7 @@ export function KetoSandbox({
               : action.fatAdditionId === 'coconut-oil' ? 'MCT Oil'
               : action.fatAdditionId;
             
-            await supabase
+            const { data: inserted } = await supabase
               .from('recipe_ingredients')
               .insert({
                 recipe_id: recipeId,
@@ -279,13 +304,42 @@ export function KetoSandbox({
                 quantity: action.newQuantity || 1,
                 unit: action.unit,
                 order_index: maxOrderIndex + 1,
-              });
+              })
+              .select('*')
+              .maybeSingle();
+
+            if (inserted) {
+              nextIngredients = [...ingredients, inserted as any];
+            }
           }
           break;
       }
 
+      // Patch recipe cache immediately (ingredients), so parent UI updates without waiting for refetch.
+      queryClient.setQueryData(['recipe', recipeId], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          ingredients: nextIngredients,
+        };
+      });
+
       // Recalculate nutrition immediately and wait for it
-      await recalculateNutrition();
+      const newNutrition = await recalculateNutrition();
+
+      // Patch nutrition cache immediately so macros + keto score flip instantly.
+      if (newNutrition) {
+        queryClient.setQueryData(['recipe', recipeId], (old: any) => {
+          if (!old) return old;
+          return {
+            ...old,
+            nutrition: {
+              ...(old.nutrition || {}),
+              ...newNutrition,
+            },
+          };
+        });
+      }
       
       // Small delay to ensure backend has processed the recalculation
       await new Promise(resolve => setTimeout(resolve, 300));
@@ -332,7 +386,8 @@ export function KetoSandbox({
   };
 
   // Don't render if already perfect and no actions available
-  if (originalNutrition.ketoScore >= 100 && smartActions.length === 0) {
+  // (but allow rendering when the user *just* achieved 100 so celebration can show)
+  if (originalNutrition.ketoScore >= 100 && smartActions.length === 0 && appliedActionIds.size === 0) {
     return null;
   }
 
