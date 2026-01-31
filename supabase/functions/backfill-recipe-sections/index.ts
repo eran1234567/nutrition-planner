@@ -94,7 +94,7 @@ serve(async (req) => {
   }
 
   try {
-    const { batchSize = 5, recipeId, dryRun = false } = await req.json();
+    const { batchSize = 5, recipeId, dryRun = false, forceReprocess = false, offset = 0 } = await req.json();
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -119,10 +119,22 @@ serve(async (req) => {
       
       if (error) throw new Error(`Recipe not found: ${error.message}`);
       recipes = data ? [data] : [];
+    } else if (forceReprocess) {
+      // Force reprocess all global recipes (ignores already-processed check)
+      const { data: globalRecipes, error } = await supabase
+        .from("recipes")
+        .select("id, title")
+        .eq("scope", "global")
+        .eq("is_deleted", false)
+        .order("title", { ascending: true })
+        .range(offset, offset + batchSize - 1);
+
+      if (error) throw new Error(`Failed to fetch recipes: ${error.message}`);
+      recipes = globalRecipes || [];
+      console.log(`Force reprocessing ${recipes.length} recipes (offset: ${offset})`);
     } else {
       // Find global recipes that need section backfill
       // A recipe needs backfill if it has NO steps with introduces_section set
-      // This is more reliable than checking ingredient sections since Main is always set
       
       // First, get IDs of recipes that already have step sections
       const { data: processedRecipeIds } = await supabase
