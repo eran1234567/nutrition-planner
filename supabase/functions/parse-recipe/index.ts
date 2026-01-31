@@ -1830,32 +1830,28 @@ CRITICAL RULES:
 9. MINIMIZE sodium by default (< 600mg unless health filter requires lower)
 10. If no recipes found, return: { "recipes": [], "error": "Could not extract recipe information" }
 11. Include "servings_source" field with the exact quote or observation that determined the serving count
-12. INGREDIENT SECTION ASSIGNMENT (CRITICAL - ALWAYS DO THIS):
-    - EVERY recipe MUST have ingredients grouped into logical sections based on HOW and WHEN they are used
-    - Read through ALL steps first to understand the cooking flow
-    - Look for these common section patterns:
-      * "Breadcrumb Coating" or "Breading": breadcrumbs, eggs, spices mixed for coating proteins
-      * "Marinade": ingredients mixed together to marinate proteins
-      * "Sauce" or "Dressing": liquids, seasonings combined for a sauce
-      * "Spice Rub" or "Seasoning": dry spices mixed and applied
-      * "Glaze": sweet or savory coating applied during cooking
-      * "Topping" or "Garnish": ingredients added at the end for presentation
-      * "Main": core proteins, vegetables, and base ingredients
-    - If step 2 says "In another dish, combine breadcrumbs, sesame seeds, paprika...", those ingredients are "Breadcrumb Coating"
-    - If step says "whisk egg with salt and pepper", the egg and its seasonings are part of the breading process, NOT Main
-    - NEVER put ALL ingredients in "Main" - analyze the steps to find natural groupings
-    - Even simple recipes have sections: coating + main, or main + garnish
+12. INGREDIENT SECTION ASSIGNMENT - GROUP BY STEP (CRITICAL):
+    - EVERY ingredient must be assigned to a section based on WHICH STEP IT IS FIRST MENTIONED IN
+    - Read through ALL steps and for EACH step, identify which ingredients are mentioned
+    - Ingredients that are FIRST used in different steps MUST be in DIFFERENT sections
+    - EXAMPLE: "Bacon-Wrapped Asparagus" recipe:
+      * Step 2: "Wash the asparagus" → Asparagus is FIRST mentioned in step 2 → Section: "Main"
+      * Step 4: "Wrap bacon around asparagus" → Bacon is FIRST mentioned in step 4 → Section: "For Wrapping" (NOT "Main"!)
+      * Even though both are "main" ingredients, they are in SEPARATE sections because they're first used in different steps
+    - Use descriptive section names based on the step context:
+      * "For Wrapping", "For Assembly", "For Serving" - for ingredients used later in the process
+      * "Breadcrumb Coating", "Marinade", "Spice Rub", "Sauce" - for technique-based groupings
+      * "Main" - ONLY for ingredients all used together in the same step
+    - NEVER put ingredients in the same section if they are first mentioned in different steps!
 13. STEP SECTION PLACEMENT (CRITICAL FOR UI):
     - Each step can optionally have an "introduces_section" field
-    - Set "introduces_section" to the section name ONLY for the FIRST step where that section's ingredients are actually used
-    - READ EACH STEP and identify which ingredients are used in that step
-    - DO NOT default "Main" to step 1. Place each section (including "Main") on the EXACT step where those ingredients are first used.
-    - Example: If step 1 says "Prepare the chicken cutlets by pounding them", set introduces_section: "Main" (chicken is Main)
-    - Example: If step 2 says "In a shallow dish, whisk the egg with salt and pepper", set introduces_section: "Breadcrumb Coating" (egg is part of breading)
-    - Example: If step 3 says "In another dish, combine breadcrumbs, sesame seeds, paprika...", this continues the Breadcrumb Coating section, so introduces_section: null
-    - Example: If step 5 says "Meanwhile, prepare the sauce...", set introduces_section: "Sauce"
-    - For steps that don't introduce a new section, set introduces_section: null
-    - This tells the UI exactly when to show the section header with its ingredients`;
+    - Set "introduces_section" to the section name for the FIRST step where that section's ingredients appear
+    - Example workflow for "Bacon-Wrapped Asparagus":
+      * Step 1: Preheat oven → introduces_section: null (no ingredients)
+      * Step 2: Wash asparagus → introduces_section: "Main" (asparagus first appears)
+      * Step 3: Toss with spices → introduces_section: "Spice Rub" (spices first appear)
+      * Step 4: Wrap bacon → introduces_section: "For Wrapping" (bacon first appears HERE, not earlier!)
+    - This ensures the UI shows ingredients RIGHT BEFORE the step where they're needed`;
 
 
     // Build prompt and call Gemini
