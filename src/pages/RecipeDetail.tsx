@@ -890,8 +890,8 @@ export default function RecipeDetail() {
             </div>
           )}
 
-          {/* Keto Sandbox - show in Keto Mode for user-owned recipes with ketoScore < 100 */}
-          {isKetoMode && recipe?.ingredients && neutronBadges?.ketoScore && neutronBadges.ketoScore.score < 100 && isUserRecipe && (
+          {/* Keto Sandbox - show in Keto Mode for user-owned recipes (includes success state at 100) */}
+          {isKetoMode && recipe?.ingredients && neutronBadges?.ketoScore && isUserRecipe && (
             <KetoSandbox
               recipeId={recipe.id}
               nutrition={recipe.nutrition as any}
