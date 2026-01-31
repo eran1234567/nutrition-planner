@@ -349,7 +349,7 @@ export function RecipeCard({
               </div>
               <div className="text-center flex-1">
                 <p className="text-sm font-bold text-[hsl(var(--carbs))]">{Math.round(nutrition.displayCarbs)}g</p>
-                <p className="text-2xs text-muted-foreground">{mode === 'keto' ? 'net carbs' : 'carbs'}</p>
+                <p className="text-2xs text-muted-foreground whitespace-nowrap">{mode === 'keto' ? 'net' : 'carbs'}</p>
               </div>
             </div>
           </div>
