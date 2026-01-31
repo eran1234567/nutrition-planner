@@ -145,11 +145,12 @@ Servings: ${recipe.servings || 4}
 Return a JSON object with this exact structure:
 {
   "ingredients": [
-    { "name": "ingredient name", "quantity": 2, "unit": "cups", "aisle": "Produce|Meat|Dairy|Bakery|Canned Goods|Spices|Oils|Frozen|Beverages|Condiments|Grains|Pasta" }
+    { "name": "ingredient name", "quantity": 2, "unit": "cups", "aisle": "Produce|Meat|Dairy|Bakery|Canned Goods|Spices|Oils|Frozen|Beverages|Condiments|Grains|Pasta", "section": "Main|Marinade|Sauce|Dressing|Topping" }
   ],
   "steps": [
-    "Detailed step 1 with specific instructions...",
-    "Detailed step 2..."
+    { "instruction": "Detailed step 1 with specific instructions...", "introduces_section": "Main" },
+    { "instruction": "Detailed step 2...", "introduces_section": null },
+    { "instruction": "Now prepare the sauce...", "introduces_section": "Sauce" }
   ],
   "nutrition": {
     "calories": 350,
@@ -164,6 +165,18 @@ Return a JSON object with this exact structure:
   },
   "serving_size": "3 chicken tenders"
 }
+
+INGREDIENT SECTION RULES (CRITICAL):
+- For recipes with distinct parts (marinade + main dish, protein + sauce), assign appropriate section values
+- Use "Main" for the primary dish ingredients, "Marinade", "Sauce", "Dressing", etc. for sub-components
+- For simple recipes, use "Main" for all ingredients
+
+STEP introduces_section RULES (CRITICAL FOR UI):
+- Set "introduces_section" to the section name ONLY for the FIRST step where that section's ingredients are used
+- DO NOT default "Main" to step 1. Place each section (including "Main") on the EXACT step where those ingredients are first used
+- Example: If step 1 says "mix the marinade", set introduces_section: "Marinade"
+- Example: If step 2 says "add the chicken to the marinade", set introduces_section: "Main" (that's when main protein is used)
+- For steps that don't introduce a new section, set introduces_section: null
 
 SERVING_SIZE RULES (CRITICAL):
 ✅ GOOD: "3 chicken tenders", "1 salmon fillet (6 oz)", "2 tacos", "1.5 cups rice", "4 meatballs + 1 cup pasta"
@@ -214,13 +227,14 @@ IMPORTANT:
         await supabase.from("recipe_ingredients").delete().eq("recipe_id", recipe.id);
         await supabase.from("recipe_steps").delete().eq("recipe_id", recipe.id);
 
-        // Insert new ingredients
+        // Insert new ingredients with section support
         const ingredientsToInsert = recipeData.ingredients.map((ing: any, index: number) => ({
           recipe_id: recipe.id,
           name: ing.name,
           quantity: ing.quantity || null,
           unit: ing.unit || null,
           aisle: ing.aisle || "Other",
+          section: ing.section || "Main",
           order_index: index,
         }));
 
@@ -232,12 +246,18 @@ IMPORTANT:
           throw new Error(`Failed to insert ingredients: ${ingredientsError.message}`);
         }
 
-        // Insert new steps
-        const stepsToInsert = recipeData.steps.map((step: string, index: number) => ({
-          recipe_id: recipe.id,
-          step_number: index + 1,
-          instruction: step,
-        }));
+        // Insert new steps with introduces_section support
+        const stepsToInsert = recipeData.steps.map((step: any, index: number) => {
+          // Handle both string format (legacy) and object format (new)
+          const instruction = typeof step === 'string' ? step : step.instruction;
+          const introducesSection = typeof step === 'object' ? (step.introduces_section || null) : null;
+          return {
+            recipe_id: recipe.id,
+            step_number: index + 1,
+            instruction,
+            introduces_section: introducesSection,
+          };
+        });
 
         const { error: stepsError } = await supabase
           .from("recipe_steps")
