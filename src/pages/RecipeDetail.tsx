@@ -45,6 +45,7 @@ import {
   KETO_BADGE_MIN_FAT_PERCENT,
   type RawNutritionData 
 } from '@/lib/neutron';
+import { generateServingLabel, isGenericServingSize } from '@/lib/servingLabel';
 
 // Diet badge config with colors and icons
 const DIET_BADGES: Record<string, { label: string; icon: React.ReactNode; bgClass: string; textClass: string }> = {
@@ -830,11 +831,17 @@ export default function RecipeDetail() {
                   <Flame className="w-4 h-4 text-primary" />
                   Nutrition per serving
                 </h3>
-                {recipe.serving_size && (
-                  <span className="text-xs text-muted-foreground bg-background px-2 py-1 rounded-md">
-                    1 serving = {recipe.serving_size}
-                  </span>
-                )}
+                {(() => {
+                  // Use dynamic label if serving_size is generic or missing
+                  const displayLabel = isGenericServingSize(recipe.serving_size)
+                    ? generateServingLabel(recipe)
+                    : `1 serving = ${recipe.serving_size}`;
+                  return (
+                    <span className="text-xs text-muted-foreground bg-background px-2 py-1 rounded-md">
+                      {displayLabel}
+                    </span>
+                  );
+                })()}
               </div>
               
               {/* Primary macros - always visible */}
