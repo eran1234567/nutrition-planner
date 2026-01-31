@@ -121,6 +121,98 @@ export function KetoSandbox({
     };
   }, [ingredients, nutrition]);
 
+  // Recalculate nutrition via edge function
+  const recalculateNutrition = useCallback(async () => {
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session?.access_token) return;
+      
+      await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/recalculate-nutrition`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.session.access_token}`,
+          },
+          body: JSON.stringify({ recipeId }),
+        }
+      );
+    } catch (error) {
+      console.error('Nutrition recalculation failed:', error);
+    }
+  }, [recipeId]);
+
+  // Restore from snapshot (Undo) - defined before handleApplyAction to avoid circular ref
+  const handleUndo = useCallback(async () => {
+    const snapshot = undoSnapshotRef.current;
+    if (!snapshot) {
+      toast.error('No changes to undo');
+      return;
+    }
+
+    setIsCommitting(true);
+
+    try {
+      // Restore ingredient quantities
+      for (const snapIng of snapshot.ingredients) {
+        await supabase
+          .from('recipe_ingredients')
+          .update({ 
+            name: snapIng.name,
+            quantity: snapIng.quantity 
+          })
+          .eq('id', snapIng.id);
+      }
+
+      // Remove any newly added ingredients (fat additions)
+      const originalIds = new Set(snapshot.ingredients.map(i => i.id));
+      const { data: currentIngredients } = await supabase
+        .from('recipe_ingredients')
+        .select('id')
+        .eq('recipe_id', recipeId);
+      
+      if (currentIngredients) {
+        for (const ing of currentIngredients) {
+          if (!originalIds.has(ing.id)) {
+            await supabase
+              .from('recipe_ingredients')
+              .delete()
+              .eq('id', ing.id);
+          }
+        }
+      }
+
+      // Recalculate nutrition
+      await recalculateNutrition();
+
+      // Force cache refresh
+      await queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] });
+      await queryClient.invalidateQueries({ queryKey: ['global-recipes'] });
+      await queryClient.invalidateQueries({ queryKey: ['user-recipes'] });
+      await queryClient.refetchQueries({ 
+        queryKey: ['recipe', recipeId],
+        type: 'active',
+        exact: true,
+      });
+
+      // Reset local state
+      resetAll();
+      setAppliedActionIds(new Set());
+      setShowCelebration(false);
+      undoSnapshotRef.current = null;
+
+      toast.success('Changes reverted successfully');
+      onCommit();
+
+    } catch (error) {
+      console.error('Failed to undo changes:', error);
+      toast.error('Failed to undo changes');
+    } finally {
+      setIsCommitting(false);
+    }
+  }, [recipeId, queryClient, resetAll, onCommit, recalculateNutrition]);
+
   // Handle applying a single Smart Action - AUTO-COMMITS immediately to DB
   const handleApplyAction = useCallback(async (action: SmartAction) => {
     setApplyingActionId(action.id);
@@ -192,16 +284,23 @@ export function KetoSandbox({
           break;
       }
 
-      // Recalculate nutrition immediately
+      // Recalculate nutrition immediately and wait for it
       await recalculateNutrition();
       
-      // Force cache refresh for immediate macro update
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] }),
-        queryClient.invalidateQueries({ queryKey: ['global-recipes'] }),
-        queryClient.invalidateQueries({ queryKey: ['user-recipes'] }),
-      ]);
-      await queryClient.refetchQueries({ queryKey: ['recipe', recipeId] });
+      // Small delay to ensure backend has processed the recalculation
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Force cache refresh for immediate macro update - hard refresh all relevant caches
+      await queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] });
+      await queryClient.invalidateQueries({ queryKey: ['global-recipes'] });
+      await queryClient.invalidateQueries({ queryKey: ['user-recipes'] });
+      
+      // Force immediate refetch to get updated macros from server
+      await queryClient.refetchQueries({ 
+        queryKey: ['recipe', recipeId],
+        type: 'active',
+        exact: true,
+      });
 
       setAppliedActionIds(prev => new Set([...prev, action.id]));
       
@@ -213,7 +312,7 @@ export function KetoSandbox({
         },
       });
 
-      // Trigger parent refresh
+      // Trigger parent refresh to update the macro card
       onCommit();
 
     } catch (error) {
@@ -222,97 +321,8 @@ export function KetoSandbox({
     } finally {
       setApplyingActionId(null);
     }
-  }, [createSnapshot, ingredients, recipeId, queryClient, onCommit]);
+  }, [createSnapshot, ingredients, recipeId, queryClient, onCommit, handleUndo, recalculateNutrition]);
 
-  // Restore from snapshot (Undo)
-  const handleUndo = useCallback(async () => {
-    const snapshot = undoSnapshotRef.current;
-    if (!snapshot) {
-      toast.error('No changes to undo');
-      return;
-    }
-
-    setIsCommitting(true);
-
-    try {
-      // Restore ingredient quantities
-      for (const snapIng of snapshot.ingredients) {
-        await supabase
-          .from('recipe_ingredients')
-          .update({ 
-            name: snapIng.name,
-            quantity: snapIng.quantity 
-          })
-          .eq('id', snapIng.id);
-      }
-
-      // Remove any newly added ingredients (fat additions)
-      const originalIds = new Set(snapshot.ingredients.map(i => i.id));
-      const { data: currentIngredients } = await supabase
-        .from('recipe_ingredients')
-        .select('id')
-        .eq('recipe_id', recipeId);
-      
-      if (currentIngredients) {
-        for (const ing of currentIngredients) {
-          if (!originalIds.has(ing.id)) {
-            await supabase
-              .from('recipe_ingredients')
-              .delete()
-              .eq('id', ing.id);
-          }
-        }
-      }
-
-      // Recalculate nutrition
-      await recalculateNutrition();
-
-      // Force cache refresh
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] }),
-        queryClient.invalidateQueries({ queryKey: ['global-recipes'] }),
-        queryClient.invalidateQueries({ queryKey: ['user-recipes'] }),
-      ]);
-      await queryClient.refetchQueries({ queryKey: ['recipe', recipeId] });
-
-      // Reset local state
-      resetAll();
-      setAppliedActionIds(new Set());
-      setShowCelebration(false);
-      undoSnapshotRef.current = null;
-
-      toast.success('Changes reverted successfully');
-      onCommit();
-
-    } catch (error) {
-      console.error('Failed to undo changes:', error);
-      toast.error('Failed to undo changes');
-    } finally {
-      setIsCommitting(false);
-    }
-  }, [recipeId, queryClient, resetAll, onCommit]);
-
-  // Recalculate nutrition via edge function
-  const recalculateNutrition = async () => {
-    try {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session?.session?.access_token) return;
-      
-      await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/recalculate-nutrition`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.session.access_token}`,
-          },
-          body: JSON.stringify({ recipeId }),
-        }
-      );
-    } catch (error) {
-      console.error('Nutrition recalculation failed:', error);
-    }
-  };
 
   // Handle reset
   const handleReset = () => {
