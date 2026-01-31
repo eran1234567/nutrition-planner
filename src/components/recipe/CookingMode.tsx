@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { X, Check, ChevronUp, ChevronDown, Play, Pause, Volume2, VolumeX } from 'lucide-react';
+import { X, Check, ChevronUp, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
-
+import { groupAndOrderIngredients } from '@/lib/neutron/ingredientGrouping';
 interface Ingredient {
   name: string;
   quantity: number | null;
@@ -87,19 +87,11 @@ export function CookingMode({
   const videoRef = useRef<HTMLIFrameElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Group ingredients by section
-  const ingredientsBySection = useMemo(() => {
-    const sections: Record<string, Ingredient[]> = {};
-    ingredients.forEach((ing) => {
-      const section = ing.section || 'Main';
-      if (!sections[section]) sections[section] = [];
-      sections[section].push(ing);
-    });
-    return sections;
-  }, [ingredients]);
-
-  // Get all section names for the collapsible summary
-  const sectionNames = useMemo(() => Object.keys(ingredientsBySection), [ingredientsBySection]);
+  // Group ingredients by section using shared Neutron utility
+  const { sections: ingredientsBySection, sectionOrder: sectionNames } = useMemo(
+    () => groupAndOrderIngredients(ingredients),
+    [ingredients]
+  );
 
   // Get YouTube embed URL
   const youtubeVideoId = sourceUrl ? getYouTubeVideoId(sourceUrl) : null;
