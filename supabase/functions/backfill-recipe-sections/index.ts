@@ -121,50 +121,35 @@ serve(async (req) => {
       recipes = data ? [data] : [];
     } else {
       // Find global recipes that need section backfill
-      // These are recipes where ALL ingredients have NULL section
+      // A recipe needs backfill if it has NO steps with introduces_section set
+      // This is more reliable than checking ingredient sections since Main is always set
+      
+      // First, get IDs of recipes that already have step sections
+      const { data: processedRecipeIds } = await supabase
+        .from("recipe_steps")
+        .select("recipe_id")
+        .not("introduces_section", "is", null);
+      
+      const processedSet = new Set((processedRecipeIds || []).map((r: any) => r.recipe_id));
+      
+      // Now fetch global recipes and filter out already-processed ones
       const { data: globalRecipes, error } = await supabase
         .from("recipes")
         .select("id, title")
         .eq("scope", "global")
         .eq("is_deleted", false)
-        .limit(batchSize * 3); // Fetch more to filter
+        .order("title", { ascending: true })
+        .limit(500); // Fetch more to find unprocessed ones
 
       if (error) throw new Error(`Failed to fetch recipes: ${error.message}`);
 
-      // Check which recipes have no section data
-      const recipesNeedingBackfill: any[] = [];
-      
-      for (const recipe of globalRecipes || []) {
-        const { data: ingredients } = await supabase
-          .from("recipe_ingredients")
-          .select("section")
-          .eq("recipe_id", recipe.id);
-        
-        // Check if ANY ingredient has a non-null, non-Main section
-        // This means the recipe was already processed properly
-        const hasRealSections = ingredients?.some(
-          (ing) => ing.section && ing.section !== "Main"
-        );
-        
-        // Also check if steps have introduces_section
-        const { data: steps } = await supabase
-          .from("recipe_steps")
-          .select("introduces_section")
-          .eq("recipe_id", recipe.id);
-        
-        const hasStepSections = steps?.some(
-          (step) => step.introduces_section !== null
-        );
-        
-        // Skip if already has proper section data
-        if (!hasRealSections && !hasStepSections) {
-          recipesNeedingBackfill.push(recipe);
-          if (recipesNeedingBackfill.length >= batchSize) break;
-        }
-      }
+      // Filter to only unprocessed recipes
+      const recipesNeedingBackfill = (globalRecipes || [])
+        .filter((recipe: any) => !processedSet.has(recipe.id))
+        .slice(0, batchSize);
 
       recipes = recipesNeedingBackfill;
-      console.log(`Found ${recipes.length} recipes needing section backfill`);
+      console.log(`Found ${recipes.length} recipes needing section backfill (${processedSet.size} already processed)`);
     }
 
     if (recipes.length === 0) {
