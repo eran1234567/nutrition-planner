@@ -6,9 +6,10 @@
  * - Zero-Quantity Flavor Guard with swap pivots
  * - Flat UI with action cards and Apply buttons
  * - Celebration state with confetti when reaching 100
+ * - Undo support with snapshot restore
  */
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Target, 
@@ -28,8 +29,40 @@ import { useKetoSandbox } from './useKetoSandbox';
 import { SmartActionsPanel } from './SmartActionsPanel';
 import { CelebrationState } from './CelebrationState';
 import { generateSmartActions, type SmartAction } from './SmartActionTypes';
-import { FAT_ADDITIONS } from './types';
 import type { KetoSandboxProps } from './types';
+
+// Snapshot for undo functionality
+interface UndoSnapshot {
+  ingredients: Array<{ id: string; name: string; quantity: number | null; unit: string | null }>;
+  nutrition: {
+    calories: number | null;
+    protein_g: number | null;
+    carbs_g: number | null;
+    fat_g: number | null;
+    fiber_g: number | null;
+  } | null;
+}
+
+// Helper to detect countable units
+function isCountableUnit(unit: string | null, name: string): boolean {
+  const lowerUnit = (unit || '').toLowerCase();
+  const lowerName = name.toLowerCase();
+  return ['fillet', 'fillets', 'slice', 'slices', 'piece', 'pieces', 
+    'egg', 'eggs', 'strip', 'strips', 'breast', 'breasts', 'thigh', 'thighs',
+    'drumstick', 'drumsticks', 'wing', 'wings', 'patty', 'patties'].some(
+    u => lowerUnit.includes(u) || lowerName.includes(u)
+  );
+}
+
+// Helper to round quantities properly
+function roundQuantity(quantity: number, isCountable: boolean): number {
+  if (isCountable) {
+    // Round to nearest 0.5 for countables, minimum 1
+    return Math.max(1, Math.round(quantity * 2) / 2);
+  }
+  // Round to nearest 0.25 for other units
+  return Math.max(0.25, Math.round(quantity * 4) / 4);
+}
 
 export function KetoSandbox({ 
   recipeId, 
@@ -45,6 +78,9 @@ export function KetoSandbox({
   const [appliedActionIds, setAppliedActionIds] = useState<Set<string>>(new Set());
   const [showCelebration, setShowCelebration] = useState(false);
   const queryClient = useQueryClient();
+  
+  // Undo snapshot reference
+  const undoSnapshotRef = useRef<UndoSnapshot | null>(null);
 
   const {
     previewState,
@@ -81,39 +117,31 @@ export function KetoSandbox({
     }
   }, [projectedScore, hasChanges, showCelebration]);
 
-  // Set a specific quantity directly (for Smart Actions)
-  const setQuantityDirect = useCallback((ingredientId: string, targetQuantity: number) => {
-    const ingredient = ingredients.find(i => i.id === ingredientId);
-    if (!ingredient || !ingredient.quantity) return;
-
-    // Detect unit type for proper rounding
-    const lowerUnit = (ingredient.unit || '').toLowerCase();
-    const isCountable = ['fillet', 'fillets', 'slice', 'slices', 'piece', 'pieces', 
-      'egg', 'eggs', 'strip', 'strips', 'breast', 'breasts', 'thigh', 'thighs'].some(
-      u => lowerUnit.includes(u) || ingredient.name.toLowerCase().includes(u)
-    );
-    
-    // Round countables to nearest 0.5 or 1.0, never microscopic decimals
-    let roundedQuantity: number;
-    if (isCountable) {
-      roundedQuantity = Math.max(1, Math.round(targetQuantity));
-    } else {
-      roundedQuantity = Math.max(0.25, Math.round(targetQuantity * 4) / 4);
-    }
-
-    // Calculate how many times we need to call updateQuantity
-    const currentQty = ingredient.quantity;
-    const direction = roundedQuantity < currentQty ? 'down' : 'up';
-    const steps = Math.abs(Math.round(currentQty - roundedQuantity));
-    
-    for (let i = 0; i < steps; i++) {
-      updateQuantity(ingredientId, direction);
-    }
-  }, [ingredients, updateQuantity]);
+  // Create snapshot before any changes
+  const createSnapshot = useCallback((): UndoSnapshot => {
+    return {
+      ingredients: ingredients.map(ing => ({
+        id: ing.id,
+        name: ing.name,
+        quantity: ing.quantity,
+        unit: ing.unit,
+      })),
+      nutrition: nutrition ? {
+        calories: nutrition.calories ?? null,
+        protein_g: nutrition.protein_g ?? null,
+        carbs_g: nutrition.carbs_g ?? null,
+        fat_g: nutrition.fat_g ?? null,
+        fiber_g: nutrition.fiber_g ?? null,
+      } : null,
+    };
+  }, [ingredients, nutrition]);
 
   // Handle applying a single Smart Action
   const handleApplyAction = useCallback(async (action: SmartAction) => {
     setApplyingActionId(action.id);
+    
+    // Create snapshot before applying
+    undoSnapshotRef.current = createSnapshot();
     
     // Small delay for visual feedback
     await new Promise(resolve => setTimeout(resolve, 200));
@@ -128,15 +156,41 @@ export function KetoSandbox({
 
         case 'reduce':
           if (action.ingredientId && action.newQuantity !== undefined) {
-            // FIX #1: Use absolute target value, not calculated difference
-            setQuantityDirect(action.ingredientId, action.newQuantity);
+            // FIX: Find ingredient and directly update to target quantity
+            const ingredient = ingredients.find(i => i.id === action.ingredientId);
+            if (ingredient && ingredient.quantity) {
+              const isCountable = isCountableUnit(ingredient.unit, ingredient.name);
+              const targetQty = roundQuantity(action.newQuantity, isCountable);
+              
+              // Calculate direction and steps needed
+              const currentQty = ingredient.quantity;
+              if (targetQty < currentQty) {
+                const steps = Math.round(currentQty - targetQty);
+                for (let i = 0; i < steps; i++) {
+                  updateQuantity(action.ingredientId, 'down');
+                }
+              } else if (targetQty > currentQty) {
+                const steps = Math.round(targetQty - currentQty);
+                for (let i = 0; i < steps; i++) {
+                  updateQuantity(action.ingredientId, 'up');
+                }
+              }
+            }
           }
           break;
 
         case 'remove':
           if (action.ingredientId) {
-            // Set quantity to 1 (minimum for countables)
-            setQuantityDirect(action.ingredientId, 1);
+            const ingredient = ingredients.find(i => i.id === action.ingredientId);
+            if (ingredient && ingredient.quantity) {
+              // Set to minimum (1 for countables)
+              const isCountable = isCountableUnit(ingredient.unit, ingredient.name);
+              const minQty = isCountable ? 1 : 0.25;
+              const steps = Math.max(0, Math.round(ingredient.quantity - minQty));
+              for (let i = 0; i < steps; i++) {
+                updateQuantity(action.ingredientId, 'down');
+              }
+            }
           }
           break;
 
@@ -162,11 +216,82 @@ export function KetoSandbox({
     } finally {
       setApplyingActionId(null);
     }
-  }, [toggleSwap, setQuantityDirect, toggleAddition, updateAdditionQuantity]);
+  }, [toggleSwap, updateQuantity, toggleAddition, updateAdditionQuantity, createSnapshot, ingredients]);
+
+  // Restore from snapshot (Undo)
+  const handleUndo = useCallback(async () => {
+    const snapshot = undoSnapshotRef.current;
+    if (!snapshot) {
+      toast.error('No changes to undo');
+      return;
+    }
+
+    setIsCommitting(true);
+
+    try {
+      // Restore ingredient quantities
+      for (const snapIng of snapshot.ingredients) {
+        await supabase
+          .from('recipe_ingredients')
+          .update({ 
+            name: snapIng.name,
+            quantity: snapIng.quantity 
+          })
+          .eq('id', snapIng.id);
+      }
+
+      // Remove any newly added ingredients (fat additions)
+      const originalIds = new Set(snapshot.ingredients.map(i => i.id));
+      const { data: currentIngredients } = await supabase
+        .from('recipe_ingredients')
+        .select('id')
+        .eq('recipe_id', recipeId);
+      
+      if (currentIngredients) {
+        for (const ing of currentIngredients) {
+          if (!originalIds.has(ing.id)) {
+            await supabase
+              .from('recipe_ingredients')
+              .delete()
+              .eq('id', ing.id);
+          }
+        }
+      }
+
+      // Recalculate nutrition
+      await recalculateNutrition();
+
+      // Force cache refresh
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] }),
+        queryClient.invalidateQueries({ queryKey: ['global-recipes'] }),
+        queryClient.invalidateQueries({ queryKey: ['user-recipes'] }),
+      ]);
+      await queryClient.refetchQueries({ queryKey: ['recipe', recipeId] });
+
+      // Reset local state
+      resetAll();
+      setAppliedActionIds(new Set());
+      setShowCelebration(false);
+      undoSnapshotRef.current = null;
+
+      toast.success('Changes reverted successfully');
+      onCommit();
+
+    } catch (error) {
+      console.error('Failed to undo changes:', error);
+      toast.error('Failed to undo changes');
+    } finally {
+      setIsCommitting(false);
+    }
+  }, [recipeId, queryClient, resetAll, onCommit]);
 
   // Commit all changes to database
   const handleCommit = async () => {
     if (!hasChanges) return;
+    
+    // Create snapshot before committing for undo support
+    undoSnapshotRef.current = createSnapshot();
     
     setIsCommitting(true);
     
@@ -181,19 +306,11 @@ export function KetoSandbox({
           .eq('id', swap.ingredientId);
       }
       
-      // 2. Apply quantity changes with proper rounding for countables
+      // 2. Apply quantity changes with ABSOLUTE TARGET VALUES and proper rounding
       for (const qty of changes.quantities) {
-        // FIX #1: Ensure countable units are rounded to whole numbers
-        let finalQuantity = qty.newQuantity;
-        const lowerUnit = (qty.unit || '').toLowerCase();
-        const isCountable = ['fillet', 'fillets', 'slice', 'slices', 'piece', 'pieces', 
-          'egg', 'eggs', 'strip', 'strips', 'breast', 'breasts', 'thigh', 'thighs'].some(
-          u => lowerUnit.includes(u) || qty.ingredientName.toLowerCase().includes(u)
-        );
-        
-        if (isCountable) {
-          finalQuantity = Math.max(1, Math.round(qty.newQuantity));
-        }
+        const isCountable = isCountableUnit(qty.unit, qty.ingredientName);
+        // FIX: Use absolute target value, properly rounded
+        const finalQuantity = roundQuantity(qty.newQuantity, isCountable);
         
         await supabase
           .from('recipe_ingredients')
@@ -222,7 +339,9 @@ export function KetoSandbox({
           if (!ingredient) continue;
           
           const originalQtyStr = qty.originalQuantity.toString();
-          const newQtyStr = qty.newQuantity.toFixed(1).replace(/\.0$/, '');
+          const isCountable = isCountableUnit(qty.unit, qty.ingredientName);
+          const finalQty = roundQuantity(qty.newQuantity, isCountable);
+          const newQtyStr = finalQty.toString();
           
           for (const step of steps) {
             const patterns = [
@@ -255,15 +374,14 @@ export function KetoSandbox({
       // 5. Recalculate nutrition
       await recalculateNutrition();
       
-      // FIX #2: Force hard refresh to update macros and badge
-      // Invalidate ALL relevant queries to ensure fresh data
+      // 6. Force hard refresh to update macros and badge
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] }),
         queryClient.invalidateQueries({ queryKey: ['global-recipes'] }),
         queryClient.invalidateQueries({ queryKey: ['user-recipes'] }),
       ]);
       
-      // Force refetch to ensure UI updates
+      // Force refetch to ensure UI updates immediately
       await queryClient.refetchQueries({ queryKey: ['recipe', recipeId] });
       
       const scoreGain = previewNutrition.ketoScore - originalNutrition.ketoScore;
@@ -271,12 +389,20 @@ export function KetoSandbox({
       if (previewNutrition.ketoScore >= 100) {
         toast.success('Perfect Score! Recipe updated and saved.', {
           description: 'Neutron Verified: 100',
+          action: {
+            label: 'Undo',
+            onClick: handleUndo,
+          },
         });
       } else {
         toast.success('Recipe optimized!', {
           description: scoreGain > 0 
             ? `Score improved by ${scoreGain} points to ${previewNutrition.ketoScore}!`
             : `Applied changes successfully.`,
+          action: {
+            label: 'Undo',
+            onClick: handleUndo,
+          },
         });
       }
       
@@ -416,20 +542,18 @@ export function KetoSandbox({
                 )}
               </AnimatePresence>
 
-              {/* Action Buttons - FIX #3: Only show when NOT in celebration mode */}
-              {!showCelebration && (
+              {/* Action Buttons - ONLY show when NOT in celebration mode */}
+              {!showCelebration && hasChanges && (
                 <div className="flex items-center gap-2 pt-3 border-t border-border/50">
-                  {hasChanges && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleReset}
-                      className="text-muted-foreground"
-                    >
-                      <RotateCcw className="w-4 h-4 mr-1.5" />
-                      Reset
-                    </Button>
-                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleReset}
+                    className="text-muted-foreground"
+                  >
+                    <RotateCcw className="w-4 h-4 mr-1.5" />
+                    Reset
+                  </Button>
                   
                   <Button
                     className={`flex-1 text-white ${
@@ -439,7 +563,7 @@ export function KetoSandbox({
                     }`}
                     size="sm"
                     onClick={handleCommit}
-                    disabled={!hasChanges || isCommitting}
+                    disabled={isCommitting}
                   >
                     {isCommitting ? (
                       <>
