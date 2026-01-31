@@ -28,6 +28,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { IngredientInput, IngredientItem } from './IngredientInput';
+import { LiveNutritionHeader } from './LiveNutritionHeader';
 
 type InputMode = 'quick' | 'detailed';
 
@@ -354,18 +355,23 @@ Steps:
                 </div>
               </motion.div>
             ) : (
-              <motion.div
-                key="detailed"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-4"
-              >
-                {/* Detailed inputs with barcode scanner */}
-                <IngredientInput 
-                  ingredients={ingredients}
-                  onChange={setIngredients}
-                />
+            <motion.div
+              key="detailed"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-4"
+            >
+              {/* Live Nutrition Header */}
+              <div className="sticky top-0 z-10 bg-background/95 backdrop-blur -mx-4 px-4 py-3 border-b border-border">
+                <LiveNutritionHeader ingredients={ingredients} />
+              </div>
+
+              {/* Detailed inputs with barcode scanner */}
+              <IngredientInput 
+                ingredients={ingredients}
+                onChange={setIngredients}
+              />
 
                 <div className="space-y-2">
                   <Label htmlFor="instructions" className="text-sm font-medium">

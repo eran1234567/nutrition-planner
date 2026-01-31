@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { BarcodeScanner } from './BarcodeScanner';
+import { ScanReviewModal, ScannedProduct } from './ScanReviewModal';
 import { toast } from 'sonner';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
 
@@ -31,6 +32,7 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
   const { t } = useTranslation();
   const [showScanner, setShowScanner] = useState(false);
   const [isLookingUp, setIsLookingUp] = useState(false);
+  const [pendingProduct, setPendingProduct] = useState<ScannedProduct | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   const generateId = () => Math.random().toString(36).substring(2, 9);
@@ -68,61 +70,66 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
         const product = data.product;
         const nutriments = product.nutriments || {};
         
-        // Create ingredient from scanned product
-        const newIngredient: IngredientItem = {
-          id: generateId(),
-          name: product.product_name || product.generic_name || barcode,
-          quantity: '1',
-          unit: product.serving_size ? 'serving' : 'item',
+        // Show review modal instead of adding directly
+        setPendingProduct({
           barcode,
+          name: product.product_name || product.generic_name || barcode,
+          servingSize: product.serving_size,
           nutrition: {
             calories: nutriments['energy-kcal_serving'] || nutriments['energy-kcal_100g'],
             protein: nutriments.proteins_serving || nutriments.proteins_100g,
             carbs: nutriments.carbohydrates_serving || nutriments.carbohydrates_100g,
             fat: nutriments.fat_serving || nutriments.fat_100g,
           }
-        };
-
-        onChange([...ingredients, newIngredient]);
-        toast.success(
-          t('recipes.productFound', `Added: ${newIngredient.name}`),
-          { description: product.serving_size ? `Serving: ${product.serving_size}` : undefined }
-        );
+        });
       } else {
-        // Product not found - add barcode as placeholder
-        const newIngredient: IngredientItem = {
-          id: generateId(),
-          name: `Product (${barcode})`,
-          quantity: '1',
-          unit: 'item',
+        // Product not found - show review with placeholder
+        setPendingProduct({
           barcode,
-        };
-        onChange([...ingredients, newIngredient]);
-        toast.info(t('recipes.productNotFound', 'Product not in database. Please enter name manually.'));
+          name: `Product (${barcode})`,
+          nutrition: {}
+        });
+        toast.info(t('recipes.productNotFound', 'Product not in database. You can enter details manually.'));
       }
     } catch (error) {
       console.error('Barcode lookup error:', error);
-      // Add placeholder on error
-      const newIngredient: IngredientItem = {
-        id: generateId(),
-        name: `Scanned item (${barcode})`,
-        quantity: '1',
-        unit: 'item',
+      // Show review with placeholder on error
+      setPendingProduct({
         barcode,
-      };
-      onChange([...ingredients, newIngredient]);
+        name: `Scanned item (${barcode})`,
+        nutrition: {}
+      });
       toast.error(t('recipes.lookupFailed', 'Could not look up product. Enter details manually.'));
     } finally {
       setIsLookingUp(false);
     }
   };
 
+  const handleConfirmProduct = (quantity: string, unit: string) => {
+    if (!pendingProduct) return;
+    
+    const newIngredient: IngredientItem = {
+      id: generateId(),
+      name: pendingProduct.name,
+      quantity,
+      unit,
+      barcode: pendingProduct.barcode,
+      nutrition: pendingProduct.nutrition,
+    };
+
+    onChange([...ingredients, newIngredient]);
+    toast.success(t('recipes.ingredientAdded', `Added: ${pendingProduct.name}`));
+    setPendingProduct(null);
+  };
+
+  const handleCancelProduct = () => {
+    setPendingProduct(null);
+  };
+
   const handlePhotoCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // For now, we just notify user that photo ingredient detection is coming
-    // This could integrate with AI vision in the future
     toast.info(
       t('recipes.photoIngredientHint', 'Photo ingredient detection coming soon! For now, please type or scan barcode.')
     );
@@ -183,7 +190,7 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
                 exit={{ opacity: 0, x: -100 }}
                 className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 border border-border"
               >
-                <GripVertical className="w-4 h-4 text-muted-foreground cursor-grab active:cursor-grabbing" />
+                <GripVertical className="w-4 h-4 text-muted-foreground cursor-grab active:cursor-grabbing flex-shrink-0" />
                 
                 <div className="flex-1 grid grid-cols-12 gap-2">
                   <Input
@@ -207,7 +214,7 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
                 </div>
 
                 {ingredient.barcode && (
-                  <span className="text-xs text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">
+                  <span className="text-xs text-muted-foreground bg-secondary px-1.5 py-0.5 rounded flex-shrink-0">
                     {t('recipes.scanned', 'Scanned')}
                   </span>
                 )}
@@ -216,7 +223,7 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive flex-shrink-0"
                   onClick={() => removeIngredient(ingredient.id)}
                 >
                   <X className="w-4 h-4" />
@@ -258,6 +265,14 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
         open={showScanner}
         onClose={() => setShowScanner(false)}
         onScan={handleBarcodeScan}
+      />
+
+      {/* Scan Review Modal */}
+      <ScanReviewModal
+        open={!!pendingProduct}
+        product={pendingProduct}
+        onConfirm={handleConfirmProduct}
+        onCancel={handleCancelProduct}
       />
     </div>
   );

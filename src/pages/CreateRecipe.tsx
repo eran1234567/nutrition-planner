@@ -22,6 +22,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { IngredientInput, IngredientItem } from '@/components/recipe/IngredientInput';
+import { LiveNutritionHeader } from '@/components/recipe/LiveNutritionHeader';
 
 type InputMode = 'quick' | 'detailed';
 
@@ -356,6 +357,11 @@ Serves 2, takes about 20 minutes`)}
               exit={{ opacity: 0, x: -20 }}
               className="space-y-6"
             >
+              {/* Live Nutrition Header - Real-time macro tracking */}
+              <div className="sticky top-[73px] z-10 bg-background/95 backdrop-blur -mx-4 px-4 py-3 border-b border-border">
+                <LiveNutritionHeader ingredients={ingredients} />
+              </div>
+
               {/* Detailed inputs with barcode scanner */}
               <IngredientInput 
                 ingredients={ingredients}
