@@ -871,6 +871,41 @@ No text, no extra garnish or props not in the recipe. Natural lighting, overhead
   }
 }
 
+// Background section backfill - runs after response is sent to refine ingredient sections
+async function runSectionBackfillInBackground(
+  recipes: { id: string; title: string; description: string | null }[],
+  supabaseUrl: string
+) {
+  // Wait a bit for the initial data to settle
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
+  for (const recipe of recipes) {
+    try {
+      console.log(`Running section backfill for: ${recipe.title}`);
+      
+      // Call the backfill endpoint for each recipe
+      const response = await fetch(`${supabaseUrl}/functions/v1/backfill-recipe-sections`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Lovable-Internal': 'true',
+        },
+        body: JSON.stringify({ recipeId: recipe.id }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Section backfill failed for ${recipe.title}: ${response.status} ${errorText}`);
+      } else {
+        const result = await response.json();
+        console.log(`Section backfill complete for ${recipe.title}:`, result.results?.[0]?.sections || 'unknown sections');
+      }
+    } catch (err) {
+      console.error(`Section backfill error for ${recipe.title}:`, err);
+    }
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -1742,12 +1777,16 @@ Always respond with valid JSON only, no markdown code blocks or explanation.`;
       "is_meal_prep_friendly": true,
       "is_budget_friendly": true,
       "ingredients": [
-        { "name": "ingredient name", "quantity": 2, "unit": "cups", "aisle": "Produce|Meat|Dairy|Bakery|Canned Goods|Spices|Oils|Health Foods|Frozen|Beverages", "section": "Main|Marinade|Sauce|Dressing|Topping|Garnish|Spice Rub|Glaze|Filling" }
+        { "name": "chicken cutlets", "quantity": 4, "unit": "pieces", "aisle": "Meat", "section": "Main" },
+        { "name": "egg", "quantity": 1, "unit": "large", "aisle": "Dairy", "section": "Breadcrumb Coating" },
+        { "name": "breadcrumbs", "quantity": 1, "unit": "cup", "aisle": "Bakery", "section": "Breadcrumb Coating" },
+        { "name": "paprika", "quantity": 1, "unit": "tsp", "aisle": "Spices", "section": "Breadcrumb Coating" }
       ],
       "steps": [
-        { "instruction": "Step 1 instruction with specific details", "introduces_section": "Main" },
-        { "instruction": "Step 2 instruction including portion info for discrete items", "introduces_section": null },
-        { "instruction": "Step 3 - now we start making the sauce", "introduces_section": "Sauce" }
+        { "instruction": "Prepare the chicken cutlets by pounding to even thickness", "introduces_section": "Main" },
+        { "instruction": "In a shallow dish, whisk the egg with salt and pepper", "introduces_section": "Breadcrumb Coating" },
+        { "instruction": "In another dish, combine breadcrumbs with paprika", "introduces_section": null },
+        { "instruction": "Dip each cutlet in egg, then coat with breadcrumb mixture", "introduces_section": null }
       ],
       "nutrition": {
         "calories": 485,
@@ -1791,15 +1830,30 @@ CRITICAL RULES:
 9. MINIMIZE sodium by default (< 600mg unless health filter requires lower)
 10. If no recipes found, return: { "recipes": [], "error": "Could not extract recipe information" }
 11. Include "servings_source" field with the exact quote or observation that determined the serving count
-12. Assign each ingredient a "section" field (e.g., "Main", "Marinade", "Sauce") for multi-part recipes
+12. INGREDIENT SECTION ASSIGNMENT (CRITICAL - ALWAYS DO THIS):
+    - EVERY recipe MUST have ingredients grouped into logical sections based on HOW and WHEN they are used
+    - Read through ALL steps first to understand the cooking flow
+    - Look for these common section patterns:
+      * "Breadcrumb Coating" or "Breading": breadcrumbs, eggs, spices mixed for coating proteins
+      * "Marinade": ingredients mixed together to marinate proteins
+      * "Sauce" or "Dressing": liquids, seasonings combined for a sauce
+      * "Spice Rub" or "Seasoning": dry spices mixed and applied
+      * "Glaze": sweet or savory coating applied during cooking
+      * "Topping" or "Garnish": ingredients added at the end for presentation
+      * "Main": core proteins, vegetables, and base ingredients
+    - If step 2 says "In another dish, combine breadcrumbs, sesame seeds, paprika...", those ingredients are "Breadcrumb Coating"
+    - If step says "whisk egg with salt and pepper", the egg and its seasonings are part of the breading process, NOT Main
+    - NEVER put ALL ingredients in "Main" - analyze the steps to find natural groupings
+    - Even simple recipes have sections: coating + main, or main + garnish
 13. STEP SECTION PLACEMENT (CRITICAL FOR UI):
     - Each step can optionally have an "introduces_section" field
     - Set "introduces_section" to the section name ONLY for the FIRST step where that section's ingredients are actually used
+    - READ EACH STEP and identify which ingredients are used in that step
     - DO NOT default "Main" to step 1. Place each section (including "Main") on the EXACT step where those ingredients are first used.
-    - If step 1 says "mix all marinade ingredients", set introduces_section: "Marinade" (NOT "Main")
-    - If step 2 says "Place onion half, insert skewers, thread chicken", set introduces_section: "Main" because that's when the main ingredients (onion, chicken) are first used
-    - Example: If step 6 says "Meanwhile, whisk tehina ingredients", set introduces_section: "Creamy Tehina"
-    - Example: If step 7 says "Toss onion salad ingredients together", set introduces_section: "Onion Sumac Salad"
+    - Example: If step 1 says "Prepare the chicken cutlets by pounding them", set introduces_section: "Main" (chicken is Main)
+    - Example: If step 2 says "In a shallow dish, whisk the egg with salt and pepper", set introduces_section: "Breadcrumb Coating" (egg is part of breading)
+    - Example: If step 3 says "In another dish, combine breadcrumbs, sesame seeds, paprika...", this continues the Breadcrumb Coating section, so introduces_section: null
+    - Example: If step 5 says "Meanwhile, prepare the sauce...", set introduces_section: "Sauce"
     - For steps that don't introduce a new section, set introduces_section: null
     - This tells the UI exactly when to show the section header with its ingredients`;
 
@@ -2292,6 +2346,12 @@ ${transcript}`;
     if (createdRecipes.length > 0) {
       EdgeRuntime.waitUntil(
         generateRecipeImagesInBackground(createdRecipes, supabaseUrl, supabaseServiceKey, GEMINI_API_KEY)
+      );
+      
+      // Run section backfill in background for each new recipe
+      // This ensures proper ingredient sections even if the initial AI didn't detect them well
+      EdgeRuntime.waitUntil(
+        runSectionBackfillInBackground(createdRecipes, supabaseUrl)
       );
     }
 
