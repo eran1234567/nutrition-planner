@@ -76,11 +76,11 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
 
       const qrbox = (viewfinderWidth: number, viewfinderHeight: number) => {
         // Make the scan window large for 1D barcodes (helps on mobile cameras).
-        const width = Math.floor(viewfinderWidth * 0.85);
-        const height = Math.floor(viewfinderHeight * 0.35);
+        const width = Math.floor(viewfinderWidth * 0.95);
+        const height = Math.floor(viewfinderHeight * 0.45);
         return {
-          width: Math.min(width, 360),
-          height: Math.min(height, 200),
+          width: Math.min(width, 500),
+          height: Math.min(height, 250),
         };
       };
 
@@ -94,6 +94,7 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
         },
         (decodedText, decodedResult) => {
           // Barcode scanned successfully
+          console.log('[BarcodeScanner] Scanned:', decodedText, decodedResult.result.format);
           const format = decodedResult.result.format?.formatName || 'unknown';
           onScan(decodedText, format);
           
@@ -102,13 +103,18 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
           setIsScanning(false);
           onClose();
         },
-        () => {
-          // QR code scanning failure - ignore (keep scanning)
+        (errorMessage) => {
+          // Scan failure (expected during continuous scanning)
+          // Only log periodically to avoid console spam
+          if (Math.random() < 0.01) {
+            console.debug('[BarcodeScanner] Scan attempt (no match):', errorMessage);
+          }
         }
       );
 
       setIsInitializing(false);
       setIsScanning(true);
+      console.log('[BarcodeScanner] Started scanning with formats:', formatsToSupport.map(f => Html5QrcodeSupportedFormats[f]));
     } catch (err) {
       console.error('Scanner init error:', err);
       
@@ -238,7 +244,7 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
         {/* Scan overlay guide */}
         {isScanning && !error && (
           <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-            <div className="w-72 h-36 border-2 border-white/50 rounded-lg">
+            <div className="w-80 h-44 border-2 border-primary/80 rounded-lg shadow-lg">
               <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-primary rounded-tl-lg" />
               <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-primary rounded-tr-lg" />
               <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-primary rounded-bl-lg" />
