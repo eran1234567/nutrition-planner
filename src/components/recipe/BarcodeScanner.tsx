@@ -241,26 +241,15 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
           </div>
         </div>
 
-        {/* Scan overlay guide */}
-        {isScanning && !error && (
-          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-            <div className="w-80 h-44 border-2 border-primary/80 rounded-lg shadow-lg">
-              <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-primary rounded-tl-lg" />
-              <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-primary rounded-tr-lg" />
-              <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-primary rounded-bl-lg" />
-              <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-primary rounded-br-lg" />
-            </div>
-
-            {showNoScanHint && (
-              <div className="absolute bottom-24 left-4 right-4 text-center text-white/80">
-                <p className="text-xs">
-                  {t(
-                    'recipes.noScanHint',
-                    'Not scanning yet? Move closer, increase light, and keep the barcode inside the box.'
-                  )}
-                </p>
-              </div>
-            )}
+        {/* No scan hint */}
+        {isScanning && !error && showNoScanHint && (
+          <div className="absolute bottom-20 left-4 right-4 text-center text-white/90 pointer-events-none">
+            <p className="text-sm bg-black/50 rounded-lg px-4 py-2">
+              {t(
+                'recipes.noScanHint',
+                'Not scanning yet? Move closer, increase light, and keep the barcode inside the box.'
+              )}
+            </p>
           </div>
         )}
 
