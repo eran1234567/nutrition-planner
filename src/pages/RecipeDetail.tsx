@@ -1010,6 +1010,82 @@ export default function RecipeDetail() {
               <div className="mb-6">
                 <h3 className="text-sm font-semibold mb-3">{t('recipes.instructions')}</h3>
 
+                {/**
+                 * Instructions grouping rule:
+                 * Many recipes start with a non-ingredient step (e.g. “Preheat oven”).
+                 * In that case, users still expect to see the first ingredient group card
+                 * ("Gather These Ingredients") BEFORE Step 1.
+                 *
+                 * We therefore render a "prelude" set of section cards above the step list:
+                 * - Any section explicitly introduced at Step 1 (prep sections)
+                 * - Always include Main/Base if it exists (so the flow matches the UX in the screenshot)
+                 *
+                 * Then, while iterating steps, we render section cards at their introduces_section step
+                 * only if we haven't rendered that section already.
+                 */}
+                {(() => {
+                  const steps = recipe.steps ?? [];
+                  const mainSectionKey =
+                    ingredientsBySection['Main']?.length
+                      ? 'Main'
+                      : ingredientsBySection['Base']?.length
+                        ? 'Base'
+                        : null;
+
+                  const introducedAtStep1 = new Set<string>();
+                  for (const s of steps) {
+                    if (s.step_number !== 1) continue;
+                    const section = (s as any).introduces_section as string | null | undefined;
+                    if (section) introducedAtStep1.add(section);
+                  }
+
+                  const preludeSections: string[] = [];
+
+                  // Render any Step-1 introduced prep sections first (exclude Main/Base; we append it below).
+                  for (const section of introducedAtStep1) {
+                    if (section && section !== mainSectionKey) preludeSections.push(section);
+                  }
+
+                  // Always show Main/Base before the steps (even if its introduces_section is later)
+                  if (mainSectionKey) preludeSections.push(mainSectionKey);
+
+                  // De-dupe and keep stable order
+                  const seen = new Set<string>();
+                  const orderedPrelude = preludeSections.filter((s) => {
+                    if (!s || seen.has(s)) return false;
+                    seen.add(s);
+                    return true;
+                  });
+
+                  if (orderedPrelude.length === 0) return null;
+
+                  return (
+                    <div className="mb-4">
+                      {orderedPrelude.map((section) => {
+                        const sectionIngredients = ingredientsBySection[section];
+                        if (!sectionIngredients || sectionIngredients.length === 0) return null;
+                        const isMain = section === mainSectionKey;
+                        return (
+                          <div key={section} className="mb-3 last:mb-0 p-3 bg-primary/5 border border-primary/20 rounded-lg">
+                            <h4 className="text-xs font-semibold text-primary uppercase tracking-wide mb-2">
+                              {isMain ? 'Gather These Ingredients' : `For the ${section}`}
+                            </h4>
+                            <div className="flex flex-wrap gap-2">
+                              {sectionIngredients.map((ing, i) => (
+                                <span key={i} className="text-xs px-2 py-1 bg-background rounded-full border">
+                                  {ing.quantity && `${formatQuantity(ing.quantity)} `}
+                                  {ing.unit && `${ing.unit} `}
+                                  {ing.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+
                 <ol className="space-y-4">
                   {(() => {
                     const mainSectionKey =
@@ -1020,6 +1096,19 @@ export default function RecipeDetail() {
                           : null;
 
                     const renderedSections = new Set<string>();
+
+                    // Mark sections rendered in the prelude so they don't repeat inside the list.
+                    // (Prelude always shows Main/Base; may also show step-1 prep sections.)
+                    if (ingredientsBySection['Main']?.length) renderedSections.add('Main');
+                    if (!ingredientsBySection['Main']?.length && ingredientsBySection['Base']?.length) {
+                      renderedSections.add('Base');
+                    }
+                    // Also mark any sections introduced at Step 1 as rendered.
+                    for (const s of recipe.steps ?? []) {
+                      if (s.step_number !== 1) continue;
+                      const section = (s as any).introduces_section as string | null | undefined;
+                      if (section) renderedSections.add(section);
+                    }
 
                     // If the recipe explicitly says when Main/Base is introduced, respect that.
                     // Otherwise (legacy imports), fall back to showing Main/Base at Step 1.
