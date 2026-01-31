@@ -128,181 +128,185 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
   ];
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-end justify-center bg-black/60"
-        onClick={onCancel}
-      >
-        <motion.div
-          initial={{ y: '100%' }}
-          animate={{ y: 0 }}
-          exit={{ y: '100%' }}
-          transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          className="w-full max-w-md bg-background rounded-t-2xl p-6 space-y-5"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {/* Product thumbnail */}
-              <button
-                type="button"
-                onClick={() => product.imageUrl && !imageError && setShowFullImage(true)}
-                className="w-16 h-16 rounded-xl bg-muted/50 border border-border flex items-center justify-center overflow-hidden flex-shrink-0"
-                disabled={!product.imageUrl || imageError}
-              >
-                {product.imageUrl && !imageError ? (
-                  <img
-                    src={product.imageUrl}
-                    alt={product.name}
-                    className="w-full h-full object-cover"
-                    onError={() => setImageError(true)}
-                  />
-                ) : (
-                  <Package className="w-7 h-7 text-muted-foreground" />
-                )}
-              </button>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-muted-foreground">{t('recipes.productFound', 'Product Found')}</p>
-                <h3 className="font-semibold text-lg leading-tight line-clamp-2">{product.name}</h3>
-              </div>
-            </div>
-            <button
-              onClick={onCancel}
-              className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Serving info */}
-          {product.servingSize && (
-            <p className="text-sm text-muted-foreground">
-              {t('recipes.servingSize', 'Serving size')}: {product.servingSize}
-              {product.servingQuantityGrams && (
-                <span className="text-xs ml-1">({product.servingQuantityGrams}g)</span>
-              )}
-            </p>
-          )}
-
-          {/* Quantity selector */}
-          <div className="space-y-2">
-            <Label className="text-sm">{t('recipes.quantity', 'Quantity')}</Label>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={decrementQuantity}
-                className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
-              >
-                <Minus className="w-4 h-4" />
-              </button>
-              <Input
-                type="number"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                className="w-20 text-center text-lg font-semibold"
-                min="0.5"
-                step="0.5"
-              />
-              <button
-                type="button"
-                onClick={incrementQuantity}
-                className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-              <Input
-                type="text"
-                value={unit}
-                onChange={(e) => setUnit(e.target.value)}
-                placeholder="serving"
-                className="flex-1"
-              />
-            </div>
-          </div>
-
-          {/* Live nutrition preview - Editable */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm">{t('recipes.nutritionPerServing', 'Nutrition per serving')}</Label>
-              <button
-                type="button"
-                onClick={() => setIsEditingMacros(!isEditingMacros)}
-                className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
-              >
-                <Pencil className="w-3 h-3" />
-                {isEditingMacros ? t('common.done', 'Done') : t('common.edit', 'Edit')}
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-4 gap-2 p-3 rounded-xl bg-muted/50">
-              {macros.map(({ icon: Icon, label, field, value, baseValue, suffix = '', color }) => (
-                <div key={label} className="text-center">
-                  <Icon className={`w-4 h-4 mx-auto mb-1 ${color}`} />
-                  {isEditingMacros ? (
-                    <Input
-                      type="number"
-                      value={baseValue}
-                      onChange={(e) => updateNutritionField(field, e.target.value)}
-                      className="h-7 text-xs text-center px-1 font-bold"
-                      min="0"
-                      step="0.1"
-                    />
-                  ) : (
-                    <p className={`text-sm font-bold ${color}`}>
-                      {Math.round(value)}{suffix}
-                    </p>
-                  )}
-                  <p className="text-[10px] text-muted-foreground">{label}</p>
-                </div>
-              ))}
-            </div>
-            
-            {qtyNum > 1 && !isEditingMacros && (
-              <p className="text-xs text-center text-muted-foreground">
-                {t('recipes.totalFor', 'Total for')} {qtyNum} {unit}
-              </p>
-            )}
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex gap-3">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={onCancel}
-            >
-              {t('common.cancel', 'Cancel')}
-            </Button>
-            <Button
-              className="flex-1 gradient-primary gap-2"
-              onClick={handleConfirm}
-            >
-              <Check className="w-4 h-4" />
-              {t('recipes.addToRecipe', 'Add to Recipe')}
-            </Button>
-          </div>
-        </motion.div>
-      </motion.div>
-
-      {/* Full-size image dialog */}
+    <>
+      {/* Full-size image dialog - MUST be outside AnimatePresence for proper z-index */}
       <Dialog open={showFullImage} onOpenChange={setShowFullImage}>
-        <DialogContent className="max-w-sm p-2 bg-background">
-          {product.imageUrl && (
+        <DialogContent className="max-w-[90vw] max-h-[90vh] p-4 bg-background overflow-auto">
+          {product?.imageUrl && (
             <img
               src={product.imageUrl}
               alt={product.name}
-              className="w-full h-auto rounded-lg"
+              className="max-w-full max-h-[70vh] mx-auto rounded-lg object-contain"
             />
           )}
           <p className="text-center text-sm text-muted-foreground mt-2 px-2">
-            {product.name}
+            {product?.name}
           </p>
         </DialogContent>
       </Dialog>
-    </AnimatePresence>
+
+      <AnimatePresence>
+        {open && product && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60"
+            onClick={onCancel}
+          >
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="w-full max-w-md bg-background rounded-t-2xl p-6 space-y-5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {/* Product thumbnail */}
+                  <button
+                    type="button"
+                    onClick={() => product.imageUrl && !imageError && setShowFullImage(true)}
+                    className="w-16 h-16 rounded-xl bg-muted/50 border border-border flex items-center justify-center overflow-hidden flex-shrink-0"
+                    disabled={!product.imageUrl || imageError}
+                  >
+                    {product.imageUrl && !imageError ? (
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                        onError={() => setImageError(true)}
+                      />
+                    ) : (
+                      <Package className="w-7 h-7 text-muted-foreground" />
+                    )}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-muted-foreground">{t('recipes.productFound', 'Product Found')}</p>
+                    <h3 className="font-semibold text-lg leading-tight line-clamp-2">{product.name}</h3>
+                  </div>
+                </div>
+                <button
+                  onClick={onCancel}
+                  className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Serving info */}
+              {product.servingSize && (
+                <p className="text-sm text-muted-foreground">
+                  {t('recipes.servingSize', 'Serving size')}: {product.servingSize}
+                  {product.servingQuantityGrams && (
+                    <span className="text-xs ml-1">({product.servingQuantityGrams}g)</span>
+                  )}
+                </p>
+              )}
+
+              {/* Quantity selector */}
+              <div className="space-y-2">
+                <Label className="text-sm">{t('recipes.quantity', 'Quantity')}</Label>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={decrementQuantity}
+                    className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <Input
+                    type="number"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    className="w-20 text-center text-lg font-semibold"
+                    min="0.5"
+                    step="0.5"
+                  />
+                  <button
+                    type="button"
+                    onClick={incrementQuantity}
+                    className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center hover:bg-muted/80 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                  <Input
+                    type="text"
+                    value={unit}
+                    onChange={(e) => setUnit(e.target.value)}
+                    placeholder="serving"
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+
+              {/* Live nutrition preview - Editable */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm">{t('recipes.nutritionPerServing', 'Nutrition per serving')}</Label>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingMacros(!isEditingMacros)}
+                    className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+                  >
+                    <Pencil className="w-3 h-3" />
+                    {isEditingMacros ? t('common.done', 'Done') : t('common.edit', 'Edit')}
+                  </button>
+                </div>
+                
+                <div className="grid grid-cols-4 gap-2 p-3 rounded-xl bg-muted/50">
+                  {macros.map(({ icon: Icon, label, field, value, baseValue, suffix = '', color }) => (
+                    <div key={label} className="text-center">
+                      <Icon className={`w-4 h-4 mx-auto mb-1 ${color}`} />
+                      {isEditingMacros ? (
+                        <Input
+                          type="number"
+                          value={baseValue}
+                          onChange={(e) => updateNutritionField(field, e.target.value)}
+                          className="h-7 text-xs text-center px-1 font-bold"
+                          min="0"
+                          step="0.1"
+                        />
+                      ) : (
+                        <p className={`text-sm font-bold ${color}`}>
+                          {Math.round(value)}{suffix}
+                        </p>
+                      )}
+                      <p className="text-[10px] text-muted-foreground">{label}</p>
+                    </div>
+                  ))}
+                </div>
+                
+                {qtyNum > 1 && !isEditingMacros && (
+                  <p className="text-xs text-center text-muted-foreground">
+                    {t('recipes.totalFor', 'Total for')} {qtyNum} {unit}
+                  </p>
+                )}
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={onCancel}
+                >
+                  {t('common.cancel', 'Cancel')}
+                </Button>
+                <Button
+                  className="flex-1 gradient-primary gap-2"
+                  onClick={handleConfirm}
+                >
+                  <Check className="w-4 h-4" />
+                  {t('recipes.addToRecipe', 'Add to Recipe')}
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
