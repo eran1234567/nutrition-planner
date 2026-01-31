@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { useTranslation } from 'react-i18next';
-import { X, Loader2, Play } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useScanFeedback } from '@/hooks/useScanFeedback';
@@ -25,6 +25,19 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
   
   // Haptic and sound feedback
   const { triggerSuccessFeedback, cleanup: cleanupFeedback } = useScanFeedback();
+
+  // Auto-start scanner when modal opens
+  useEffect(() => {
+    if (open && !isScanning && !isInitializing && !error) {
+      startScanner();
+    }
+    
+    return () => {
+      if (!open) {
+        stopScanner();
+      }
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) {
@@ -189,25 +202,7 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
 
           {/* Center content */}
           <div className="flex-1 flex items-center justify-center">
-            {/* Initial state - show start button */}
-            {!isScanning && !isInitializing && !error && (
-              <div className="flex flex-col items-center justify-center text-white gap-6 p-4">
-                <div className="w-64 h-32 border-2 border-white/50 rounded-xl flex items-center justify-center">
-                  <p className="text-sm text-white/70 text-center px-4">
-                    {t('recipes.tapToStartCamera', 'Tap below to start scanning')}
-                  </p>
-                </div>
-                <Button
-                  onClick={startScanner}
-                  className="gap-2 bg-white text-black hover:bg-white/90"
-                  size="lg"
-                >
-                  <Play className="w-5 h-5" />
-                  {t('recipes.startCamera', 'Start Camera')}
-                </Button>
-              </div>
-            )}
-
+            {/* Show loading state while initializing */}
             {isInitializing && (
               <div className="flex flex-col items-center justify-center text-white gap-3">
                 <Loader2 className="w-8 h-8 animate-spin" />
