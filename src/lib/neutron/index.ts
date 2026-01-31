@@ -61,6 +61,14 @@ export {
   type KetoSwapSuggestion,
 } from './optimization';
 
+// Ingredient grouping utilities
+export {
+  groupIngredientsBySection,
+  getSectionOrder,
+  groupAndOrderIngredients,
+  type GroupableIngredient,
+} from './ingredientGrouping';
+
 // Import for the main engine function
 import type { NeutronMode, RawNutritionData, NeutronResult } from './types';
 import { processNutrition } from './calculations';

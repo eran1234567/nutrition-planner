@@ -43,6 +43,7 @@ import {
   getNeutronBadges, 
   KETO_BADGE_MAX_NET_CARBS,
   KETO_BADGE_MIN_FAT_PERCENT,
+  groupAndOrderIngredients,
   type RawNutritionData 
 } from '@/lib/neutron';
 import { generateServingLabel, isGenericServingSize } from '@/lib/servingLabel';
@@ -254,46 +255,11 @@ export default function RecipeDetail() {
     }));
   }, [recipe?.ingredients, servingMultiplier]);
 
-  // Group ingredients by section
-  const ingredientsBySection = useMemo(() => {
-    const sections: Record<string, typeof adjustedIngredients> = {};
-    for (const ing of adjustedIngredients) {
-      const section = ing.section || 'Main';
-      if (!sections[section]) {
-        sections[section] = [];
-      }
-      sections[section].push(ing);
-    }
-    return sections;
-  }, [adjustedIngredients]);
-
-  // Get ordered section keys based on first appearance in ingredient order.
-  // (Main first, then by earliest order_index, then alpha as a stable tie-breaker)
-  const sectionOrder = useMemo(() => {
-    const keys = Object.keys(ingredientsBySection);
-
-    const minOrderIndexFor = (section: string) => {
-      if (section === 'Main') return -1;
-      const items = ingredientsBySection[section] ?? [];
-      let min = Number.POSITIVE_INFINITY;
-      for (const ing of items) {
-        const oi = (ing as any).order_index;
-        if (typeof oi === 'number' && Number.isFinite(oi)) {
-          min = Math.min(min, oi);
-        }
-      }
-      return Number.isFinite(min) ? min : Number.POSITIVE_INFINITY;
-    };
-
-    return keys.sort((a, b) => {
-      if (a === 'Main') return -1;
-      if (b === 'Main') return 1;
-      const aMin = minOrderIndexFor(a);
-      const bMin = minOrderIndexFor(b);
-      if (aMin !== bMin) return aMin - bMin;
-      return a.localeCompare(b);
-    });
-  }, [ingredientsBySection]);
+  // Group ingredients by section using shared Neutron utility
+  const { sections: ingredientsBySection, sectionOrder } = useMemo(
+    () => groupAndOrderIngredients(adjustedIngredients),
+    [adjustedIngredients]
+  );
 
   // Build diet badges array using Neutron Engine for keto + fallbacks for other diets
   const dietBadges = useMemo(() => {
