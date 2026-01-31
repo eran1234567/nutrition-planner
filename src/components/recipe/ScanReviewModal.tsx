@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, X, Package, Flame, Drumstick, Droplet, Wheat, Minus, Plus } from 'lucide-react';
+import { Check, X, Package, Flame, Drumstick, Droplet, Wheat, Minus, Plus, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +10,8 @@ export interface ScannedProduct {
   barcode: string;
   name: string;
   servingSize?: string;
+  servingQuantityGrams?: number;
+  naturalUnit?: string;
   nutrition: {
     calories?: number;
     protein?: number;
@@ -21,7 +23,7 @@ export interface ScannedProduct {
 interface ScanReviewModalProps {
   open: boolean;
   product: ScannedProduct | null;
-  onConfirm: (quantity: string, unit: string) => void;
+  onConfirm: (quantity: string, unit: string, nutrition: ScannedProduct['nutrition']) => void;
   onCancel: () => void;
 }
 
@@ -29,14 +31,37 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
   const { t } = useTranslation();
   const [quantity, setQuantity] = useState('1');
   const [unit, setUnit] = useState('serving');
+  const [editableNutrition, setEditableNutrition] = useState({
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fat: 0,
+  });
+  const [isEditingMacros, setIsEditingMacros] = useState(false);
+
+  // Reset state when product changes
+  useEffect(() => {
+    if (product) {
+      setQuantity('1');
+      setUnit(product.naturalUnit || 'serving');
+      setEditableNutrition({
+        calories: product.nutrition.calories || 0,
+        protein: product.nutrition.protein || 0,
+        carbs: product.nutrition.carbs || 0,
+        fat: product.nutrition.fat || 0,
+      });
+      setIsEditingMacros(false);
+    }
+  }, [product]);
 
   if (!open || !product) return null;
 
   const handleConfirm = () => {
-    onConfirm(quantity, unit);
+    onConfirm(quantity, unit, editableNutrition);
     // Reset for next scan
     setQuantity('1');
     setUnit('serving');
+    setIsEditingMacros(false);
   };
 
   const incrementQuantity = () => {
@@ -51,14 +76,49 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
     }
   };
 
+  const updateNutritionField = (field: keyof typeof editableNutrition, value: string) => {
+    const numValue = parseFloat(value) || 0;
+    setEditableNutrition(prev => ({ ...prev, [field]: numValue }));
+  };
+
   const qtyNum = parseFloat(quantity) || 1;
-  const { nutrition } = product;
 
   const macros = [
-    { icon: Flame, label: 'Cal', value: (nutrition.calories || 0) * qtyNum, color: 'text-orange-500' },
-    { icon: Drumstick, label: 'Protein', value: (nutrition.protein || 0) * qtyNum, suffix: 'g', color: 'text-red-500' },
-    { icon: Droplet, label: 'Fat', value: (nutrition.fat || 0) * qtyNum, suffix: 'g', color: 'text-yellow-500' },
-    { icon: Wheat, label: 'Carbs', value: (nutrition.carbs || 0) * qtyNum, suffix: 'g', color: 'text-blue-500' },
+    { 
+      icon: Flame, 
+      label: 'Cal', 
+      field: 'calories' as const, 
+      value: editableNutrition.calories * qtyNum, 
+      baseValue: editableNutrition.calories,
+      color: 'text-orange-500' 
+    },
+    { 
+      icon: Drumstick, 
+      label: 'Protein', 
+      field: 'protein' as const, 
+      value: editableNutrition.protein * qtyNum, 
+      baseValue: editableNutrition.protein,
+      suffix: 'g', 
+      color: 'text-red-500' 
+    },
+    { 
+      icon: Droplet, 
+      label: 'Fat', 
+      field: 'fat' as const, 
+      value: editableNutrition.fat * qtyNum, 
+      baseValue: editableNutrition.fat,
+      suffix: 'g', 
+      color: 'text-yellow-500' 
+    },
+    { 
+      icon: Wheat, 
+      label: 'Carbs', 
+      field: 'carbs' as const, 
+      value: editableNutrition.carbs * qtyNum, 
+      baseValue: editableNutrition.carbs,
+      suffix: 'g', 
+      color: 'text-blue-500' 
+    },
   ];
 
   return (
@@ -101,6 +161,9 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
           {product.servingSize && (
             <p className="text-sm text-muted-foreground">
               {t('recipes.servingSize', 'Serving size')}: {product.servingSize}
+              {product.servingQuantityGrams && (
+                <span className="text-xs ml-1">({product.servingQuantityGrams}g)</span>
+              )}
             </p>
           )}
 
@@ -140,17 +203,48 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
             </div>
           </div>
 
-          {/* Live nutrition preview */}
-          <div className="grid grid-cols-4 gap-2 p-3 rounded-xl bg-muted/50">
-            {macros.map(({ icon: Icon, label, value, suffix = '', color }) => (
-              <div key={label} className="text-center">
-                <Icon className={`w-4 h-4 mx-auto mb-1 ${color}`} />
-                <p className={`text-sm font-bold ${color}`}>
-                  {Math.round(value)}{suffix}
-                </p>
-                <p className="text-[10px] text-muted-foreground">{label}</p>
-              </div>
-            ))}
+          {/* Live nutrition preview - Editable */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">{t('recipes.nutritionPerServing', 'Nutrition per serving')}</Label>
+              <button
+                type="button"
+                onClick={() => setIsEditingMacros(!isEditingMacros)}
+                className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+              >
+                <Pencil className="w-3 h-3" />
+                {isEditingMacros ? t('common.done', 'Done') : t('common.edit', 'Edit')}
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-4 gap-2 p-3 rounded-xl bg-muted/50">
+              {macros.map(({ icon: Icon, label, field, value, baseValue, suffix = '', color }) => (
+                <div key={label} className="text-center">
+                  <Icon className={`w-4 h-4 mx-auto mb-1 ${color}`} />
+                  {isEditingMacros ? (
+                    <Input
+                      type="number"
+                      value={baseValue}
+                      onChange={(e) => updateNutritionField(field, e.target.value)}
+                      className="h-7 text-xs text-center px-1 font-bold"
+                      min="0"
+                      step="0.1"
+                    />
+                  ) : (
+                    <p className={`text-sm font-bold ${color}`}>
+                      {Math.round(value)}{suffix}
+                    </p>
+                  )}
+                  <p className="text-[10px] text-muted-foreground">{label}</p>
+                </div>
+              ))}
+            </div>
+            
+            {qtyNum > 1 && !isEditingMacros && (
+              <p className="text-xs text-center text-muted-foreground">
+                {t('recipes.totalFor', 'Total for')} {qtyNum} {unit}
+              </p>
+            )}
           </div>
 
           {/* Action buttons */}
