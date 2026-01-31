@@ -16,8 +16,6 @@ import {
   ChevronDown, 
   ChevronUp, 
   Loader2,
-  RotateCcw,
-  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -83,15 +81,7 @@ export function KetoSandbox({
   const undoSnapshotRef = useRef<UndoSnapshot | null>(null);
 
   const {
-    previewState,
-    previewNutrition,
     originalNutrition,
-    hasChanges,
-    toggleSwap,
-    updateQuantity,
-    toggleAddition,
-    updateAdditionQuantity,
-    getActiveChanges,
     resetAll,
   } = useKetoSandbox({ nutrition, ingredients, servings });
 
@@ -100,22 +90,17 @@ export function KetoSandbox({
     return generateSmartActions(originalNutrition, ingredients, servings);
   }, [originalNutrition, ingredients, servings]);
 
-  // Calculate projected score including staged changes
-  const projectedScore = useMemo(() => {
-    if (hasChanges) {
-      return previewNutrition.ketoScore;
-    }
-    return originalNutrition.ketoScore;
-  }, [hasChanges, previewNutrition, originalNutrition]);
+  // Projected score is just the original since changes are auto-applied to DB
+  const projectedScore = originalNutrition.ketoScore;
 
-  // Check for celebration trigger
+  // Check for celebration trigger when score hits 100
   useEffect(() => {
-    if (projectedScore >= 100 && hasChanges && !showCelebration) {
+    if (projectedScore >= 100 && appliedActionIds.size > 0 && !showCelebration) {
       setShowCelebration(true);
     } else if (projectedScore < 100) {
       setShowCelebration(false);
     }
-  }, [projectedScore, hasChanges, showCelebration]);
+  }, [projectedScore, appliedActionIds.size, showCelebration]);
 
   // Create snapshot before any changes
   const createSnapshot = useCallback((): UndoSnapshot => {
@@ -136,45 +121,37 @@ export function KetoSandbox({
     };
   }, [ingredients, nutrition]);
 
-  // Handle applying a single Smart Action
+  // Handle applying a single Smart Action - AUTO-COMMITS immediately to DB
   const handleApplyAction = useCallback(async (action: SmartAction) => {
     setApplyingActionId(action.id);
     
-    // Create snapshot before applying
+    // Create snapshot before applying for undo support
     undoSnapshotRef.current = createSnapshot();
-    
-    // Small delay for visual feedback
-    await new Promise(resolve => setTimeout(resolve, 200));
 
     try {
+      // Direct database updates based on action type
       switch (action.type) {
         case 'swap':
           if (action.ingredientId && action.swapTo) {
-            toggleSwap(action.ingredientId);
+            await supabase
+              .from('recipe_ingredients')
+              .update({ name: action.swapTo })
+              .eq('id', action.ingredientId);
           }
           break;
 
         case 'reduce':
           if (action.ingredientId && action.newQuantity !== undefined) {
-            // FIX: Find ingredient and directly update to target quantity
             const ingredient = ingredients.find(i => i.id === action.ingredientId);
-            if (ingredient && ingredient.quantity) {
+            if (ingredient) {
               const isCountable = isCountableUnit(ingredient.unit, ingredient.name);
-              const targetQty = roundQuantity(action.newQuantity, isCountable);
+              // CRITICAL: Use absolute target value, properly rounded
+              const finalQuantity = roundQuantity(action.newQuantity, isCountable);
               
-              // Calculate direction and steps needed
-              const currentQty = ingredient.quantity;
-              if (targetQty < currentQty) {
-                const steps = Math.round(currentQty - targetQty);
-                for (let i = 0; i < steps; i++) {
-                  updateQuantity(action.ingredientId, 'down');
-                }
-              } else if (targetQty > currentQty) {
-                const steps = Math.round(targetQty - currentQty);
-                for (let i = 0; i < steps; i++) {
-                  updateQuantity(action.ingredientId, 'up');
-                }
-              }
+              await supabase
+                .from('recipe_ingredients')
+                .update({ quantity: finalQuantity })
+                .eq('id', action.ingredientId);
             }
           }
           break;
@@ -182,33 +159,62 @@ export function KetoSandbox({
         case 'remove':
           if (action.ingredientId) {
             const ingredient = ingredients.find(i => i.id === action.ingredientId);
-            if (ingredient && ingredient.quantity) {
-              // Set to minimum (1 for countables)
+            if (ingredient) {
               const isCountable = isCountableUnit(ingredient.unit, ingredient.name);
               const minQty = isCountable ? 1 : 0.25;
-              const steps = Math.max(0, Math.round(ingredient.quantity - minQty));
-              for (let i = 0; i < steps; i++) {
-                updateQuantity(action.ingredientId, 'down');
-              }
+              
+              await supabase
+                .from('recipe_ingredients')
+                .update({ quantity: minQty })
+                .eq('id', action.ingredientId);
             }
           }
           break;
 
         case 'add_fat':
-          if (action.fatAdditionId) {
-            toggleAddition(action.fatAdditionId);
-            if (action.newQuantity && action.newQuantity > 1) {
-              updateAdditionQuantity(action.fatAdditionId, action.newQuantity);
-            }
+          if (action.fatAdditionId && action.unit) {
+            const maxOrderIndex = Math.max(...ingredients.map(i => i.order_index ?? 0), 0);
+            const fatName = action.fatAdditionId === 'olive-oil' ? 'Olive Oil' 
+              : action.fatAdditionId === 'butter' ? 'Butter'
+              : action.fatAdditionId === 'coconut-oil' ? 'MCT Oil'
+              : action.fatAdditionId;
+            
+            await supabase
+              .from('recipe_ingredients')
+              .insert({
+                recipe_id: recipeId,
+                name: fatName,
+                quantity: action.newQuantity || 1,
+                unit: action.unit,
+                order_index: maxOrderIndex + 1,
+              });
           }
           break;
       }
+
+      // Recalculate nutrition immediately
+      await recalculateNutrition();
+      
+      // Force cache refresh for immediate macro update
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] }),
+        queryClient.invalidateQueries({ queryKey: ['global-recipes'] }),
+        queryClient.invalidateQueries({ queryKey: ['user-recipes'] }),
+      ]);
+      await queryClient.refetchQueries({ queryKey: ['recipe', recipeId] });
 
       setAppliedActionIds(prev => new Set([...prev, action.id]));
       
       toast.success(`Applied: ${action.title}`, {
         description: `+${action.scoreImpact} points`,
+        action: {
+          label: 'Undo',
+          onClick: handleUndo,
+        },
       });
+
+      // Trigger parent refresh
+      onCommit();
 
     } catch (error) {
       console.error('Failed to apply action:', error);
@@ -216,7 +222,7 @@ export function KetoSandbox({
     } finally {
       setApplyingActionId(null);
     }
-  }, [toggleSwap, updateQuantity, toggleAddition, updateAdditionQuantity, createSnapshot, ingredients]);
+  }, [createSnapshot, ingredients, recipeId, queryClient, onCommit]);
 
   // Restore from snapshot (Undo)
   const handleUndo = useCallback(async () => {
@@ -285,140 +291,6 @@ export function KetoSandbox({
       setIsCommitting(false);
     }
   }, [recipeId, queryClient, resetAll, onCommit]);
-
-  // Commit all changes to database
-  const handleCommit = async () => {
-    if (!hasChanges) return;
-    
-    // Create snapshot before committing for undo support
-    undoSnapshotRef.current = createSnapshot();
-    
-    setIsCommitting(true);
-    
-    try {
-      const changes = getActiveChanges();
-      
-      // 1. Apply swaps - update ingredient names
-      for (const swap of changes.swaps) {
-        await supabase
-          .from('recipe_ingredients')
-          .update({ name: swap.newName })
-          .eq('id', swap.ingredientId);
-      }
-      
-      // 2. Apply quantity changes with ABSOLUTE TARGET VALUES and proper rounding
-      for (const qty of changes.quantities) {
-        const isCountable = isCountableUnit(qty.unit, qty.ingredientName);
-        // FIX: Use absolute target value, properly rounded
-        const finalQuantity = roundQuantity(qty.newQuantity, isCountable);
-        
-        await supabase
-          .from('recipe_ingredients')
-          .update({ quantity: finalQuantity })
-          .eq('id', qty.ingredientId);
-      }
-      
-      // 3. Add new ingredients for fat additions
-      for (const addition of changes.additions) {
-        const maxOrderIndex = Math.max(...ingredients.map(i => i.order_index ?? 0), 0);
-        await supabase
-          .from('recipe_ingredients')
-          .insert({
-            recipe_id: recipeId,
-            name: addition.name,
-            quantity: addition.quantity,
-            unit: addition.unit,
-            order_index: maxOrderIndex + 1,
-          });
-      }
-      
-      // 4. Auto-sync instructions for quantity changes
-      if (changes.quantities.length > 0) {
-        for (const qty of changes.quantities) {
-          const ingredient = ingredients.find(i => i.id === qty.ingredientId);
-          if (!ingredient) continue;
-          
-          const originalQtyStr = qty.originalQuantity.toString();
-          const isCountable = isCountableUnit(qty.unit, qty.ingredientName);
-          const finalQty = roundQuantity(qty.newQuantity, isCountable);
-          const newQtyStr = finalQty.toString();
-          
-          for (const step of steps) {
-            const patterns = [
-              new RegExp(`\\b${originalQtyStr}\\s*(${ingredient.unit || ''})\\s+${ingredient.name.split(' ')[0]}`, 'gi'),
-              new RegExp(`\\b${originalQtyStr}\\s+${ingredient.name.split(' ')[0]}`, 'gi'),
-            ];
-            
-            let updatedInstruction = step.instruction;
-            let wasUpdated = false;
-            
-            for (const pattern of patterns) {
-              if (pattern.test(updatedInstruction)) {
-                updatedInstruction = updatedInstruction.replace(pattern, (match) => {
-                  return match.replace(originalQtyStr, newQtyStr);
-                });
-                wasUpdated = true;
-              }
-            }
-            
-            if (wasUpdated) {
-              await supabase
-                .from('recipe_steps')
-                .update({ instruction: updatedInstruction })
-                .eq('id', step.id);
-            }
-          }
-        }
-      }
-      
-      // 5. Recalculate nutrition
-      await recalculateNutrition();
-      
-      // 6. Force hard refresh to update macros and badge
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['recipe', recipeId] }),
-        queryClient.invalidateQueries({ queryKey: ['global-recipes'] }),
-        queryClient.invalidateQueries({ queryKey: ['user-recipes'] }),
-      ]);
-      
-      // Force refetch to ensure UI updates immediately
-      await queryClient.refetchQueries({ queryKey: ['recipe', recipeId] });
-      
-      const scoreGain = previewNutrition.ketoScore - originalNutrition.ketoScore;
-      
-      if (previewNutrition.ketoScore >= 100) {
-        toast.success('Perfect Score! Recipe updated and saved.', {
-          description: 'Neutron Verified: 100',
-          action: {
-            label: 'Undo',
-            onClick: handleUndo,
-          },
-        });
-      } else {
-        toast.success('Recipe optimized!', {
-          description: scoreGain > 0 
-            ? `Score improved by ${scoreGain} points to ${previewNutrition.ketoScore}!`
-            : `Applied changes successfully.`,
-          action: {
-            label: 'Undo',
-            onClick: handleUndo,
-          },
-        });
-      }
-      
-      resetAll();
-      setAppliedActionIds(new Set());
-      onCommit();
-      
-    } catch (error) {
-      console.error('Failed to commit changes:', error);
-      toast.error('Failed to apply changes', {
-        description: 'Please try again.',
-      });
-    } finally {
-      setIsCommitting(false);
-    }
-  };
 
   // Recalculate nutrition via edge function
   const recalculateNutrition = async () => {
@@ -489,11 +361,11 @@ export function KetoSandbox({
         </div>
         
         <div className="flex items-center gap-2">
-          {/* Projected Score Badge */}
+          {/* Score Badge */}
           <div className={`px-3 py-1.5 rounded-full text-sm font-bold transition-all ${
             projectedScore >= 100
               ? 'bg-emerald-500 text-white'
-              : hasChanges
+              : appliedActionIds.size > 0
                 ? 'bg-indigo-500 text-white'
                 : 'bg-muted text-muted-foreground'
           }`}>
@@ -536,49 +408,12 @@ export function KetoSandbox({
                       onApplyAction={handleApplyAction}
                       appliedActionIds={appliedActionIds}
                       isApplying={applyingActionId}
-                      projectedScore={projectedScore}
                     />
                   </motion.div>
                 )}
               </AnimatePresence>
 
-              {/* Action Buttons - ONLY show when NOT in celebration mode */}
-              {!showCelebration && hasChanges && (
-                <div className="flex items-center gap-2 pt-3 border-t border-border/50">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleReset}
-                    className="text-muted-foreground"
-                  >
-                    <RotateCcw className="w-4 h-4 mr-1.5" />
-                    Reset
-                  </Button>
-                  
-                  <Button
-                    className={`flex-1 text-white ${
-                      projectedScore >= 100
-                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600'
-                        : 'bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600'
-                    }`}
-                    size="sm"
-                    onClick={handleCommit}
-                    disabled={isCommitting}
-                  >
-                    {isCommitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4 mr-1.5" />
-                        {projectedScore >= 100 ? 'Save & Celebrate!' : 'Commit Changes'}
-                      </>
-                    )}
-                  </Button>
-                </div>
-              )}
+              {/* Reset button - only show if there are staged (unapplied) changes */}
             </div>
           </motion.div>
         )}
