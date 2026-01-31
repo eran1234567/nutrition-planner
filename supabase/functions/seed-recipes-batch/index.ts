@@ -168,28 +168,31 @@ async function calculateServingSize(
 Title: ${title}
 Ingredients: ${ingredientsList}
 
-Calculate what ONE SERVING equals in terms of the COMPLETED DISH with SPECIFIC COUNTS.
+Generate a CLEAN, HUMAN-READABLE serving size description.
 
-CRITICAL CALCULATION RULES:
-1. For countable protein items (chicken tenders, wings, drumsticks, meatballs, patties, nuggets):
-   - Calculate: total quantity ÷ number of servings = pieces per serving
-   - Example: "1.5 lbs chicken tenders" ≈ 12 tenders total ÷ 4 servings = "3 chicken tenders"
+OUTPUT FORMAT RULES (STRICT):
+✅ GOOD examples:
+- "3 chicken tenders"
+- "1 salmon fillet (6 oz)"
+- "2 tacos"
+- "1.5 cups fried rice"
+- "1 bowl soup"
+- "4 meatballs + 1 cup pasta"
 
-2. For whole protein pieces (chicken breasts, steaks, pork chops, fish fillets):
-   - Use piece count if countable: "1 chicken breast" or "1 pork chop"
-   - Or use weight per serving: "6 oz salmon" or "5 oz steak"
+❌ BAD examples (NEVER do this):
+- "0.38 lb chicken breast + 0.5 cups vegetables" (no decimals for weights)
+- "1 serving = 1 serving" (meaningless)
+- "approximately 1/4 of recipe" (not descriptive)
 
-3. For non-countable items (soups, stews, rice dishes, salads):
-   - Use volume: "1 cup soup" or "1.5 cups fried rice" or "1 bowl"
+RULES:
+1. COUNTABLE ITEMS (tenders, wings, meatballs, tacos, fillets): Use whole numbers
+   - Calculate: total pieces ÷ ${servings} servings = pieces per serving
+2. WEIGHT-BASED PROTEIN: Round to whole ounces, e.g., "6 oz salmon" not "5.7 oz"
+3. VOLUME DISHES (soups, stews, rice): Use cups or "1 bowl"
+4. MULTI-COMPONENT: Protein + side, e.g., "2 pork chops + 1 cup rice"
+5. MAX 50 characters, no "1 serving =" prefix
 
-4. For multi-component dishes:
-   - Combine protein count + sides: "3 chicken tenders + 1 cup vegetables"
-
-DO NOT say generic things like "1 chicken breast equivalent" - be SPECIFIC.
-
-${buildNutritionPromptInstructions()}
-
-Respond with ONLY the serving size description, no explanation. Keep it under 60 characters.`;
+Respond with ONLY the serving size, nothing else.`;
 
   try {
     const model = genAI.getGenerativeModel({ 

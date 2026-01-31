@@ -162,8 +162,15 @@ Return a JSON object with this exact structure:
     "saturated_fat_g": 3,
     "cholesterol_mg": 45
   },
-  "serving_size": "1 bowl (about 1.5 cups)"
+  "serving_size": "3 chicken tenders"
 }
+
+SERVING_SIZE RULES (CRITICAL):
+✅ GOOD: "3 chicken tenders", "1 salmon fillet (6 oz)", "2 tacos", "1.5 cups rice", "4 meatballs + 1 cup pasta"
+❌ BAD: "0.38 lb chicken + 0.5 cups vegetables", "1 serving", "1/4 of recipe"
+- Use whole numbers for countable items
+- Round weights to whole ounces
+- Max 50 characters, no "1 serving =" prefix
 
 IMPORTANT:
 - Include 8-15 ingredients for a complete recipe
