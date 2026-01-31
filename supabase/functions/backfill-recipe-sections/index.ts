@@ -7,6 +7,78 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-lovable-internal",
 };
 
+// ═══════════════════════════════════════════════════════════════
+// USER-FRIENDLY QUANTITY FORMATTING HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Smart rounding for quantities:
+ * - Uses fractions for common cooking measurements (1/4, 1/3, 1/2, 2/3, 3/4)
+ * - Rounds to whole numbers when close
+ * - Keeps 1 decimal for odd amounts
+ */
+function smartRoundQuantity(value: number): number {
+  // Round to nearest 0.25 for cleaner fractions
+  const nearestQuarter = Math.round(value * 4) / 4;
+  
+  // If very close to a whole number, use that
+  if (Math.abs(value - Math.round(value)) < 0.1) {
+    return Math.round(value);
+  }
+  
+  return nearestQuarter;
+}
+
+/**
+ * Checks if a unit represents a compound measurement like "6 oz fillets"
+ * and reformats to user-friendly style: unit becomes "fillets", quantity stays the count
+ */
+function parseCompoundUnit(unit: string): { baseUnit: string; sizeSpec: string } | null {
+  // Pattern: "6 oz fillets", "12 oz can", "100g portions"
+  const match = unit.match(/^(\d+\s*(?:oz|g|lb|ml|fl oz|kg))\s+(.+)$/i);
+  if (match) {
+    return { sizeSpec: match[1], baseUnit: match[2] };
+  }
+  return null;
+}
+
+/**
+ * Reformats ingredient for user-friendly display in the database
+ * Handles compound units and ensures clean quantities
+ */
+function reformatIngredient(
+  quantity: number | null,
+  unit: string | null,
+  name: string
+): { quantity: number | null; unit: string | null; name: string } {
+  // If no quantity, return as-is
+  if (quantity === null) {
+    return { quantity, unit, name };
+  }
+  
+  // Smart round the quantity
+  const roundedQty = smartRoundQuantity(quantity);
+  
+  // Check for compound units
+  if (unit) {
+    const compound = parseCompoundUnit(unit);
+    if (compound) {
+      // Reformat: "4 x 6 oz fillets" becomes quantity=4, unit="fillets (6 oz each)", name stays same
+      return {
+        quantity: roundedQty,
+        unit: `${compound.baseUnit} (${compound.sizeSpec} each)`,
+        name,
+      };
+    }
+  }
+  
+  return {
+    quantity: roundedQty,
+    unit,
+    name,
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -220,16 +292,35 @@ IMPORTANT: Only return the JSON, no explanation. Use 1-based indexing matching t
           continue;
         }
 
-        // Update ingredients with sections
+        // Update ingredients with sections AND reformat quantities
+        let quantitiesFixed = 0;
         for (const ingUpdate of sectionData.ingredients) {
           const ingredient = ingredients[ingUpdate.index - 1];
           if (ingredient) {
+            // Reformat ingredient for user-friendly display
+            const reformatted = reformatIngredient(
+              ingredient.quantity,
+              ingredient.unit,
+              ingredient.name
+            );
+            
+            // Track if we changed the quantity/unit
+            if (reformatted.quantity !== ingredient.quantity || reformatted.unit !== ingredient.unit) {
+              quantitiesFixed++;
+            }
+            
             await supabase
               .from("recipe_ingredients")
-              .update({ section: ingUpdate.section || "Main" })
+              .update({ 
+                section: ingUpdate.section || "Main",
+                quantity: reformatted.quantity,
+                unit: reformatted.unit,
+              })
               .eq("id", ingredient.id);
           }
         }
+        
+        console.log(`  - Fixed ${quantitiesFixed} ingredient quantities`);
 
         // Update steps with introduces_section
         for (const stepUpdate of sectionData.steps) {
