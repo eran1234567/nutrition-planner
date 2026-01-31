@@ -948,7 +948,10 @@ export default function Recipes() {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>{t('common.cancel', 'Cancel')}</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={handleDeleteConfirm} 
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeleteConfirm();
+              }} 
               disabled={isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
@@ -970,7 +973,10 @@ export default function Recipes() {
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeletingAll}>{t('common.cancel', 'Cancel')}</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={handleDeleteAllConfirm} 
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeleteAllConfirm();
+              }} 
               disabled={isDeletingAll}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
