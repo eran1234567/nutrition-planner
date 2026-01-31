@@ -70,12 +70,6 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
         const product = data.product;
         const nutriments = product.nutriments || {};
         
-        console.log('[Barcode] Raw API response:', { 
-          serving_quantity: product.serving_quantity,
-          serving_size: product.serving_size,
-          nutriments_keys: Object.keys(nutriments).filter(k => k.includes('serving') || k.includes('100g'))
-        });
-        
         // Parse serving quantity - API may return string or number
         const parseNumber = (val: unknown): number | null => {
           if (val === null || val === undefined) return null;
@@ -83,14 +77,32 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
           return isNaN(num) ? null : num;
         };
         
+        console.log('[Barcode] Raw API response:', { 
+          serving_quantity: product.serving_quantity,
+          serving_size: product.serving_size,
+          nutriments_sample: {
+            'energy-kcal_100g': nutriments['energy-kcal_100g'],
+            'energy-kcal_serving': nutriments['energy-kcal_serving'],
+            'energy_100g': nutriments['energy_100g'],
+            'proteins_100g': nutriments['proteins_100g'],
+            'proteins_serving': nutriments['proteins_serving'],
+            'fat_100g': nutriments['fat_100g'],
+            'fat_serving': nutriments['fat_serving'],
+            'carbohydrates_100g': nutriments['carbohydrates_100g'],
+            'carbohydrates_serving': nutriments['carbohydrates_serving'],
+          }
+        });
+        
         // Extract serving quantity in grams
         let servingQuantityGrams = parseNumber(product.serving_quantity);
         
         // Fallback: try to parse from serving_size string (e.g., "2 Rounded Teaspoons (11.7g)")
         if (!servingQuantityGrams && product.serving_size) {
-          const gramsMatch = product.serving_size.match(/\((\d+(?:[.,]\d+)?)\s*g\)/i);
+          // Try patterns like "(11.7g)", "(11.7 g)", "11.7g"
+          const gramsMatch = product.serving_size.match(/(\d+(?:[.,]\d+)?)\s*g(?:\)|$|\s)/i);
           if (gramsMatch) {
             servingQuantityGrams = parseNumber(gramsMatch[1]);
+            console.log('[Barcode] Extracted serving grams from string:', servingQuantityGrams);
           }
         }
         
@@ -128,6 +140,11 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
         
         // Check if per-serving data is available
         const caloriesServing = getCaloriesServing();
+        const proteinServing = parseNumber(nutriments['proteins_serving']);
+        const carbsServing = parseNumber(nutriments['carbohydrates_serving']);
+        const fatServing = parseNumber(nutriments['fat_serving']);
+        
+        // Only use per-serving if we have at least calories
         const hasServingData = caloriesServing !== null;
         
         // Calculate nutrition values
@@ -138,35 +155,35 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
         
         if (hasServingData) {
           // Use per-serving values directly
-          console.log('[Barcode] Using per-serving data');
+          console.log('[Barcode] Using per-serving data directly');
           calories = caloriesServing ?? undefined;
-          protein = parseNumber(nutriments.proteins_serving) ?? undefined;
-          carbs = parseNumber(nutriments.carbohydrates_serving) ?? undefined;
-          fat = parseNumber(nutriments.fat_serving) ?? undefined;
+          protein = proteinServing ?? undefined;
+          carbs = carbsServing ?? undefined;
+          fat = fatServing ?? undefined;
         } else if (servingQuantityGrams && servingQuantityGrams > 0) {
           // Scale 100g values to serving size: (value_per_100g / 100) * serving_grams
           const scaleFactor = servingQuantityGrams / 100;
           console.log('[Barcode] Scaling from 100g, factor:', scaleFactor, 'grams:', servingQuantityGrams);
           
           const cal100g = getCalories100g();
-          const prot100g = parseNumber(nutriments.proteins_100g);
-          const carb100g = parseNumber(nutriments.carbohydrates_100g);
-          const fat100g = parseNumber(nutriments.fat_100g);
+          const prot100g = parseNumber(nutriments['proteins_100g']);
+          const carb100g = parseNumber(nutriments['carbohydrates_100g']);
+          const fat100g = parseNumber(nutriments['fat_100g']);
           
           calories = cal100g !== null ? Math.round(cal100g * scaleFactor) : undefined;
           protein = prot100g !== null ? Math.round(prot100g * scaleFactor * 10) / 10 : undefined;
           carbs = carb100g !== null ? Math.round(carb100g * scaleFactor * 10) / 10 : undefined;
           fat = fat100g !== null ? Math.round(fat100g * scaleFactor * 10) / 10 : undefined;
         } else {
-          // No serving quantity available - use 100g values as-is (user can edit)
-          console.log('[Barcode] No serving data, using 100g values');
+          // No serving quantity available - use 100g values as-is with warning
+          console.warn('[Barcode] No serving data or serving quantity - using 100g values (may be inaccurate)');
           calories = getCalories100g() ?? undefined;
-          protein = parseNumber(nutriments.proteins_100g) ?? undefined;
-          carbs = parseNumber(nutriments.carbohydrates_100g) ?? undefined;
-          fat = parseNumber(nutriments.fat_100g) ?? undefined;
+          protein = parseNumber(nutriments['proteins_100g']) ?? undefined;
+          carbs = parseNumber(nutriments['carbohydrates_100g']) ?? undefined;
+          fat = parseNumber(nutriments['fat_100g']) ?? undefined;
         }
         
-        console.log('[Barcode] Final nutrition:', { calories, protein, carbs, fat });
+        console.log('[Barcode] Final nutrition:', { calories, protein, carbs, fat, hasServingData, servingQuantityGrams });
         
         // Parse serving size to extract natural unit
         let naturalUnit = 'serving';
