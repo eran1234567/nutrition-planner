@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { useTranslation } from 'react-i18next';
-import { X, Loader2, Play, Flashlight } from 'lucide-react';
+import { X, Loader2, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useScanFeedback } from '@/hooks/useScanFeedback';
 
 interface BarcodeScannerProps {
   open: boolean;
@@ -21,6 +22,9 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const scannerIdRef = useRef<string>('barcode-scanner-' + Date.now());
+  
+  // Haptic and sound feedback
+  const { triggerSuccessFeedback, cleanup: cleanupFeedback } = useScanFeedback();
 
   useEffect(() => {
     if (!open) {
@@ -95,10 +99,8 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
           console.log('[BarcodeScanner] Scanned:', decodedText, decodedResult.result.format);
           const format = decodedResult.result.format?.formatName || 'unknown';
           
-          // Vibrate on successful scan if available
-          if ('vibrate' in navigator) {
-            navigator.vibrate(100);
-          }
+          // Trigger haptic feedback and success sound
+          triggerSuccessFeedback();
           
           onScan(decodedText, format);
           
@@ -135,7 +137,7 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
       
       setIsInitializing(false);
     }
-  }, [onClose, onScan, t]);
+  }, [onClose, onScan, t, triggerSuccessFeedback]);
 
   const stopScanner = useCallback(() => {
     if (scannerRef.current) {
@@ -145,7 +147,8 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
     const el = document.getElementById(scannerIdRef.current);
     if (el) el.remove();
     setIsScanning(false);
-  }, []);
+    cleanupFeedback();
+  }, [cleanupFeedback]);
 
   const handleClose = useCallback(() => {
     stopScanner();
