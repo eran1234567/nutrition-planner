@@ -23,11 +23,16 @@ function calculateTotals(ingredients: IngredientItem[]): NutritionTotals {
       // Get quantity multiplier (default to 1)
       const qty = parseFloat(ing.quantity) || 1;
       
+      const carbs = (ing.nutrition.carbs || 0) * qty;
+      const fiber = (ing.nutrition.fiber || 0) * qty;
+      // Net Carbs = Total Carbs - Fiber (minimum 0)
+      const netCarbs = Math.max(0, carbs - fiber);
+      
       return {
         calories: acc.calories + (ing.nutrition.calories || 0) * qty,
         protein: acc.protein + (ing.nutrition.protein || 0) * qty,
         fat: acc.fat + (ing.nutrition.fat || 0) * qty,
-        netCarbs: acc.netCarbs + (ing.nutrition.carbs || 0) * qty,
+        netCarbs: acc.netCarbs + netCarbs,
       };
     },
     { calories: 0, protein: 0, fat: 0, netCarbs: 0 }
