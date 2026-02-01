@@ -34,6 +34,8 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [pendingProduct, setPendingProduct] = useState<ScannedProduct | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const lookupSeqRef = useRef(0);
+  const activeLookupAbortRef = useRef<AbortController | null>(null);
 
   const generateId = () => Math.random().toString(36).substring(2, 9);
 
@@ -57,21 +59,58 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
   };
 
   const handleBarcodeScan = async (barcode: string, format: string) => {
-    console.log('[Barcode] Starting lookup for:', barcode);
+    // New scan = invalidate any previous pending lookup
+    const lookupId = ++lookupSeqRef.current;
+
+    // Cancel any previous request (mobile Safari can leave fetch hanging)
+    try {
+      activeLookupAbortRef.current?.abort();
+    } catch {
+      // ignore
+    }
+
+    const controller = new AbortController();
+    activeLookupAbortRef.current = controller;
+
+    const isCurrent = () => lookupSeqRef.current === lookupId;
+    const safeSetPendingProduct = (p: ScannedProduct | null) => {
+      if (isCurrent()) setPendingProduct(p);
+    };
+    const safeStopSpinner = () => {
+      if (isCurrent()) setIsLookingUp(false);
+    };
+
     setIsLookingUp(true);
     setShowScanner(false);
-    
+
+    // Hard timeout fallback: always clear UI even if fetch never resolves
+    let didHardTimeout = false;
+    const hardTimeout = setTimeout(() => {
+      if (!isCurrent()) return;
+      didHardTimeout = true;
+      try {
+        controller.abort();
+      } catch {
+        // ignore
+      }
+      safeStopSpinner();
+      toast.error(t('recipes.lookupTimeout', 'Lookup timed out. Enter details manually.'));
+      // Provide manual review modal even when lookup fails
+      safeSetPendingProduct({
+        barcode,
+        name: `Scanned item (${barcode})`,
+        naturalUnit: 'serving',
+        nutrition: {},
+      });
+    }, 12000);
+
     try {
       // Look up product info from Open Food Facts API
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-      
       const response = await fetch(
         `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`,
-        { signal: controller.signal }
+        { signal: controller.signal },
       );
-      clearTimeout(timeoutId);
-      
+
       const data = await response.json();
 
       if (data.status === 1 && data.product) {
@@ -271,7 +310,7 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
           || null;
         
         // Show review modal
-        setPendingProduct({
+        safeSetPendingProduct({
           barcode,
           name: product.product_name || product.generic_name || barcode,
           servingSize: product.serving_size,
@@ -282,7 +321,7 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
         });
       } else {
         // Product not found - show review with placeholder
-        setPendingProduct({
+        safeSetPendingProduct({
           barcode,
           name: `Product (${barcode})`,
           naturalUnit: 'serving',
@@ -291,27 +330,35 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
         toast.info(t('recipes.productNotFound', 'Product not in database. You can enter details manually.'));
       }
     } catch (error) {
+      // If hard timeout already handled UI, don't double-toast.
+      if (didHardTimeout) return;
+
       console.error('Barcode lookup error:', error);
-      
-      // Check if it was a timeout/abort
-      const isTimeout = error instanceof Error && error.name === 'AbortError';
-      
+
+      const isAbort = error instanceof Error && error.name === 'AbortError';
+
       // Show review with placeholder on error
-      setPendingProduct({
+      safeSetPendingProduct({
         barcode,
         name: `Scanned item (${barcode})`,
         naturalUnit: 'serving',
-        nutrition: {}
+        nutrition: {},
       });
-      
-      if (isTimeout) {
+
+      if (isAbort) {
         toast.error(t('recipes.lookupTimeout', 'Lookup timed out. Enter details manually.'));
       } else {
         toast.error(t('recipes.lookupFailed', 'Could not look up product. Enter details manually.'));
       }
     } finally {
-      console.log('[Barcode] Lookup complete, hiding spinner');
-      setIsLookingUp(false);
+      clearTimeout(hardTimeout);
+
+      // Clear abort controller only if this is still the active lookup
+      if (isCurrent()) {
+        activeLookupAbortRef.current = null;
+      }
+
+      safeStopSpinner();
     }
   };
 
