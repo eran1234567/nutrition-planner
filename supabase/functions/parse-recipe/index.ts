@@ -414,22 +414,53 @@ function validateAndCorrectNutrition(
   const perServingCholesterol = calculatedCholesterol / effectiveServings;
   
   // Check for significant discrepancies (>15% difference)
+  // IMPORTANT: previously we only compared protein/fat/carbs. That allowed cases where AI
+  // matched those macros but dropped fiber (and other micronutrients), which breaks
+  // net carb calculations on the recipe detail page.
   const proteinDiff = Math.abs(aiNutrition.protein_g - perServingProtein);
   const fatDiff = Math.abs(aiNutrition.fat_g - perServingFat);
   const carbsDiff = Math.abs(aiNutrition.carbs_g - perServingCarbs);
+  const fiberDiff = Math.abs(aiNutrition.fiber_g - perServingFiber);
   
   const proteinThreshold = Math.max(perServingProtein * 0.15, 5);
   const fatThreshold = Math.max(perServingFat * 0.15, 5);
   const carbsThreshold = Math.max(perServingCarbs * 0.15, 5);
+  const fiberThreshold = Math.max(perServingFiber * 0.15, 2);
   
   const hasSignificantError = 
     proteinDiff > proteinThreshold ||
     fatDiff > fatThreshold ||
     carbsDiff > carbsThreshold;
+
+  // If core macros match but fiber/micros are missing, patch them without touching
+  // calories or the other macros (label calories can legitimately differ from macro math).
+  // This ensures net carbs are correct in the UI.
+  const hasSignificantFiberOrMicrosError =
+    fiberDiff > fiberThreshold ||
+    (perServingSugar > 0 && Math.abs((aiNutrition.sugar_g ?? 0) - perServingSugar) > Math.max(perServingSugar * 0.2, 1)) ||
+    (perServingSodium > 0 && Math.abs((aiNutrition.sodium_mg ?? 0) - perServingSodium) > Math.max(perServingSodium * 0.2, 25)) ||
+    (perServingSaturatedFat > 0 && Math.abs((aiNutrition.saturated_fat_g ?? 0) - perServingSaturatedFat) > Math.max(perServingSaturatedFat * 0.2, 0.5)) ||
+    (perServingCholesterol > 0 && Math.abs((aiNutrition.cholesterol_mg ?? 0) - perServingCholesterol) > Math.max(perServingCholesterol * 0.2, 10));
   
   if (!hasSignificantError) {
-    console.log(`[MACROS] AI nutrition within tolerance, no correction needed`);
-    return { nutrition: aiNutrition, wasCorrect: true };
+    if (!hasSignificantFiberOrMicrosError) {
+      console.log(`[MACROS] AI nutrition within tolerance, no correction needed`);
+      return { nutrition: aiNutrition, wasCorrect: true };
+    }
+
+    const patched: NutritionData = {
+      ...aiNutrition,
+      // Only overwrite when deterministic has a meaningful value; otherwise keep AI value.
+      fiber_g: perServingFiber > 0 ? Math.round(perServingFiber) : aiNutrition.fiber_g,
+      sugar_g: perServingSugar > 0 ? Math.round(perServingSugar) : (aiNutrition.sugar_g || 0),
+      sodium_mg: perServingSodium > 0 ? Math.round(perServingSodium) : (aiNutrition.sodium_mg || 0),
+      saturated_fat_g: perServingSaturatedFat > 0 ? Math.round(perServingSaturatedFat) : (aiNutrition.saturated_fat_g || 0),
+      cholesterol_mg: perServingCholesterol > 0 ? Math.round(perServingCholesterol) : (aiNutrition.cholesterol_mg || 0),
+    };
+
+    const reason = `Core macros matched, but deterministic calc patched fiber/micros (fiber ${aiNutrition.fiber_g}→${patched.fiber_g})`;
+    console.log(`[MACROS] Patching fiber/micros without changing calories: ${reason}`);
+    return { nutrition: patched, wasCorrect: false, reason };
   }
   
   // Calculate corrected calories using the formula
