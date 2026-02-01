@@ -118,7 +118,22 @@ export function RecipeCreatorDrawer({ open, onOpenChange, onSuccess }: RecipeCre
       ingredients.forEach(ing => {
         const qty = ing.quantity ? `${ing.quantity} ` : '';
         const unit = ing.unit ? `${ing.unit} ` : '';
-        content += `- ${qty}${unit}${ing.name}\n`;
+        let line = `- ${qty}${unit}${ing.name}`;
+        
+        // Include barcode nutrition data inline so AI preserves exact values
+        if (ing.nutrition && ing.barcode) {
+          const n = ing.nutrition;
+          const parts: string[] = [];
+          if (n.calories !== undefined) parts.push(`${n.calories} cal`);
+          if (n.protein !== undefined) parts.push(`${n.protein}g protein`);
+          if (n.fat !== undefined) parts.push(`${n.fat}g fat`);
+          if (n.carbs !== undefined) parts.push(`${n.carbs}g carbs`);
+          if (parts.length > 0) {
+            line += ` (${parts.join(', ')} per serving - verified barcode data)`;
+          }
+        }
+        
+        content += line + '\n';
       });
     }
     
