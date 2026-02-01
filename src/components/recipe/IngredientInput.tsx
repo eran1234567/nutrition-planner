@@ -57,13 +57,21 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
   };
 
   const handleBarcodeScan = async (barcode: string, format: string) => {
+    console.log('[Barcode] Starting lookup for:', barcode);
     setIsLookingUp(true);
+    setShowScanner(false);
     
     try {
       // Look up product info from Open Food Facts API
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
       const response = await fetch(
-        `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`
+        `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`,
+        { signal: controller.signal }
       );
+      clearTimeout(timeoutId);
+      
       const data = await response.json();
 
       if (data.status === 1 && data.product) {
@@ -284,6 +292,10 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
       }
     } catch (error) {
       console.error('Barcode lookup error:', error);
+      
+      // Check if it was a timeout/abort
+      const isTimeout = error instanceof Error && error.name === 'AbortError';
+      
       // Show review with placeholder on error
       setPendingProduct({
         barcode,
@@ -291,8 +303,14 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
         naturalUnit: 'serving',
         nutrition: {}
       });
-      toast.error(t('recipes.lookupFailed', 'Could not look up product. Enter details manually.'));
+      
+      if (isTimeout) {
+        toast.error(t('recipes.lookupTimeout', 'Lookup timed out. Enter details manually.'));
+      } else {
+        toast.error(t('recipes.lookupFailed', 'Could not look up product. Enter details manually.'));
+      }
     } finally {
+      console.log('[Barcode] Lookup complete, hiding spinner');
       setIsLookingUp(false);
     }
   };
