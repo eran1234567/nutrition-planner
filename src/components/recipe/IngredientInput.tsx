@@ -143,47 +143,106 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
         const proteinServing = parseNumber(nutriments['proteins_serving']);
         const carbsServing = parseNumber(nutriments['carbohydrates_serving']);
         const fatServing = parseNumber(nutriments['fat_serving']);
-        
-        // Only use per-serving if we have at least calories
-        const hasServingData = caloriesServing !== null;
-        
+
+        const hasServingCalories = caloriesServing !== null;
+        const hasAnyServingMacro = proteinServing !== null || carbsServing !== null || fatServing !== null;
+
+        const cal100g = getCalories100g();
+        const prot100g = parseNumber(nutriments['proteins_100g']);
+        const carb100g = parseNumber(nutriments['carbohydrates_100g']);
+        const fat100g = parseNumber(nutriments['fat_100g']);
+
+        const scaleFrom100g = (grams: number) => {
+          const scaleFactor = grams / 100;
+          return {
+            calories: cal100g !== null ? Math.round(cal100g * scaleFactor) : undefined,
+            protein: prot100g !== null ? Math.round(prot100g * scaleFactor * 10) / 10 : undefined,
+            carbs: carb100g !== null ? Math.round(carb100g * scaleFactor * 10) / 10 : undefined,
+            fat: fat100g !== null ? Math.round(fat100g * scaleFactor * 10) / 10 : undefined,
+          };
+        };
+
+        const scaled =
+          servingQuantityGrams && servingQuantityGrams > 0 ? scaleFrom100g(servingQuantityGrams) : null;
+
+        const servingDirect = {
+          calories: caloriesServing ?? undefined,
+          protein: proteinServing ?? undefined,
+          carbs: carbsServing ?? undefined,
+          fat: fatServing ?? undefined,
+        };
+
         // Calculate nutrition values
         let calories: number | undefined;
         let protein: number | undefined;
         let carbs: number | undefined;
         let fat: number | undefined;
-        
-        if (hasServingData) {
-          // Use per-serving values directly
-          console.log('[Barcode] Using per-serving data directly');
-          calories = caloriesServing ?? undefined;
-          protein = proteinServing ?? undefined;
-          carbs = carbsServing ?? undefined;
-          fat = fatServing ?? undefined;
-        } else if (servingQuantityGrams && servingQuantityGrams > 0) {
-          // Scale 100g values to serving size: (value_per_100g / 100) * serving_grams
-          const scaleFactor = servingQuantityGrams / 100;
-          console.log('[Barcode] Scaling from 100g, factor:', scaleFactor, 'grams:', servingQuantityGrams);
-          
-          const cal100g = getCalories100g();
-          const prot100g = parseNumber(nutriments['proteins_100g']);
-          const carb100g = parseNumber(nutriments['carbohydrates_100g']);
-          const fat100g = parseNumber(nutriments['fat_100g']);
-          
-          calories = cal100g !== null ? Math.round(cal100g * scaleFactor) : undefined;
-          protein = prot100g !== null ? Math.round(prot100g * scaleFactor * 10) / 10 : undefined;
-          carbs = carb100g !== null ? Math.round(carb100g * scaleFactor * 10) / 10 : undefined;
-          fat = fat100g !== null ? Math.round(fat100g * scaleFactor * 10) / 10 : undefined;
+
+        // OpenFoodFacts data can be inconsistent: sometimes *_serving fields are actually per-100g.
+        // If we can compute a reasonable scaled-from-100g value, sanity-check and prefer scaled when serving looks wrong.
+        const macroOff = (servVal: number | null, scaledVal: number | undefined) => {
+          if (servVal === null || scaledVal === undefined) return false;
+          const diff = Math.abs(servVal - scaledVal);
+          const rel = diff / Math.max(0.1, scaledVal);
+          return diff >= 0.5 && rel > 0.6;
+        };
+
+        const caloriesOff = () => {
+          if (!scaled || caloriesServing === null || scaled.calories === undefined) return false;
+          const diff = Math.abs(caloriesServing - scaled.calories);
+          const rel = diff / Math.max(1, scaled.calories);
+          if (diff >= 10 && rel > 0.35) return true;
+
+          // Common failure mode: calories_serving equals calories_100g (meaning it's mislabeled)
+          if (
+            cal100g !== null &&
+            servingQuantityGrams &&
+            servingQuantityGrams < 80 &&
+            Math.abs(caloriesServing - cal100g) / Math.max(1, cal100g) < 0.05
+          ) {
+            return true;
+          }
+          return false;
+        };
+
+        const shouldPreferScaled =
+          !!scaled &&
+          (caloriesOff() || macroOff(fatServing, scaled.fat) || macroOff(carbsServing, scaled.carbs) || macroOff(proteinServing, scaled.protein));
+
+        if ((hasServingCalories || hasAnyServingMacro) && !shouldPreferScaled) {
+          console.log('[Barcode] Using per-serving data (passed sanity check)');
+          calories = servingDirect.calories ?? scaled?.calories;
+          protein = servingDirect.protein ?? scaled?.protein;
+          carbs = servingDirect.carbs ?? scaled?.carbs;
+          fat = servingDirect.fat ?? scaled?.fat;
+        } else if (scaled) {
+          console.log('[Barcode] Using scaled-from-100g values (serving looked inconsistent)', {
+            servingQuantityGrams,
+            servingDirect,
+            scaled,
+          });
+          calories = scaled.calories;
+          protein = scaled.protein;
+          carbs = scaled.carbs;
+          fat = scaled.fat;
         } else {
           // No serving quantity available - use 100g values as-is with warning
-          console.warn('[Barcode] No serving data or serving quantity - using 100g values (may be inaccurate)');
-          calories = getCalories100g() ?? undefined;
-          protein = parseNumber(nutriments['proteins_100g']) ?? undefined;
-          carbs = parseNumber(nutriments['carbohydrates_100g']) ?? undefined;
-          fat = parseNumber(nutriments['fat_100g']) ?? undefined;
+          console.warn('[Barcode] No serving grams available - using 100g values (may be inaccurate)');
+          calories = cal100g ?? undefined;
+          protein = prot100g ?? undefined;
+          carbs = carb100g ?? undefined;
+          fat = fat100g ?? undefined;
         }
         
-        console.log('[Barcode] Final nutrition:', { calories, protein, carbs, fat, hasServingData, servingQuantityGrams });
+        console.log('[Barcode] Final nutrition:', {
+          calories,
+          protein,
+          carbs,
+          fat,
+          hasServingCalories,
+          servingQuantityGrams,
+          shouldPreferScaled,
+        });
         
         // Parse serving size to extract natural unit
         let naturalUnit = 'serving';
