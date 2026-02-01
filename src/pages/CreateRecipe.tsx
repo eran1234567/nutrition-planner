@@ -26,6 +26,52 @@ import { LiveNutritionHeader } from '@/components/recipe/LiveNutritionHeader';
 
 type InputMode = 'quick' | 'detailed';
 
+interface NutritionTotals {
+  calories: number;
+  protein: number;
+  fat: number;
+  carbs: number;
+  fiber: number;
+  sugar: number;
+  saturatedFat: number;
+  cholesterol: number;
+  sodium: number;
+}
+
+function calculateIngredientTotals(ingredients: IngredientItem[]): NutritionTotals {
+  return ingredients.reduce<NutritionTotals>(
+    (acc, ing) => {
+      if (!ing.nutrition) return acc;
+
+      const qty = parseFloat(ing.quantity) || 1;
+      const n = ing.nutrition;
+
+      return {
+        calories: acc.calories + (n.calories || 0) * qty,
+        protein: acc.protein + (n.protein || 0) * qty,
+        fat: acc.fat + (n.fat || 0) * qty,
+        carbs: acc.carbs + (n.carbs || 0) * qty,
+        fiber: acc.fiber + (n.fiber || 0) * qty,
+        sugar: acc.sugar + (n.sugar || 0) * qty,
+        saturatedFat: acc.saturatedFat + (n.saturatedFat || 0) * qty,
+        cholesterol: acc.cholesterol + (n.cholesterol || 0) * qty,
+        sodium: acc.sodium + (n.sodium || 0) * qty,
+      };
+    },
+    {
+      calories: 0,
+      protein: 0,
+      fat: 0,
+      carbs: 0,
+      fiber: 0,
+      sugar: 0,
+      saturatedFat: 0,
+      cholesterol: 0,
+      sodium: 0,
+    }
+  );
+}
+
 export default function CreateRecipe() {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -190,13 +236,43 @@ export default function CreateRecipe() {
 
       const recipe = result.recipes[0];
 
+      // If we're in Detailed Mode and we have nutrition on every ingredient,
+      // persist the exact totals to the recipe's nutrition row so the Recipe page
+      // matches the Create Recipe live header (prevents AI/cache overrides from drifting).
+      const shouldPersistExactNutrition =
+        inputMode === 'detailed' &&
+        ingredients.length > 0 &&
+        ingredients.every((i) => !!i.nutrition);
+
+      const exactTotals = shouldPersistExactNutrition
+        ? calculateIngredientTotals(ingredients)
+        : null;
+
       // Update with user's title and image if provided
       const updates: Record<string, unknown> = { title: title.trim() };
       if (imagePreview) {
         updates.image_url = imagePreview;
       }
-      
-      await supabase.from('recipes').update(updates).eq('id', recipe.id);
+
+      await Promise.all([
+        supabase.from('recipes').update(updates).eq('id', recipe.id),
+        exactTotals
+          ? supabase
+              .from('recipe_nutrition')
+              .update({
+                calories: Math.round(exactTotals.calories),
+                protein_g: Math.round(exactTotals.protein),
+                fat_g: Math.round(exactTotals.fat),
+                carbs_g: Math.round(exactTotals.carbs),
+                fiber_g: Math.round(exactTotals.fiber),
+                sugar_g: Math.round(exactTotals.sugar),
+                saturated_fat_g: Math.round(exactTotals.saturatedFat),
+                cholesterol_mg: Math.round(exactTotals.cholesterol),
+                sodium_mg: Math.round(exactTotals.sodium),
+              })
+              .eq('recipe_id', recipe.id)
+          : Promise.resolve(),
+      ]);
 
       toast.success(t('recipes.createSuccess', 'Recipe created! You can edit it anytime.'));
       navigate(`/recipe/${recipe.id}`);
