@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, X, Package, Flame, Drumstick, Droplet, Wheat, Minus, Plus, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 export interface ScannedProduct {
   barcode: string;
@@ -60,6 +60,16 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
     }
   }, [product]);
 
+  // Allow ESC to close full image preview
+  useEffect(() => {
+    if (!showFullImage) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowFullImage(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showFullImage]);
+
   if (!open || !product) return null;
 
   const handleConfirm = () => {
@@ -88,6 +98,16 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
   };
 
   const qtyNum = parseFloat(quantity) || 1;
+
+  const formatMacro = (field: 'calories' | 'protein' | 'fat' | 'carbs', value: number) => {
+    if (!Number.isFinite(value)) return '0';
+    if (field === 'calories') return String(Math.round(value));
+
+    // Avoid “rounding up” small values into 1g (e.g. 0.6g -> 1g)
+    const rounded = Math.round(value * 10) / 10;
+    const normalized = rounded < 0.05 ? 0 : rounded;
+    return normalized % 1 === 0 ? normalized.toFixed(0) : normalized.toFixed(1);
+  };
 
   const macros = [
     { 
@@ -129,21 +149,44 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
 
   return (
     <>
-      {/* Full-size image dialog - MUST be outside AnimatePresence for proper z-index */}
-      <Dialog open={showFullImage} onOpenChange={setShowFullImage}>
-        <DialogContent className="max-w-[90vw] max-h-[90vh] p-4 bg-background overflow-auto">
-          {product?.imageUrl && (
-            <img
-              src={product.imageUrl}
-              alt={product.name}
-              className="max-w-full max-h-[70vh] mx-auto rounded-lg object-contain"
-            />
-          )}
-          <p className="text-center text-sm text-muted-foreground mt-2 px-2">
-            {product?.name}
-          </p>
-        </DialogContent>
-      </Dialog>
+      {/* Full-size image preview (avoid nested Dialog z-index issues) */}
+      {showFullImage && product?.imageUrl && !imageError
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[60] bg-black/70"
+              onClick={() => setShowFullImage(false)}
+              role="dialog"
+              aria-modal="true"
+              aria-label={t('recipes.imagePreview', 'Product image preview')}
+            >
+              <div
+                className="absolute inset-0 flex items-center justify-center p-4"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="relative w-full max-w-md rounded-2xl bg-background p-4 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => setShowFullImage(false)}
+                    className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-muted"
+                    aria-label={t('common.close', 'Close')}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+
+                  <img
+                    src={product.imageUrl}
+                    alt={product.name}
+                    className="mx-auto max-h-[75vh] w-auto max-w-[90vw] rounded-xl object-contain"
+                  />
+                  <p className="mt-3 text-center text-sm text-muted-foreground">
+                    {product.name}
+                  </p>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       <AnimatePresence>
         {open && product && (
@@ -271,7 +314,7 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
                         />
                       ) : (
                         <p className={`text-sm font-bold ${color}`}>
-                          {Math.round(value)}{suffix}
+                          {formatMacro(field, value)}{suffix}
                         </p>
                       )}
                       <p className="text-[10px] text-muted-foreground">{label}</p>
