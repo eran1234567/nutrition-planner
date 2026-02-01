@@ -20,6 +20,11 @@ export interface IngredientItem {
     protein?: number;
     carbs?: number;
     fat?: number;
+    fiber?: number;
+    sugar?: number;
+    saturatedFat?: number;
+    cholesterol?: number;
+    sodium?: number;
   };
 }
 
@@ -130,13 +135,14 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
           nutriments_sample: {
             'energy-kcal_100g': nutriments['energy-kcal_100g'],
             'energy-kcal_serving': nutriments['energy-kcal_serving'],
-            'energy_100g': nutriments['energy_100g'],
             'proteins_100g': nutriments['proteins_100g'],
-            'proteins_serving': nutriments['proteins_serving'],
             'fat_100g': nutriments['fat_100g'],
-            'fat_serving': nutriments['fat_serving'],
             'carbohydrates_100g': nutriments['carbohydrates_100g'],
-            'carbohydrates_serving': nutriments['carbohydrates_serving'],
+            'fiber_100g': nutriments['fiber_100g'],
+            'sugars_100g': nutriments['sugars_100g'],
+            'saturated-fat_100g': nutriments['saturated-fat_100g'],
+            'cholesterol_100g': nutriments['cholesterol_100g'],
+            'sodium_100g': nutriments['sodium_100g'],
           }
         });
         
@@ -190,14 +196,25 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
         const proteinServing = parseNumber(nutriments['proteins_serving']);
         const carbsServing = parseNumber(nutriments['carbohydrates_serving']);
         const fatServing = parseNumber(nutriments['fat_serving']);
+        const fiberServing = parseNumber(nutriments['fiber_serving']);
+        const sugarServing = parseNumber(nutriments['sugars_serving']);
+        const satFatServing = parseNumber(nutriments['saturated-fat_serving']);
+        const cholesterolServing = parseNumber(nutriments['cholesterol_serving']);
+        const sodiumServing = parseNumber(nutriments['sodium_serving']);
 
         const hasServingCalories = caloriesServing !== null;
         const hasAnyServingMacro = proteinServing !== null || carbsServing !== null || fatServing !== null;
 
+        // Get all 100g values
         const cal100g = getCalories100g();
         const prot100g = parseNumber(nutriments['proteins_100g']);
         const carb100g = parseNumber(nutriments['carbohydrates_100g']);
         const fat100g = parseNumber(nutriments['fat_100g']);
+        const fiber100g = parseNumber(nutriments['fiber_100g']);
+        const sugar100g = parseNumber(nutriments['sugars_100g']);
+        const satFat100g = parseNumber(nutriments['saturated-fat_100g']);
+        const cholesterol100g = parseNumber(nutriments['cholesterol_100g']);
+        const sodium100g = parseNumber(nutriments['sodium_100g']);
 
         const scaleFrom100g = (grams: number) => {
           const scaleFactor = grams / 100;
@@ -206,6 +223,11 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
             protein: prot100g !== null ? Math.round(prot100g * scaleFactor * 10) / 10 : undefined,
             carbs: carb100g !== null ? Math.round(carb100g * scaleFactor * 10) / 10 : undefined,
             fat: fat100g !== null ? Math.round(fat100g * scaleFactor * 10) / 10 : undefined,
+            fiber: fiber100g !== null ? Math.round(fiber100g * scaleFactor * 10) / 10 : undefined,
+            sugar: sugar100g !== null ? Math.round(sugar100g * scaleFactor * 10) / 10 : undefined,
+            saturatedFat: satFat100g !== null ? Math.round(satFat100g * scaleFactor * 10) / 10 : undefined,
+            cholesterol: cholesterol100g !== null ? Math.round(cholesterol100g * scaleFactor * 10) / 10 : undefined,
+            sodium: sodium100g !== null ? Math.round(sodium100g * scaleFactor * 10) / 10 : undefined,
           };
         };
 
@@ -217,6 +239,11 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
           protein: proteinServing ?? undefined,
           carbs: carbsServing ?? undefined,
           fat: fatServing ?? undefined,
+          fiber: fiberServing ?? undefined,
+          sugar: sugarServing ?? undefined,
+          saturatedFat: satFatServing ?? undefined,
+          cholesterol: cholesterolServing ?? undefined,
+          sodium: sodiumServing ?? undefined,
         };
 
         // Calculate nutrition values
@@ -224,6 +251,11 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
         let protein: number | undefined;
         let carbs: number | undefined;
         let fat: number | undefined;
+        let fiber: number | undefined;
+        let sugar: number | undefined;
+        let saturatedFat: number | undefined;
+        let cholesterol: number | undefined;
+        let sodium: number | undefined;
 
         // OpenFoodFacts data can be inconsistent: sometimes *_serving fields are actually per-100g.
         // If we can compute a reasonable scaled-from-100g value, sanity-check and prefer scaled when serving looks wrong.
@@ -262,6 +294,11 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
           protein = servingDirect.protein ?? scaled?.protein;
           carbs = servingDirect.carbs ?? scaled?.carbs;
           fat = servingDirect.fat ?? scaled?.fat;
+          fiber = servingDirect.fiber ?? scaled?.fiber;
+          sugar = servingDirect.sugar ?? scaled?.sugar;
+          saturatedFat = servingDirect.saturatedFat ?? scaled?.saturatedFat;
+          cholesterol = servingDirect.cholesterol ?? scaled?.cholesterol;
+          sodium = servingDirect.sodium ?? scaled?.sodium;
         } else if (scaled) {
           console.log('[Barcode] Using scaled-from-100g values (serving looked inconsistent)', {
             servingQuantityGrams,
@@ -272,6 +309,11 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
           protein = scaled.protein;
           carbs = scaled.carbs;
           fat = scaled.fat;
+          fiber = scaled.fiber;
+          sugar = scaled.sugar;
+          saturatedFat = scaled.saturatedFat;
+          cholesterol = scaled.cholesterol;
+          sodium = scaled.sodium;
         } else {
           // No serving quantity available - use 100g values as-is with warning
           console.warn('[Barcode] No serving grams available - using 100g values (may be inaccurate)');
@@ -279,16 +321,16 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
           protein = prot100g ?? undefined;
           carbs = carb100g ?? undefined;
           fat = fat100g ?? undefined;
+          fiber = fiber100g ?? undefined;
+          sugar = sugar100g ?? undefined;
+          saturatedFat = satFat100g ?? undefined;
+          cholesterol = cholesterol100g ?? undefined;
+          sodium = sodium100g ?? undefined;
         }
         
         console.log('[Barcode] Final nutrition:', {
-          calories,
-          protein,
-          carbs,
-          fat,
-          hasServingCalories,
-          servingQuantityGrams,
-          shouldPreferScaled,
+          calories, protein, carbs, fat, fiber, sugar, saturatedFat, cholesterol, sodium,
+          hasServingCalories, servingQuantityGrams, shouldPreferScaled,
         });
         
         // Parse serving size to extract natural unit
@@ -317,7 +359,7 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
           imageUrl,
           servingQuantityGrams,
           naturalUnit,
-          nutrition: { calories, protein, carbs, fat }
+          nutrition: { calories, protein, carbs, fat, fiber, sugar, saturatedFat, cholesterol, sodium }
         });
       } else {
         // Product not found - show review with placeholder
