@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, X, Package, Flame, Drumstick, Droplet, Wheat, Minus, Plus, Pencil } from 'lucide-react';
+import { Check, X, Package, Flame, Drumstick, Droplet, Wheat, Minus, Plus, Pencil, Leaf, Cookie, Beef, Heart, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,6 +19,11 @@ export interface ScannedProduct {
     protein?: number;
     carbs?: number;
     fat?: number;
+    fiber?: number;
+    sugar?: number;
+    saturatedFat?: number;
+    cholesterol?: number;
+    sodium?: number;
   };
 }
 
@@ -38,6 +43,11 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
     protein: 0,
     carbs: 0,
     fat: 0,
+    fiber: 0,
+    sugar: 0,
+    saturatedFat: 0,
+    cholesterol: 0,
+    sodium: 0,
   });
   const [isEditingMacros, setIsEditingMacros] = useState(false);
   const [showFullImage, setShowFullImage] = useState(false);
@@ -53,6 +63,11 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
         protein: product.nutrition.protein || 0,
         carbs: product.nutrition.carbs || 0,
         fat: product.nutrition.fat || 0,
+        fiber: product.nutrition.fiber || 0,
+        sugar: product.nutrition.sugar || 0,
+        saturatedFat: product.nutrition.saturatedFat || 0,
+        cholesterol: product.nutrition.cholesterol || 0,
+        sodium: product.nutrition.sodium || 0,
       });
       setIsEditingMacros(false);
       setImageError(false);
@@ -99,17 +114,19 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
 
   const qtyNum = parseFloat(quantity) || 1;
 
-  const formatMacro = (field: 'calories' | 'protein' | 'fat' | 'carbs', value: number) => {
+  const formatMacro = (field: keyof typeof editableNutrition, value: number) => {
     if (!Number.isFinite(value)) return '0';
     if (field === 'calories') return String(Math.round(value));
-
+    // mg fields (cholesterol, sodium) - show as integers
+    if (field === 'cholesterol' || field === 'sodium') return String(Math.round(value));
     // Avoid “rounding up” small values into 1g (e.g. 0.6g -> 1g)
     const rounded = Math.round(value * 10) / 10;
     const normalized = rounded < 0.05 ? 0 : rounded;
     return normalized % 1 === 0 ? normalized.toFixed(0) : normalized.toFixed(1);
   };
 
-  const macros = [
+  // Primary macros (always visible)
+  const primaryMacros = [
     { 
       icon: Flame, 
       label: 'Cal', 
@@ -146,6 +163,58 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
       color: 'text-blue-500' 
     },
   ];
+
+  // Secondary nutrients (fiber, sugar, sat fat, cholesterol, sodium)
+  const secondaryMacros = [
+    { 
+      icon: Leaf, 
+      label: 'Fiber', 
+      field: 'fiber' as const, 
+      value: editableNutrition.fiber * qtyNum, 
+      baseValue: editableNutrition.fiber,
+      suffix: 'g', 
+      color: 'text-green-500' 
+    },
+    { 
+      icon: Cookie, 
+      label: 'Sugar', 
+      field: 'sugar' as const, 
+      value: editableNutrition.sugar * qtyNum, 
+      baseValue: editableNutrition.sugar,
+      suffix: 'g', 
+      color: 'text-pink-500' 
+    },
+    { 
+      icon: Beef, 
+      label: 'Sat Fat', 
+      field: 'saturatedFat' as const, 
+      value: editableNutrition.saturatedFat * qtyNum, 
+      baseValue: editableNutrition.saturatedFat,
+      suffix: 'g', 
+      color: 'text-amber-600' 
+    },
+    { 
+      icon: Heart, 
+      label: 'Chol', 
+      field: 'cholesterol' as const, 
+      value: editableNutrition.cholesterol * qtyNum, 
+      baseValue: editableNutrition.cholesterol,
+      suffix: 'mg', 
+      color: 'text-rose-500' 
+    },
+    { 
+      icon: FlaskConical, 
+      label: 'Sodium', 
+      field: 'sodium' as const, 
+      value: editableNutrition.sodium * qtyNum, 
+      baseValue: editableNutrition.sodium,
+      suffix: 'mg', 
+      color: 'text-purple-500' 
+    },
+  ];
+
+  // Show net carbs in keto context
+  const netCarbs = Math.max(0, editableNutrition.carbs - editableNutrition.fiber) * qtyNum;
 
   return (
     <>
@@ -299,8 +368,9 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
                   </button>
                 </div>
                 
+                {/* Primary macros row */}
                 <div className="grid grid-cols-4 gap-2 p-3 rounded-xl bg-muted/50">
-                  {macros.map(({ icon: Icon, label, field, value, baseValue, suffix = '', color }) => (
+                  {primaryMacros.map(({ icon: Icon, label, field, value, baseValue, suffix = '', color }) => (
                     <div key={label} className="text-center">
                       <Icon className={`w-4 h-4 mx-auto mb-1 ${color}`} />
                       {isEditingMacros ? (
@@ -318,6 +388,37 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
                         </p>
                       )}
                       <p className="text-[10px] text-muted-foreground">{label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Net carbs hint for keto */}
+                {editableNutrition.fiber > 0 && !isEditingMacros && (
+                  <p className="text-xs text-center text-green-600 font-medium">
+                    {t('recipes.netCarbs', 'Net Carbs')}: {formatMacro('carbs', netCarbs)}g
+                  </p>
+                )}
+                
+                {/* Secondary nutrients row */}
+                <div className="grid grid-cols-5 gap-1.5 p-2 rounded-lg bg-muted/30">
+                  {secondaryMacros.map(({ icon: Icon, label, field, value, baseValue, suffix = '', color }) => (
+                    <div key={label} className="text-center">
+                      <Icon className={`w-3 h-3 mx-auto mb-0.5 ${color}`} />
+                      {isEditingMacros ? (
+                        <Input
+                          type="number"
+                          value={baseValue}
+                          onChange={(e) => updateNutritionField(field, e.target.value)}
+                          className="h-6 text-[10px] text-center px-0.5 font-bold"
+                          min="0"
+                          step="0.1"
+                        />
+                      ) : (
+                        <p className={`text-[10px] font-bold ${color}`}>
+                          {formatMacro(field, value)}{suffix}
+                        </p>
+                      )}
+                      <p className="text-[8px] text-muted-foreground truncate">{label}</p>
                     </div>
                   ))}
                 </div>
