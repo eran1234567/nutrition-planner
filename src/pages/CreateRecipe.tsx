@@ -97,6 +97,11 @@ export default function CreateRecipe() {
           if (n.protein !== undefined) parts.push(`${n.protein}g protein`);
           if (n.fat !== undefined) parts.push(`${n.fat}g fat`);
           if (n.carbs !== undefined) parts.push(`${n.carbs}g carbs`);
+          if (n.fiber !== undefined) parts.push(`${n.fiber}g fiber`);
+          if (n.sugar !== undefined) parts.push(`${n.sugar}g sugar`);
+          if (n.saturatedFat !== undefined) parts.push(`${n.saturatedFat}g saturated fat`);
+          if (n.cholesterol !== undefined) parts.push(`${n.cholesterol}mg cholesterol`);
+          if (n.sodium !== undefined) parts.push(`${n.sodium}mg sodium`);
           if (parts.length > 0) {
             line += ` (${parts.join(', ')} per serving - verified barcode data)`;
           }
