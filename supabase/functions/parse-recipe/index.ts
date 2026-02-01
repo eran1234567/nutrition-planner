@@ -2146,6 +2146,18 @@ ${transcript}`;
 
     console.log(`Found ${parsedRecipes.recipes.length} recipes to save`);
 
+    // If the incoming content contains verified barcode nutrition, run deterministic validation
+    // during initial recipe creation as well (not just nutritionOnly mode). This prevents cases
+    // where AI extracts calories/protein/fat/carbs but drops fiber, causing Net Carbs to equal
+    // Total Carbs on the recipe detail page.
+    const contentForNutritionValidation = typeof content === 'string' ? content : '';
+    const shouldValidateNutritionFromBarcode =
+      /verified barcode data/i.test(contentForNutritionValidation);
+
+    const nutritionCacheForValidation = shouldValidateNutritionFromBarcode
+      ? await loadIngredientNutritionCache(supabase)
+      : [];
+
     // Save all recipes in parallel for speed
     const recipePromises = parsedRecipes.recipes.map(async (recipe: any) => {
       if (!recipe.title || typeof recipe.title !== 'string') {
@@ -2168,6 +2180,43 @@ ${transcript}`;
       
       const sanitizedServings = (typeof recipe.servings === 'number' && recipe.servings >= 1 && recipe.servings <= 100)
         ? Math.round(recipe.servings) : 5; // Default to 5 for meal prep (Mon-Fri)
+
+      // Normalize + optionally validate nutrition at creation-time.
+      // NOTE: validateAndCorrectNutrition expects numeric fields; AI sometimes returns null/undefined.
+      let nutritionForInsert: NutritionData | null = null;
+      if (recipe?.nutrition && typeof recipe.nutrition === 'object') {
+        const n = recipe.nutrition;
+        const normalizedNutrition: NutritionData = {
+          calories: typeof n.calories === 'number' ? n.calories : 0,
+          protein_g: typeof n.protein_g === 'number' ? n.protein_g : 0,
+          carbs_g: typeof n.carbs_g === 'number' ? n.carbs_g : 0,
+          fat_g: typeof n.fat_g === 'number' ? n.fat_g : 0,
+          fiber_g: typeof n.fiber_g === 'number' ? n.fiber_g : 0,
+          sugar_g: typeof n.sugar_g === 'number' ? n.sugar_g : 0,
+          sodium_mg: typeof n.sodium_mg === 'number' ? n.sodium_mg : 0,
+          saturated_fat_g: typeof n.saturated_fat_g === 'number' ? n.saturated_fat_g : 0,
+          cholesterol_mg: typeof n.cholesterol_mg === 'number' ? n.cholesterol_mg : 0,
+        };
+
+        if (shouldValidateNutritionFromBarcode) {
+          const validated = validateAndCorrectNutrition(
+            contentForNutritionValidation,
+            normalizedNutrition,
+            nutritionCacheForValidation,
+            sanitizedServings
+          );
+
+          if (validated.wasCorrect === false) {
+            console.log(
+              `[MACROS] Creation-time nutrition patched for "${sanitizedTitle}": ${validated.reason ?? 'n/a'}`
+            );
+          }
+
+          nutritionForInsert = validated.nutrition;
+        } else {
+          nutritionForInsert = normalizedNutrition;
+        }
+      }
       const sanitizedPrepTime = (typeof recipe.prep_time === 'number' && recipe.prep_time >= 0 && recipe.prep_time <= 1440)
         ? Math.round(recipe.prep_time) : null;
       const sanitizedCookTime = (typeof recipe.cook_time === 'number' && recipe.cook_time >= 0 && recipe.cook_time <= 1440)
@@ -2276,15 +2325,15 @@ ${transcript}`;
       
       relatedPromises.push(supabase.from('recipe_nutrition').insert({
         recipe_id: newRecipe.id,
-        calories: validateNutrition(recipe.nutrition?.calories, 10000),
-        protein_g: validateNutrition(recipe.nutrition?.protein_g, 1000),
-        carbs_g: validateNutrition(recipe.nutrition?.carbs_g, 1000),
-        fat_g: validateNutrition(recipe.nutrition?.fat_g, 1000),
-        fiber_g: validateNutrition(recipe.nutrition?.fiber_g, 500),
-        sugar_g: validateNutrition(recipe.nutrition?.sugar_g, 500),
-        sodium_mg: validateNutrition(recipe.nutrition?.sodium_mg, 50000),
-        saturated_fat_g: validateNutrition(recipe.nutrition?.saturated_fat_g, 500),
-        cholesterol_mg: validateNutrition(recipe.nutrition?.cholesterol_mg, 5000),
+        calories: validateNutrition(nutritionForInsert?.calories, 10000),
+        protein_g: validateNutrition(nutritionForInsert?.protein_g, 1000),
+        carbs_g: validateNutrition(nutritionForInsert?.carbs_g, 1000),
+        fat_g: validateNutrition(nutritionForInsert?.fat_g, 1000),
+        fiber_g: validateNutrition(nutritionForInsert?.fiber_g, 500),
+        sugar_g: validateNutrition(nutritionForInsert?.sugar_g, 500),
+        sodium_mg: validateNutrition(nutritionForInsert?.sodium_mg, 50000),
+        saturated_fat_g: validateNutrition(nutritionForInsert?.saturated_fat_g, 500),
+        cholesterol_mg: validateNutrition(nutritionForInsert?.cholesterol_mg, 5000),
       }));
 
       // Tags - combine general tags, diet_tags, and health_tags
