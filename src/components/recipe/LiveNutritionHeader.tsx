@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { Flame, Drumstick, Droplet, Wheat } from 'lucide-react';
+import { Flame, Drumstick, Droplet, Wheat, Leaf, Cookie, Heart, Zap } from 'lucide-react';
 import type { IngredientItem } from './IngredientInput';
 
 interface LiveNutritionHeaderProps {
@@ -12,7 +12,13 @@ interface NutritionTotals {
   calories: number;
   protein: number;
   fat: number;
+  carbs: number;
   netCarbs: number;
+  fiber: number;
+  sugar: number;
+  saturatedFat: number;
+  cholesterol: number;
+  sodium: number;
 }
 
 function calculateTotals(ingredients: IngredientItem[]): NutritionTotals {
@@ -32,10 +38,16 @@ function calculateTotals(ingredients: IngredientItem[]): NutritionTotals {
         calories: acc.calories + (ing.nutrition.calories || 0) * qty,
         protein: acc.protein + (ing.nutrition.protein || 0) * qty,
         fat: acc.fat + (ing.nutrition.fat || 0) * qty,
+        carbs: acc.carbs + carbs,
         netCarbs: acc.netCarbs + netCarbs,
+        fiber: acc.fiber + fiber,
+        sugar: acc.sugar + (ing.nutrition.sugar || 0) * qty,
+        saturatedFat: acc.saturatedFat + (ing.nutrition.saturatedFat || 0) * qty,
+        cholesterol: acc.cholesterol + (ing.nutrition.cholesterol || 0) * qty,
+        sodium: acc.sodium + (ing.nutrition.sodium || 0) * qty,
       };
     },
-    { calories: 0, protein: 0, fat: 0, netCarbs: 0 }
+    { calories: 0, protein: 0, fat: 0, carbs: 0, netCarbs: 0, fiber: 0, sugar: 0, saturatedFat: 0, cholesterol: 0, sodium: 0 }
   );
 }
 
@@ -58,10 +70,10 @@ export function LiveNutritionHeader({ ingredients }: LiveNutritionHeaderProps) {
   
   const totals = useMemo(() => calculateTotals(ingredients), [ingredients]);
   
-  const macros = [
+  const primaryMacros = [
     { 
       icon: Flame, 
-      label: t('nutrition.calories', 'Calories'), 
+      label: t('nutrition.cal', 'Cal'), 
       value: totals.calories, 
       suffix: '',
       color: 'text-orange-500',
@@ -85,30 +97,101 @@ export function LiveNutritionHeader({ ingredients }: LiveNutritionHeaderProps) {
     },
     { 
       icon: Wheat, 
-      label: t('nutrition.netCarbs', 'Net Carbs'), 
-      value: totals.netCarbs, 
+      label: t('nutrition.carbs', 'Carbs'), 
+      value: totals.carbs, 
       suffix: 'g',
       color: 'text-blue-500',
       bgColor: 'bg-blue-500/10'
     },
   ];
 
+  const secondaryMacros = [
+    { 
+      icon: Leaf, 
+      label: t('nutrition.fiber', 'Fiber'), 
+      value: totals.fiber, 
+      suffix: 'g',
+      color: 'text-green-500',
+      bgColor: 'bg-green-500/10'
+    },
+    { 
+      icon: Cookie, 
+      label: t('nutrition.sugar', 'Sugar'), 
+      value: totals.sugar, 
+      suffix: 'g',
+      color: 'text-pink-500',
+      bgColor: 'bg-pink-500/10'
+    },
+    { 
+      icon: Droplet, 
+      label: t('nutrition.satFat', 'Sat Fat'), 
+      value: totals.saturatedFat, 
+      suffix: 'g',
+      color: 'text-amber-600',
+      bgColor: 'bg-amber-600/10'
+    },
+    { 
+      icon: Heart, 
+      label: t('nutrition.chol', 'Chol'), 
+      value: totals.cholesterol, 
+      suffix: 'mg',
+      color: 'text-rose-500',
+      bgColor: 'bg-rose-500/10'
+    },
+    { 
+      icon: Zap, 
+      label: t('nutrition.sodium', 'Sodium'), 
+      value: totals.sodium, 
+      suffix: 'mg',
+      color: 'text-purple-500',
+      bgColor: 'bg-purple-500/10'
+    },
+  ];
+
   return (
-    <div className="grid grid-cols-4 gap-2">
-      {macros.map(({ icon: Icon, label, value, suffix, color, bgColor }) => (
-        <div
-          key={label}
-          className={`flex flex-col items-center p-2 rounded-lg ${bgColor}`}
-        >
-          <Icon className={`w-4 h-4 ${color} mb-1`} />
-          <span className={`text-sm font-bold ${color}`}>
-            <AnimatedNumber value={value} suffix={suffix} />
-          </span>
-          <span className="text-[10px] text-muted-foreground truncate max-w-full">
-            {label}
-          </span>
-        </div>
-      ))}
+    <div className="space-y-2">
+      {/* Primary macros */}
+      <div className="grid grid-cols-4 gap-2">
+        {primaryMacros.map(({ icon: Icon, label, value, suffix, color, bgColor }) => (
+          <div
+            key={label}
+            className={`flex flex-col items-center p-2 rounded-lg ${bgColor}`}
+          >
+            <Icon className={`w-4 h-4 ${color} mb-1`} />
+            <span className={`text-sm font-bold ${color}`}>
+              <AnimatedNumber value={value} suffix={suffix} />
+            </span>
+            <span className="text-[10px] text-muted-foreground truncate max-w-full">
+              {label}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Net Carbs highlight */}
+      <div className="text-center py-1">
+        <span className="text-sm font-semibold text-green-600">
+          {t('nutrition.netCarbs', 'Net Carbs')}: <AnimatedNumber value={totals.netCarbs} suffix="g" />
+        </span>
+      </div>
+
+      {/* Secondary macros */}
+      <div className="grid grid-cols-5 gap-1">
+        {secondaryMacros.map(({ icon: Icon, label, value, suffix, color, bgColor }) => (
+          <div
+            key={label}
+            className={`flex flex-col items-center p-1.5 rounded-lg ${bgColor}`}
+          >
+            <Icon className={`w-3 h-3 ${color} mb-0.5`} />
+            <span className={`text-xs font-bold ${color}`}>
+              <AnimatedNumber value={value} suffix={suffix} />
+            </span>
+            <span className="text-[9px] text-muted-foreground truncate max-w-full">
+              {label}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
