@@ -3,6 +3,23 @@
 
 import { supabase } from '@/integrations/supabase/client';
 
+export interface IngredientNutritionRow {
+  id: string;
+  name: string;
+  brand?: string | null;
+  keywords: string[];
+  serving_description: string;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g: number;
+  sugar_g: number;
+  sodium_mg: number;
+  saturated_fat_g: number;
+  cholesterol_mg: number;
+}
+
 export async function identifyProductAndGetNutrition(
   imageUrl: string,
   timeoutMs = 15000
@@ -10,10 +27,15 @@ export async function identifyProductAndGetNutrition(
   productName?: string;
   brand?: string;
   calories?: number | null;
+  protein?: number | null;
   carbs?: number | null;
+  fat?: number | null;
   fiber?: number | null;
+  sugar?: number | null;
+  saturatedFat?: number | null;
+  cholesterol?: number | null;
   sodium?: number | null;
-  servingGrams?: number | null;
+  servingDescription?: string | null;
   confidence?: number;
   source?: 'gemini' | 'database' | 'ocr';
 } | null> {
@@ -54,6 +76,46 @@ export async function identifyProductAndGetNutrition(
   }
 }
 
+/**
+ * Search ingredient_nutrition table by brand, name, AND keywords simultaneously
+ * Returns matches sorted by relevance
+ */
+export async function searchIngredientNutrition(
+  searchTerm: string,
+  limit = 10
+): Promise<IngredientNutritionRow[]> {
+  if (!searchTerm || searchTerm.trim().length < 2) return [];
+  
+  const term = searchTerm.trim().toLowerCase();
+  
+  try {
+    // Search across brand, name, and keywords using OR conditions
+    // The textSearch approach uses ilike for flexible matching
+    const { data, error } = await (supabase as any)
+      .from('ingredient_nutrition')
+      .select('id, name, brand, keywords, serving_description, calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg, saturated_fat_g, cholesterol_mg')
+      .or(`name.ilike.%${term}%,brand.ilike.%${term}%,keywords.cs.{${term}}`)
+      .limit(limit);
+
+    if (error) {
+      console.error('Search error:', error);
+      return [];
+    }
+
+    return (data || []) as IngredientNutritionRow[];
+  } catch (err) {
+    console.error('Search failed:', err);
+    return [];
+  }
+}
+
+/**
+ * Get Net Carbs calculation: carbs_g - fiber_g (minimum 0)
+ */
+export function calculateNetCarbs(carbs_g: number, fiber_g: number): number {
+  return Math.max(0, (carbs_g || 0) - (fiber_g || 0));
+}
+
 let lastGeminiRequestAt = 0;
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -65,10 +127,15 @@ async function identifyProductWithGemini(
   productName?: string;
   brand?: string;
   calories?: number | null;
+  protein?: number | null;
   carbs?: number | null;
+  fat?: number | null;
   fiber?: number | null;
+  sugar?: number | null;
+  saturatedFat?: number | null;
+  cholesterol?: number | null;
   sodium?: number | null;
-  servingGrams?: number | null;
+  servingDescription?: string | null;
   confidence?: number;
 } | null> {
   if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
@@ -110,8 +177,8 @@ async function identifyProductWithGemini(
 
     const prompt = `You are a nutrition label expert. Analyze this product image and extract:
 1. Product name (e.g., "Metamucil Fiber Supplement")
-2. Brand name (e.g., "Procter & Gamble")
-3. Nutrition facts per serving: calories, total carbs (g), dietary fiber (g), sodium (mg), serving size (g)
+2. Brand name (e.g., "Metamucil", "Jif", "Silk")
+3. Nutrition facts per serving: calories, protein (g), total carbs (g), fat (g), dietary fiber (g), sugar (g), saturated fat (g), cholesterol (mg), sodium (mg), serving size description
 4. Your confidence level (0-1) in the identification
 
 Format your response as JSON only, no other text:
@@ -119,10 +186,15 @@ Format your response as JSON only, no other text:
   "productName": "string",
   "brand": "string", 
   "calories": number or null,
+  "protein": number or null,
   "carbs": number or null,
+  "fat": number or null,
   "fiber": number or null,
+  "sugar": number or null,
+  "saturatedFat": number or null,
+  "cholesterol": number or null,
   "sodium": number or null,
-  "servingGrams": number or null,
+  "servingDescription": "string or null",
   "confidence": 0-1
 }
 
@@ -247,20 +319,35 @@ async function lookupProductInDatabase(
   productName: string,
   brand?: string
 ): Promise<{
+  productName?: string;
+  brand?: string;
   calories?: number | null;
+  protein?: number | null;
   carbs?: number | null;
+  fat?: number | null;
   fiber?: number | null;
+  sugar?: number | null;
+  saturatedFat?: number | null;
+  cholesterol?: number | null;
   sodium?: number | null;
-  servingGrams?: number | null;
+  servingDescription?: string | null;
 } | null> {
   try {
-    const query = (supabase as any)
-      .from('products')
-      .select('product_name, brand, calories, carbs, fiber, sodium, serving_grams')
-      .ilike('product_name', `%${productName}%`);
+    // Search using brand, name, and keywords
+    let query = (supabase as any)
+      .from('ingredient_nutrition')
+      .select('name, brand, calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg, saturated_fat_g, cholesterol_mg, serving_description');
 
-    const withBrand = brand ? query.ilike('brand', `%${brand}%`) : query;
-    const { data, error } = await withBrand.limit(1).maybeSingle();
+    // Build OR condition for flexible matching
+    const searchTerm = productName.toLowerCase();
+    query = query.or(`name.ilike.%${searchTerm}%,brand.ilike.%${searchTerm}%`);
+
+    // If brand is provided, prioritize exact brand matches
+    if (brand) {
+      query = query.or(`brand.ilike.%${brand}%`);
+    }
+
+    const { data, error } = await query.limit(1).maybeSingle();
 
     if (error) {
       return null;
@@ -269,11 +356,18 @@ async function lookupProductInDatabase(
     if (!data) return null;
 
     return {
+      productName: data.name ?? null,
+      brand: data.brand ?? null,
       calories: data.calories ?? null,
-      carbs: data.carbs ?? null,
-      fiber: data.fiber ?? null,
-      sodium: data.sodium ?? null,
-      servingGrams: data.serving_grams ?? null,
+      protein: data.protein_g ?? null,
+      carbs: data.carbs_g ?? null,
+      fat: data.fat_g ?? null,
+      fiber: data.fiber_g ?? null,
+      sugar: data.sugar_g ?? null,
+      saturatedFat: data.saturated_fat_g ?? null,
+      cholesterol: data.cholesterol_mg ?? null,
+      sodium: data.sodium_mg ?? null,
+      servingDescription: data.serving_description ?? null,
     };
 
   } catch (err) {

@@ -234,6 +234,7 @@ export function RecipeCreatorDrawer({ open, onOpenChange, onSuccess }: RecipeCre
               protein: exactTotals.protein / s,
               fat: exactTotals.fat / s,
               carbs: exactTotals.carbs / s,
+              netCarbs: exactTotals.netCarbs / s,
               fiber: exactTotals.fiber / s,
               sugar: exactTotals.sugar / s,
               saturatedFat: exactTotals.saturatedFat / s,

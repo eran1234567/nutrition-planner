@@ -177,6 +177,7 @@ export type Database = {
       }
       ingredient_nutrition: {
         Row: {
+          brand: string | null
           calories: number
           carbs_g: number
           cholesterol_mg: number
@@ -193,6 +194,7 @@ export type Database = {
           sugar_g: number
         }
         Insert: {
+          brand?: string | null
           calories?: number
           carbs_g?: number
           cholesterol_mg?: number
@@ -209,6 +211,7 @@ export type Database = {
           sugar_g?: number
         }
         Update: {
+          brand?: string | null
           calories?: number
           carbs_g?: number
           cholesterol_mg?: number

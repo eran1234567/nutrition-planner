@@ -598,25 +598,41 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
         try {
           const { identifyProductAndGetNutrition } = await import('@/lib/productRecognition');
           const recognized = await identifyProductAndGetNutrition(imageUrl, 15000);
+          
+          // Apply recognized data - maps DB columns (carbs_g, fiber_g, etc.) to UI fields
           const applyRecognized = (data: {
             productName?: string;
+            brand?: string;
             calories?: number | null;
+            protein?: number | null;
             carbs?: number | null;
+            fat?: number | null;
             fiber?: number | null;
+            sugar?: number | null;
+            saturatedFat?: number | null;
+            cholesterol?: number | null;
             sodium?: number | null;
-            servingGrams?: number | null;
+            servingDescription?: string | null;
           }) => {
             setPendingProduct(prev => prev ? {
               ...prev,
-              name: data.productName || prev.name,
+              name: data.brand && data.productName 
+                ? `${data.brand} ${data.productName}` 
+                : data.productName || prev.name,
               nutrition: {
                 ...prev.nutrition,
                 calories: data.calories ?? prev.nutrition.calories,
+                protein: data.protein ?? prev.nutrition.protein,
                 carbs: data.carbs ?? prev.nutrition.carbs,
+                fat: data.fat ?? prev.nutrition.fat,
                 fiber: data.fiber ?? prev.nutrition.fiber,
+                sugar: data.sugar ?? prev.nutrition.sugar,
+                saturatedFat: data.saturatedFat ?? prev.nutrition.saturatedFat,
+                cholesterol: data.cholesterol ?? prev.nutrition.cholesterol,
                 sodium: data.sodium ?? prev.nutrition.sodium,
               },
-              servingQuantityGrams: data.servingGrams ?? prev.servingQuantityGrams ?? null,
+              // Use serving_description from DB if available
+              naturalUnit: data.servingDescription || prev.naturalUnit,
             } : null);
           };
 
