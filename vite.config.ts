@@ -14,13 +14,22 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-      "@/integrations/supabase/client": path.resolve(
-        __dirname,
-        "./src/integrations/supabase/client-runtime.ts",
-      ),
-    },
+    // IMPORTANT: order matters. The more specific alias MUST come before "@",
+    // otherwise "@" will match first and Vite will load the auto-generated
+    // client.ts (which crashes if env injection fails).
+    alias: [
+      {
+        find: "@/integrations/supabase/client",
+        replacement: path.resolve(
+          __dirname,
+          "./src/integrations/supabase/client-runtime.ts",
+        ),
+      },
+      {
+        find: "@",
+        replacement: path.resolve(__dirname, "./src"),
+      },
+    ],
     dedupe: ["react", "react-dom"],
   },
   optimizeDeps: {
