@@ -6,6 +6,7 @@ import type { IngredientItem } from './IngredientInput';
 
 interface LiveNutritionHeaderProps {
   ingredients: IngredientItem[];
+  servings?: number;
 }
 
 interface NutritionTotals {
@@ -65,10 +66,27 @@ function AnimatedNumber({ value, suffix = '' }: { value: number; suffix?: string
   );
 }
 
-export function LiveNutritionHeader({ ingredients }: LiveNutritionHeaderProps) {
+export function LiveNutritionHeader({ ingredients, servings = 1 }: LiveNutritionHeaderProps) {
   const { t } = useTranslation();
   
-  const totals = useMemo(() => calculateTotals(ingredients), [ingredients]);
+  // Calculate raw totals then normalize to per-serving when servings > 1
+  const totals = useMemo(() => {
+    const raw = calculateTotals(ingredients);
+    const s = servings && servings > 0 ? servings : 1;
+    if (s === 1) return raw;
+    return {
+      calories: raw.calories / s,
+      protein: raw.protein / s,
+      fat: raw.fat / s,
+      carbs: raw.carbs / s,
+      netCarbs: raw.netCarbs / s,
+      fiber: raw.fiber / s,
+      sugar: raw.sugar / s,
+      saturatedFat: raw.saturatedFat / s,
+      cholesterol: raw.cholesterol / s,
+      sodium: raw.sodium / s,
+    };
+  }, [ingredients, servings]);
   
   const primaryMacros = [
     { 

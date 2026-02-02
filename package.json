@@ -67,7 +67,8 @@
     "vaul": "^0.9.9",
     "zod": "^3.25.76",
     "zustand": "^5.0.10",
-    "zxing-wasm": "^2.2.4"
+    "zxing-wasm": "^2.2.4",
+    "tesseract.js": "^4.0.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",

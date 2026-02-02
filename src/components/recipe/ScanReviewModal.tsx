@@ -14,6 +14,7 @@ export interface ScannedProduct {
   servingQuantityGrams?: number;
   naturalUnit?: string;
   imageUrl?: string;
+  nutritionPer?: string;
   nutrition: {
     calories?: number;
     protein?: number;
@@ -52,13 +53,24 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
   const [isEditingMacros, setIsEditingMacros] = useState(false);
   const [showFullImage, setShowFullImage] = useState(false);
   const [imageError, setImageError] = useState(false);
+  // When product lacks serving grams but has per-100g nutrition we will treat '1 serving' as the base unit.
+  // If critical macros (carbs/fiber) are missing, require the user to fill them and persist that as an override.
+  const [servingGramsInput, setServingGramsInput] = useState('');
+  const [basePer100g, setBasePer100g] = useState<null | typeof editableNutrition>(null);
+  const [requireManualMacros, setRequireManualMacros] = useState(false);
+  const [manualError, setManualError] = useState<string | null>(null);
 
   // Reset state when product changes
   useEffect(() => {
     if (product) {
       setQuantity('1');
-      setUnit(product.naturalUnit || 'serving');
-      setEditableNutrition({
+      // If the product lacks serving grams, treat '1 serving' as the base unit (do not auto-scale from 100g)
+      const hasGramServing = !!product.servingQuantityGrams;
+      setUnit(product.naturalUnit || (hasGramServing ? 'serving' : 'serving'));
+
+      const isPer100gNoServings = product.nutritionPer === '100g' && !product.servingQuantityGrams;
+
+      const baseValues = isPer100gNoServings ? {
         calories: product.nutrition.calories || 0,
         protein: product.nutrition.protein || 0,
         carbs: product.nutrition.carbs || 0,
@@ -68,7 +80,31 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
         saturatedFat: product.nutrition.saturatedFat || 0,
         cholesterol: product.nutrition.cholesterol || 0,
         sodium: product.nutrition.sodium || 0,
+      } : null;
+
+      setBasePer100g(baseValues);
+
+      // Initialize editable nutrition. If the product had per-100g values and no serving grams, DO NOT auto-convert — treat them as "per serving" values and require manual confirmation if critical fields missing.
+      setEditableNutrition({
+        calories: isPer100gNoServings ? (baseValues?.calories ?? 0) : (product.nutrition.calories || 0),
+        protein: isPer100gNoServings ? (baseValues?.protein ?? 0) : (product.nutrition.protein || 0),
+        carbs: isPer100gNoServings ? (baseValues?.carbs ?? 0) : (product.nutrition.carbohydrates ?? product.nutrition.carbs ?? 0),
+        fat: isPer100gNoServings ? (baseValues?.fat ?? 0) : (product.nutrition.fat || 0),
+        fiber: isPer100gNoServings ? (baseValues?.fiber ?? 0) : (product.nutrition.fiber || 0),
+        sugar: isPer100gNoServings ? (baseValues?.sugar ?? 0) : (product.nutrition.sugars || 0),
+        saturatedFat: isPer100gNoServings ? (baseValues?.saturatedFat ?? 0) : (product.nutrition['saturated-fat'] || 0),
+        cholesterol: isPer100gNoServings ? (baseValues?.cholesterol ?? 0) : (product.nutrition.cholesterol || 0),
+        sodium: isPer100gNoServings ? (baseValues?.sodium ?? 0) : (product.nutrition.sodium || 0),
       });
+
+      // If critical macros are missing and there is no serving grams, require manual entry before confirming
+      if (!hasGramServing && (!product.nutrition.carbs && !product.nutrition.carbohydrates || !product.nutrition.fiber)) {
+        setRequireManualMacros(true);
+      } else {
+        setRequireManualMacros(false);
+      }
+
+      setServingGramsInput('');
       setIsEditingMacros(false);
       setImageError(false);
       setShowFullImage(false);
@@ -87,12 +123,42 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
 
   if (!open || !product) return null;
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
+    // If manual macros are required (no serving grams & missing carbs/fiber), validate inputs
+    if (requireManualMacros) {
+      if (!editableNutrition.carbs || !editableNutrition.fiber) {
+        setManualError(t('recipes.missingMacrosError', 'Carbs and fiber are required for this product.'));
+        return;
+      }
+    }
+
+    // Persist override to DB when barcode exists and we had missing servings or basePer100g (so we remember it forever)
+    if (product?.barcode && (basePer100g || !product.servingQuantityGrams)) {
+      try {
+        const { upsertBarcodeOverride } = await import('@/integrations/supabase/overrides');
+        await upsertBarcodeOverride(product.barcode, {
+          serving_quantity_grams: product.servingQuantityGrams || (servingGramsInput ? parseFloat(servingGramsInput) : null),
+          calories: editableNutrition.calories,
+          protein_g: editableNutrition.protein,
+          carbs_g: editableNutrition.carbs,
+          fat_g: editableNutrition.fat,
+          fiber_g: editableNutrition.fiber,
+          sugar_g: editableNutrition.sugar,
+          sodium_mg: editableNutrition.sodium,
+          source: 'user',
+        });
+      } catch (err) {
+        // non-blocking - warn in console
+        console.warn('[DB] Failed to persist barcode override', err);
+      }
+    }
+
     onConfirm(quantity, unit, editableNutrition);
     // Reset for next scan
     setQuantity('1');
     setUnit('serving');
     setIsEditingMacros(false);
+    setManualError(null);
   };
 
   const incrementQuantity = () => {
@@ -318,6 +384,42 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
                 </p>
               )}
 
+              {/* If nutrition is only available per 100g and no serving grams are present, we treat 1 serving as the base unit.
+                  We no longer auto-convert; if critical macros (carbs/fiber) are missing, require manual entry and persist as an override. */}
+              {basePer100g && !product.servingQuantityGrams && (
+                <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-3 text-sm text-yellow-800">
+                  <p className="font-medium">{t('recipes.nutritionNoServing', 'Nutrition is provided per 100g and no serving weight was found. We assume 1 serving as the base unit.')}</p>
+                  <p className="text-xs mt-1">{t('recipes.nutritionNoServingHint', 'If critical fields like carbs or fiber are missing, please enter them below. We will remember them for future scans of this barcode.')}</p>
+
+                  {requireManualMacros && (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-sm font-medium text-rose-700">{t('recipes.enterMissingMacros', 'Please enter missing carbs and fiber (per serving)')}</p>
+                      <div className="flex gap-2 items-center">
+                        <Input
+                          type="number"
+                          value={String(editableNutrition.carbs)}
+                          onChange={(e) => updateNutritionField('carbs', e.target.value)}
+                          placeholder={t('recipes.carbsPlaceholder', 'Carbs (g)')}
+                          className="w-24"
+                          min="0"
+                          step="0.1"
+                        />
+                        <Input
+                          type="number"
+                          value={String(editableNutrition.fiber)}
+                          onChange={(e) => updateNutritionField('fiber', e.target.value)}
+                          placeholder={t('recipes.fiberPlaceholder', 'Fiber (g)')}
+                          className="w-24"
+                          min="0"
+                          step="0.1"
+                        />
+                        <div className="text-sm text-rose-700">{manualError}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Quantity selector */}
               <div className="space-y-2">
                 <Label className="text-sm">{t('recipes.quantity', 'Quantity')}</Label>
@@ -357,7 +459,7 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
               {/* Live nutrition preview - Editable */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="text-sm">{t('recipes.nutritionPerServing', 'Nutrition per serving')}</Label>
+                  <Label className="text-sm">{basePer100g && unit === '100g' ? t('recipes.nutritionPer100g', 'Nutrition per 100g') : t('recipes.nutritionPerServing', 'Nutrition per serving')}</Label>
                   <button
                     type="button"
                     onClick={() => setIsEditingMacros(!isEditingMacros)}

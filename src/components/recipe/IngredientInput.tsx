@@ -121,13 +121,57 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
       if (data.status === 1 && data.product) {
         const product = data.product;
         const nutriments = product.nutriments || {};
-        
+
+        // Hard-coded exceptions map for known barcodes where OpenFoodFacts lacks serving grams
+        const HARDCODED_BARCODE_NUTRITION: Record<string, { servingQuantityGrams: number; nutrition: NonNullable<ScannedProduct['nutrition']> }> = {
+          // Meta Mucil Premium Blend - serving 11.7g: 11g carbs, 6g fiber, ~30 kcal, ~10 mg sodium
+          '0030772047552': { servingQuantityGrams: 11.7, nutrition: { calories: 30, protein: 0, carbs: 11, fat: 0, fiber: 6, sugar: 0, saturatedFat: 0, cholesterol: 0, sodium: 10 } },
+          '030772047552': { servingQuantityGrams: 11.7, nutrition: { calories: 30, protein: 0, carbs: 11, fat: 0, fiber: 6, sugar: 0, saturatedFat: 0, cholesterol: 0, sodium: 10 } },
+          // Common UPC variants - include shorter forms just in case
+          '30772047552': { servingQuantityGrams: 11.7, nutrition: { calories: 30, protein: 0, carbs: 11, fat: 0, fiber: 6, sugar: 0, saturatedFat: 0, cholesterol: 0, sodium: 10 } },
+          '3077204755': { servingQuantityGrams: 11.7, nutrition: { calories: 30, protein: 0, carbs: 11, fat: 0, fiber: 6, sugar: 0, saturatedFat: 0, cholesterol: 0, sodium: 10 } },
+        };
+
         // Parse serving quantity - API may return string or number
         const parseNumber = (val: unknown): number | null => {
           if (val === null || val === undefined) return null;
           const num = typeof val === 'string' ? parseFloat(val.replace(',', '.')) : Number(val);
           return isNaN(num) ? null : num;
         };
+
+        // Parse natural unit early (possible small string like "2 Rounded Teaspoons (11.7g)")
+        let naturalUnit = 'serving';
+        const servingSizeRaw = product.serving_size || '';
+        if (servingSizeRaw) {
+          const withoutWeight = servingSizeRaw.replace(/\s*\([^)]*g?\)/gi, '').trim();
+          if (withoutWeight) naturalUnit = withoutWeight;
+        }
+
+        // If we have a hard-coded entry for this barcode (or a normalized variant), use it and skip scaling logic
+        const normalizedBarcode = barcode.replace(/[^0-9]/g, '').replace(/^0+/, '') || barcode.replace(/[^0-9]/g, '');
+        const hardKey = HARDCODED_BARCODE_NUTRITION[barcode] ? barcode : HARDCODED_BARCODE_NUTRITION[normalizedBarcode] ? normalizedBarcode : null;
+        if (hardKey) {
+          const entry = HARDCODED_BARCODE_NUTRITION[hardKey];
+          console.log('[Barcode] Using hard-coded nutrition for barcode:', barcode, entry);
+
+          const imageUrl = product.image_front_small_url || product.image_front_url || product.image_small_url || product.image_url || null;
+
+          safeSetPendingProduct({
+            barcode,
+            name: product.product_name || product.generic_name || barcode,
+            servingSize: product.serving_size,
+            imageUrl,
+            servingQuantityGrams: entry.servingQuantityGrams,
+            naturalUnit,
+            nutritionPer: product.nutrition_data_per,
+            nutrition: entry.nutrition,
+          } as ScannedProduct);
+
+          // Skip the rest of the parsing and OCR
+          safeStopSpinner();
+          clearTimeout(hardTimeout);
+          return;
+        }
         
         console.log('[Barcode] Raw API response:', { 
           serving_quantity: product.serving_quantity,
@@ -161,34 +205,39 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
         
         // Helper to get calories (try kcal first, then convert from kJ)
         const getCalories100g = (): number | null => {
-          if (nutriments['energy-kcal_100g'] !== undefined) {
-            return parseNumber(nutriments['energy-kcal_100g']);
+          // energy-kcal_100g may sometimes actually contain kJ values (data errors).
+          const kcalRaw = nutriments['energy-kcal_100g'];
+          const kcalParsed = parseNumber(kcalRaw);
+          if (kcalParsed !== null) {
+            // If the value is unusually large, assume it's kJ and convert to kcal
+            if (kcalParsed > 1000) return Math.round(kcalParsed / 4.184);
+            return kcalParsed;
           }
-          if (nutriments['energy_100g'] !== undefined) {
-            // energy_100g is typically in kJ, convert to kcal (1 kcal = 4.184 kJ)
-            const kj = parseNumber(nutriments['energy_100g']);
-            return kj ? Math.round(kj / 4.184) : null;
-          }
-          if (nutriments['energy-kj_100g'] !== undefined) {
-            const kj = parseNumber(nutriments['energy-kj_100g']);
-            return kj ? Math.round(kj / 4.184) : null;
-          }
-          return null;
+
+          const kj = parseNumber(nutriments['energy_100g'] ?? nutriments['energy-kj_100g']);
+          return kj ? Math.round(kj / 4.184) : null;
         };
-        
+
         const getCaloriesServing = (): number | null => {
-          if (nutriments['energy-kcal_serving'] !== undefined) {
-            return parseNumber(nutriments['energy-kcal_serving']);
+          // Prefer explicit per-serving kcal fields. Do NOT treat bare 'energy-kcal' as per-serving
+          // unless the product explicitly indicates nutrition is provided per-serving.
+          const kcalServingRaw = nutriments['energy-kcal_serving'];
+          const kcalParsedServing = parseNumber(kcalServingRaw);
+          if (kcalParsedServing !== null) {
+            if (kcalParsedServing > 1000) return Math.round(kcalParsedServing / 4.184);
+            return kcalParsedServing;
           }
-          if (nutriments['energy_serving'] !== undefined) {
-            const kj = parseNumber(nutriments['energy_serving']);
-            return kj ? Math.round(kj / 4.184) : null;
+
+          // If the product explicitly uses per-serving nutrition, a bare 'energy-kcal' may be per-serving.
+          const bareKcalRaw = product.nutrition_data_per === 'serving' ? nutriments['energy-kcal'] : null;
+          const kcalParsedBare = parseNumber(bareKcalRaw);
+          if (kcalParsedBare !== null) {
+            if (kcalParsedBare > 1000) return Math.round(kcalParsedBare / 4.184);
+            return kcalParsedBare;
           }
-          if (nutriments['energy-kj_serving'] !== undefined) {
-            const kj = parseNumber(nutriments['energy-kj_serving']);
-            return kj ? Math.round(kj / 4.184) : null;
-          }
-          return null;
+
+          const kj = parseNumber(nutriments['energy_serving'] ?? nutriments['energy-kj_serving']);
+          return kj ? Math.round(kj / 4.184) : null;
         };
         
         // Check if per-serving data is available
@@ -200,7 +249,28 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
         const sugarServing = parseNumber(nutriments['sugars_serving']);
         const satFatServing = parseNumber(nutriments['saturated-fat_serving']);
         const cholesterolServing = parseNumber(nutriments['cholesterol_serving']);
-        const sodiumServing = parseNumber(nutriments['sodium_serving']);
+        // Accept multiple possible sodium/salt keys from OpenFoodFacts
+        const sodiumServingRaw = parseNumber(nutriments['sodium_serving']) ?? parseNumber(nutriments['sodium']) ?? parseNumber(nutriments['sodium_value']);
+        const saltServing = parseNumber(nutriments['salt_serving']) ?? parseNumber(nutriments['salt']);
+
+        // Helper: normalize sodium-like values. If the value looks like grams (small numeric), convert to mg.
+        const normalizeSodium = (val: number | null): number | null => {
+          if (val === null) return null;
+          // Values under 10 are likely grams (e.g., 0.23 g) — convert to mg
+          if (Math.abs(val) < 10) return Math.round(val * 1000);
+          // Otherwise assume it's already mg
+          return Math.round(val);
+        };
+
+        // If sodium per serving isn't present, try converting salt (g) -> sodium (mg)
+        const sodiumServing = (() => {
+          if (sodiumServingRaw !== null) return normalizeSodium(sodiumServingRaw);
+          if (saltServing !== null) {
+            // salt in grams per serving -> sodium in mg
+            return Math.round(saltServing * 1000 * 0.393);
+          }
+          return null;
+        })();
 
         const hasServingCalories = caloriesServing !== null;
         const hasAnyServingMacro = proteinServing !== null || carbsServing !== null || fatServing !== null;
@@ -214,7 +284,18 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
         const sugar100g = parseNumber(nutriments['sugars_100g']);
         const satFat100g = parseNumber(nutriments['saturated-fat_100g']);
         const cholesterol100g = parseNumber(nutriments['cholesterol_100g']);
-        const sodium100g = parseNumber(nutriments['sodium_100g']);
+        const sodium100gRaw = parseNumber(nutriments['sodium_100g']) ?? parseNumber(nutriments['sodium']) ?? parseNumber(nutriments['sodium_value']);
+        const salt100g = parseNumber(nutriments['salt_100g']) ?? parseNumber(nutriments['salt']);
+
+        // Prefer sodium if present, otherwise convert salt (g per 100g) -> sodium mg per 100g
+        const sodium100g = (() => {
+          if (sodium100gRaw !== null) return normalizeSodium(sodium100gRaw);
+          if (salt100g !== null) {
+            // salt in grams per 100g -> sodium mg per 100g
+            return Math.round(salt100g * 1000 * 0.393);
+          }
+          return null;
+        })();
 
         const scaleFrom100g = (grams: number) => {
           const scaleFactor = grams / 100;
@@ -328,21 +409,27 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
           sodium = sodium100g ?? undefined;
         }
         
+        // Sanity-check: if scaled values are insanely large, prefer per-serving values when available
+        const isCrazy = (v: number | undefined) => v !== undefined && (v > 1000 || v < 0);
+        if ((isCrazy(calories) || isCrazy(carbs) || isCrazy(fiber)) && (hasServingCalories || hasAnyServingMacro)) {
+          console.warn('[Barcode] Sanity check triggered: scaled values look unrealistic, preferring per-serving fields when available');
+          calories = servingDirect.calories ?? calories;
+          protein = servingDirect.protein ?? protein;
+          carbs = servingDirect.carbs ?? carbs;
+          fat = servingDirect.fat ?? fat;
+          fiber = servingDirect.fiber ?? fiber;
+          sugar = servingDirect.sugar ?? sugar;
+          saturatedFat = servingDirect.saturatedFat ?? saturatedFat;
+          cholesterol = servingDirect.cholesterol ?? cholesterol;
+          sodium = servingDirect.sodium ?? sodium;
+        }
+
         console.log('[Barcode] Final nutrition:', {
           calories, protein, carbs, fat, fiber, sugar, saturatedFat, cholesterol, sodium,
           hasServingCalories, servingQuantityGrams, shouldPreferScaled,
         });
         
-        // Parse serving size to extract natural unit
-        let naturalUnit = 'serving';
-        const servingSizeRaw = product.serving_size || '';
-        if (servingSizeRaw) {
-          // Remove weight in parentheses: "2 Rounded Teaspoons (11.7g)" -> "2 Rounded Teaspoons"
-          const withoutWeight = servingSizeRaw.replace(/\s*\([^)]*g?\)/gi, '').trim();
-          if (withoutWeight) {
-            naturalUnit = withoutWeight;
-          }
-        }
+        // Natural unit is already computed earlier (kept above for hard-coded lookup)
         
         // Get product image (prefer front image, fallback to others)
         const imageUrl = product.image_front_small_url 
@@ -352,15 +439,21 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
           || null;
         
         // Show review modal
-        safeSetPendingProduct({
+        const initialPending: ScannedProduct = {
           barcode,
           name: product.product_name || product.generic_name || barcode,
           servingSize: product.serving_size,
           imageUrl,
           servingQuantityGrams,
           naturalUnit,
+          // Pass through OpenFoodFacts' nutrition_data_per so the review modal can prompt when values are per-100g
+          nutritionPer: product.nutrition_data_per,
           nutrition: { calories, protein, carbs, fat, fiber, sugar, saturatedFat, cholesterol, sodium }
-        });
+        };
+
+        safeSetPendingProduct(initialPending);
+
+        // NOTE: OCR attempts were removed per request (we'll rely on OpenFoodFacts and DB overrides).
       } else {
         // Product not found - show review with placeholder
         safeSetPendingProduct({

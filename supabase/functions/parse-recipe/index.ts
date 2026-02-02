@@ -965,7 +965,7 @@ serve(async (req) => {
     
     // Parse body first to check for _seedKey
     const body = await req.json();
-    const { uploadId, content, sourceUrl, fileType, isImage, title, filters, seedGlobal, _seedKey, batchMode, nutritionOnly } = body;
+    const { uploadId, content, sourceUrl, fileType, isImage, title, filters, seedGlobal, _seedKey, batchMode, nutritionOnly, structured_ingredients } = body;
 
     // Save minimal context for catch-block
     uploadIdForError = typeof uploadId === 'string' ? uploadId : undefined;
@@ -2267,8 +2267,12 @@ ${transcript}`;
       const relatedPromises = [];
 
       // Ingredients
-      if (Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0) {
-        const validIngredients = recipe.ingredients
+      const sourceIngredients = (structured_ingredients && Array.isArray(structured_ingredients) && structured_ingredients.length > 0)
+        ? structured_ingredients
+        : recipe.ingredients;
+
+      if (Array.isArray(sourceIngredients) && sourceIngredients.length > 0) {
+        const validIngredients = sourceIngredients
           .filter((ing: any) => ing && typeof ing.name === 'string' && ing.name.trim())
           .slice(0, 100)
           .map((ing: any, idx: number) => ({
@@ -2278,6 +2282,14 @@ ${transcript}`;
             unit: typeof ing.unit === 'string' ? ing.unit.trim().substring(0, 50) : null,
             order_index: idx,
             section: typeof ing.section === 'string' ? ing.section.trim().substring(0, 50) : 'Main',
+            calories: ing.nutrition?.calories ?? null,
+            protein_g: ing.nutrition?.protein_g ?? null,
+            carbs_g: ing.nutrition?.carbs_g ?? null,
+            fat_g: ing.nutrition?.fat_g ?? null,
+            fiber_g: ing.nutrition?.fiber_g ?? null,
+            sugar_g: ing.nutrition?.sugar_g ?? null,
+            sodium_mg: ing.nutrition?.sodium_mg ?? null,
+            source_type: ing.source === 'scan' ? 'scan' : 'ai',
           }));
         
         if (validIngredients.length > 0) {
@@ -2323,17 +2335,45 @@ ${transcript}`;
         return null;
       };
       
+      // If we have structured ingredients (e.g. from a barcode scan), 
+      // calculate per-serving nutrition by summing them up.
+      let finalNutrition = nutritionForInsert;
+      if (structured_ingredients && Array.isArray(structured_ingredients) && structured_ingredients.length > 0) {
+        const totals = structured_ingredients.reduce((acc, ing) => {
+          const n = ing.nutrition || {};
+          return {
+            calories: acc.calories + (n.calories || 0),
+            protein: acc.protein + (n.protein_g || 0),
+            fat: acc.fat + (n.fat_g || 0),
+            carbs: acc.carbs + (n.carbs_g || 0),
+            fiber: acc.fiber + (n.fiber_g || 0),
+            sugar: acc.sugar + (n.sugar_g || 0),
+            sodium: acc.sodium + (n.sodium_mg || 0),
+          };
+        }, { calories: 0, protein: 0, fat: 0, carbs: 0, fiber: 0, sugar: 0, sodium: 0 });
+
+        finalNutrition = {
+          calories: totals.calories / sanitizedServings,
+          protein_g: totals.protein / sanitizedServings,
+          fat_g: totals.fat / sanitizedServings,
+          carbs_g: totals.carbs / sanitizedServings,
+          fiber_g: totals.fiber / sanitizedServings,
+          sugar_g: (totals.sugar || 0) / sanitizedServings,
+          sodium_mg: (totals.sodium || 0) / sanitizedServings,
+        };
+      }
+      
       relatedPromises.push(supabase.from('recipe_nutrition').insert({
         recipe_id: newRecipe.id,
-        calories: validateNutrition(nutritionForInsert?.calories, 10000),
-        protein_g: validateNutrition(nutritionForInsert?.protein_g, 1000),
-        carbs_g: validateNutrition(nutritionForInsert?.carbs_g, 1000),
-        fat_g: validateNutrition(nutritionForInsert?.fat_g, 1000),
-        fiber_g: validateNutrition(nutritionForInsert?.fiber_g, 500),
-        sugar_g: validateNutrition(nutritionForInsert?.sugar_g, 500),
-        sodium_mg: validateNutrition(nutritionForInsert?.sodium_mg, 50000),
-        saturated_fat_g: validateNutrition(nutritionForInsert?.saturated_fat_g, 500),
-        cholesterol_mg: validateNutrition(nutritionForInsert?.cholesterol_mg, 5000),
+        calories: validateNutrition(finalNutrition?.calories, 10000),
+        protein_g: validateNutrition(finalNutrition?.protein_g, 1000),
+        carbs_g: validateNutrition(finalNutrition?.carbs_g, 1000),
+        fat_g: validateNutrition(finalNutrition?.fat_g, 1000),
+        fiber_g: validateNutrition(finalNutrition?.fiber_g, 500),
+        sugar_g: validateNutrition(finalNutrition?.sugar_g, 500),
+        sodium_mg: validateNutrition(finalNutrition?.sodium_mg, 50000),
+        saturated_fat_g: validateNutrition(finalNutrition?.saturated_fat_g, 500),
+        cholesterol_mg: validateNutrition(finalNutrition?.cholesterol_mg, 5000),
       }));
 
       // Tags - combine general tags, diet_tags, and health_tags

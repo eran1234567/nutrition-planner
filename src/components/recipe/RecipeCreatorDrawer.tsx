@@ -28,6 +28,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import { IngredientInput, IngredientItem } from './IngredientInput';
+import { calculateIngredientTotals } from '@/lib/recipeUtils';
 import { LiveNutritionHeader } from './LiveNutritionHeader';
 
 type InputMode = 'quick' | 'detailed';
@@ -55,7 +56,7 @@ export function RecipeCreatorDrawer({ open, onOpenChange, onSuccess }: RecipeCre
   // Detailed mode fields
   const [ingredients, setIngredients] = useState<IngredientItem[]>([]);
   const [instructions, setInstructions] = useState('');
-  const [servings, setServings] = useState('4');
+  const [servings, setServings] = useState('');
   const [prepTime, setPrepTime] = useState('');
   const [cookTime, setCookTime] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -191,6 +192,15 @@ export function RecipeCreatorDrawer({ open, onOpenChange, onSuccess }: RecipeCre
           uploadId: upload.id,
           content: isImage ? imagePreview : fullContent,
           isImage,
+          structured_ingredients: inputMode === 'detailed'
+            ? ingredients.map(ing => ({
+                name: ing.name,
+                quantity: ing.quantity,
+                unit: ing.unit,
+                nutrition: ing.nutrition,
+                source: 'manual_entry'
+              }))
+            : undefined,
         },
       });
 
@@ -204,13 +214,60 @@ export function RecipeCreatorDrawer({ open, onOpenChange, onSuccess }: RecipeCre
 
       const recipe = result.recipes[0];
 
+      // If we're in Detailed Mode and we have nutrition on every ingredient,
+      // persist the exact totals to the recipe's nutrition row so the Recipe page
+      // matches the Create Recipe live header (prevents AI/cache overrides from drifting).
+      const shouldPersistExactNutrition =
+        inputMode === 'detailed' &&
+        ingredients.length > 0 &&
+        ingredients.every((i) => !!i.nutrition);
+
+      const exactTotals = shouldPersistExactNutrition
+        ? calculateIngredientTotals(ingredients)
+        : null;
+
+      const perServingTotals = exactTotals
+        ? ((): typeof exactTotals => {
+            const s = Number(servings) > 0 ? Number(servings) : 1;
+            return {
+              calories: exactTotals.calories / s,
+              protein: exactTotals.protein / s,
+              fat: exactTotals.fat / s,
+              carbs: exactTotals.carbs / s,
+              fiber: exactTotals.fiber / s,
+              sugar: exactTotals.sugar / s,
+              saturatedFat: exactTotals.saturatedFat / s,
+              cholesterol: exactTotals.cholesterol / s,
+              sodium: exactTotals.sodium / s,
+            };
+          })()
+        : null;
+
       // Update with user's title and image if provided
       const updates: Record<string, unknown> = { title: title.trim() };
       if (imagePreview) {
         updates.image_url = imagePreview;
       }
       
-      await supabase.from('recipes').update(updates).eq('id', recipe.id);
+      await Promise.all([
+        supabase.from('recipes').update(updates).eq('id', recipe.id),
+        perServingTotals
+          ? supabase
+              .from('recipe_nutrition')
+              .update({
+                calories: Math.round(perServingTotals.calories),
+                protein_g: Math.round(perServingTotals.protein),
+                fat_g: Math.round(perServingTotals.fat),
+                carbs_g: Math.round(perServingTotals.carbs),
+                fiber_g: Math.round(perServingTotals.fiber),
+                sugar_g: Math.round(perServingTotals.sugar),
+                saturated_fat_g: Math.round(perServingTotals.saturatedFat),
+                cholesterol_mg: Math.round(perServingTotals.cholesterol),
+                sodium_mg: Math.round(perServingTotals.sodium),
+              })
+              .eq('recipe_id', recipe.id)
+          : Promise.resolve(),
+      ]);
 
       toast.success(t('recipes.createSuccess', 'Recipe created!'));
       handleClose();
@@ -379,7 +436,7 @@ Steps:
             >
               {/* Live Nutrition Header */}
               <div className="sticky top-0 z-10 bg-background/95 backdrop-blur -mx-4 px-4 py-3 border-b border-border">
-                <LiveNutritionHeader ingredients={ingredients} />
+                <LiveNutritionHeader ingredients={ingredients} servings={parseFloat(servings) || 1} />
               </div>
 
               {/* Detailed inputs with barcode scanner */}

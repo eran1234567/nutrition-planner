@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 import { z } from 'zod';
+import { toast } from '@/hooks/use-toast';
 
 const emailSchema = z.string().email('Please enter a valid email address');
 const passwordSchema = z.string().min(6, 'Password must be at least 6 characters');
@@ -27,6 +28,7 @@ const Auth = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDevCreating, setIsDevCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string; confirmPassword?: string }>({});
 
@@ -107,6 +109,79 @@ const Auth = () => {
     setError(null);
     setFieldErrors({});
     setConfirmPassword('');
+  };
+
+  // Dev-only: create a user without client password policy restrictions using the dev function
+  const handleDevCreateUser = async () => {
+    if (!import.meta.env.DEV) return;
+    if (!email || !password) {
+      toast.error('Please enter email and password in the form first');
+      return;
+    }
+
+    const secret = import.meta.env.VITE_DEV_BYPASS_SECRET;
+    if (!secret) {
+      toast.error('VITE_DEV_BYPASS_SECRET is not set in your local .env');
+      return;
+    }
+
+    setIsDevCreating(true);
+    try {
+      const primaryUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/dev-create-user`;
+      const fallbackUrl = 'http://127.0.0.1:54321/functions/v1/dev-create-user';
+
+      const attempt = async (url: string) => {
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-dev-bypass': secret,
+            },
+            body: JSON.stringify({ email, password }),
+          });
+          const text = await res.text().catch(() => '');
+          let data: any = {};
+          try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+          return { res, data };
+        } catch (err) {
+          return { err };
+        }
+      };
+
+      // Try configured SUPABASE URL first
+      let result = await attempt(primaryUrl);
+      if (result.err || (result.res && result.res.status === 404)) {
+        // Try local functions server as fallback
+        toast('Primary function not reachable; trying local functions server...', { duration: 3000 });
+        result = await attempt(fallbackUrl);
+      }
+
+      if (result.err) {
+        console.error('Dev create user request failed:', result.err);
+        toast.error(String(result.err));
+        return;
+      }
+
+      const { res, data } = result;
+      if (!res.ok) {
+        toast.error(data?.error?.message || data?.error || JSON.stringify(data));
+        return;
+      }
+
+      toast.success('Dev user created. Signing in...');
+      const { error: signInError } = await signIn(email, password);
+      if (signInError) {
+        toast.error(signInError.message || String(signInError));
+      } else {
+        navigate(from, { replace: true });
+      }
+    } catch (err) {
+      console.error('Unexpected error in handleDevCreateUser:', err);
+      toast.error(String(err));
+    } finally {
+      setIsDevCreating(false);
+    }
   };
 
   if (authLoading) {
@@ -253,7 +328,7 @@ const Auth = () => {
                   <AlertCircle className="h-4 w-4 flex-shrink-0" />
                   <span>{error}</span>
                 </motion.div>
-              )}
+              )} 
             </AnimatePresence>
 
             {/* Submit Button */}
@@ -272,6 +347,21 @@ const Auth = () => {
                 isSignUp ? t('auth.signUp', 'Sign Up') : t('auth.signIn', 'Sign In')
               )}
             </Button>
+
+            {/* Dev-only helper: creates a user via the service-role function (DEV only) */}
+            {import.meta.env.DEV && (
+              <div className="mt-3 text-center">
+                <button
+                  type="button"
+                  onClick={handleDevCreateUser}
+                  disabled={isDevCreating || !email || !password}
+                  className="text-sm text-muted-foreground hover:underline"
+                >
+                  {isDevCreating ? 'Creating dev user...' : 'Dev: create test user (uses form email/password)'}
+                </button>
+                <p className="text-xs text-muted-foreground mt-2">Dev-only: uses the `dev-create-user` function. Ensure `VITE_DEV_BYPASS_SECRET` is set locally.</p>
+              </div>
+            )}
           </form>
 
           {/* Toggle Mode */}

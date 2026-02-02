@@ -1,0 +1,9 @@
+ALTER TABLE public.recipe_ingredients
+ADD COLUMN IF NOT EXISTS calories numeric DEFAULT 0,
+ADD COLUMN IF NOT EXISTS protein_g numeric DEFAULT 0,
+ADD COLUMN IF NOT EXISTS carbs_g numeric DEFAULT 0,
+ADD COLUMN IF NOT EXISTS fat_g numeric DEFAULT 0,
+ADD COLUMN IF NOT EXISTS fiber_g numeric DEFAULT 0,
+ADD COLUMN IF NOT EXISTS sugar_g numeric DEFAULT 0,
+ADD COLUMN IF NOT EXISTS sodium_mg numeric DEFAULT 0,
+ADD COLUMN IF NOT EXISTS source_type text DEFAULT 'ai';

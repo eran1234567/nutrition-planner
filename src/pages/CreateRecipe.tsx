@@ -38,39 +38,7 @@ interface NutritionTotals {
   sodium: number;
 }
 
-function calculateIngredientTotals(ingredients: IngredientItem[]): NutritionTotals {
-  return ingredients.reduce<NutritionTotals>(
-    (acc, ing) => {
-      if (!ing.nutrition) return acc;
-
-      const qty = parseFloat(ing.quantity) || 1;
-      const n = ing.nutrition;
-
-      return {
-        calories: acc.calories + (n.calories || 0) * qty,
-        protein: acc.protein + (n.protein || 0) * qty,
-        fat: acc.fat + (n.fat || 0) * qty,
-        carbs: acc.carbs + (n.carbs || 0) * qty,
-        fiber: acc.fiber + (n.fiber || 0) * qty,
-        sugar: acc.sugar + (n.sugar || 0) * qty,
-        saturatedFat: acc.saturatedFat + (n.saturatedFat || 0) * qty,
-        cholesterol: acc.cholesterol + (n.cholesterol || 0) * qty,
-        sodium: acc.sodium + (n.sodium || 0) * qty,
-      };
-    },
-    {
-      calories: 0,
-      protein: 0,
-      fat: 0,
-      carbs: 0,
-      fiber: 0,
-      sugar: 0,
-      saturatedFat: 0,
-      cholesterol: 0,
-      sodium: 0,
-    }
-  );
-}
+import { calculateIngredientTotals } from '@/lib/recipeUtils';
 
 export default function CreateRecipe() {
   const navigate = useNavigate();
@@ -89,7 +57,7 @@ export default function CreateRecipe() {
   // Detailed mode fields
   const [ingredients, setIngredients] = useState<IngredientItem[]>([]);
   const [instructions, setInstructions] = useState('');
-  const [servings, setServings] = useState('4');
+  const [servings, setServings] = useState('');
   const [prepTime, setPrepTime] = useState('');
   const [cookTime, setCookTime] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -219,6 +187,15 @@ export default function CreateRecipe() {
             uploadId: upload.id,
             content: isImage ? imagePreview : fullContent,
             isImage,
+            structured_ingredients: inputMode === 'detailed' 
+              ? ingredients.map(ing => ({
+                  name: ing.name,
+                  quantity: ing.quantity,
+                  unit: ing.unit,
+                  nutrition: ing.nutrition,
+                  source: 'manual_entry'
+                }))
+              : undefined,
           }),
         }
       );
@@ -248,6 +225,24 @@ export default function CreateRecipe() {
         ? calculateIngredientTotals(ingredients)
         : null;
 
+      // Convert exactTotals (whole recipe) to per-serving totals before persisting
+      const perServingTotals = exactTotals
+        ? ((): typeof exactTotals => {
+            const s = Number(servings) > 0 ? Number(servings) : 1;
+            return {
+              calories: exactTotals.calories / s,
+              protein: exactTotals.protein / s,
+              fat: exactTotals.fat / s,
+              carbs: exactTotals.carbs / s,
+              fiber: exactTotals.fiber / s,
+              sugar: exactTotals.sugar / s,
+              saturatedFat: exactTotals.saturatedFat / s,
+              cholesterol: exactTotals.cholesterol / s,
+              sodium: exactTotals.sodium / s,
+            };
+          })()
+        : null;
+
       // Update with user's title and image if provided
       const updates: Record<string, unknown> = { title: title.trim() };
       if (imagePreview) {
@@ -256,19 +251,19 @@ export default function CreateRecipe() {
 
       await Promise.all([
         supabase.from('recipes').update(updates).eq('id', recipe.id),
-        exactTotals
+        perServingTotals
           ? supabase
               .from('recipe_nutrition')
               .update({
-                calories: Math.round(exactTotals.calories),
-                protein_g: Math.round(exactTotals.protein),
-                fat_g: Math.round(exactTotals.fat),
-                carbs_g: Math.round(exactTotals.carbs),
-                fiber_g: Math.round(exactTotals.fiber),
-                sugar_g: Math.round(exactTotals.sugar),
-                saturated_fat_g: Math.round(exactTotals.saturatedFat),
-                cholesterol_mg: Math.round(exactTotals.cholesterol),
-                sodium_mg: Math.round(exactTotals.sodium),
+                calories: Math.round(perServingTotals.calories),
+                protein_g: Math.round(perServingTotals.protein),
+                fat_g: Math.round(perServingTotals.fat),
+                carbs_g: Math.round(perServingTotals.carbs),
+                fiber_g: Math.round(perServingTotals.fiber),
+                sugar_g: Math.round(perServingTotals.sugar),
+                saturated_fat_g: Math.round(perServingTotals.saturatedFat),
+                cholesterol_mg: Math.round(perServingTotals.cholesterol),
+                sodium_mg: Math.round(perServingTotals.sodium),
               })
               .eq('recipe_id', recipe.id)
           : Promise.resolve(),
@@ -455,7 +450,7 @@ Serves 2, takes about 20 minutes`)}
             >
               {/* Live Nutrition Header - Real-time macro tracking */}
               <div className="sticky top-[73px] z-10 bg-background/95 backdrop-blur -mx-4 px-4 py-3 border-b border-border">
-                <LiveNutritionHeader ingredients={ingredients} />
+                <LiveNutritionHeader ingredients={ingredients} servings={parseFloat(servings) || 1} />
               </div>
 
               {/* Detailed inputs with barcode scanner */}
