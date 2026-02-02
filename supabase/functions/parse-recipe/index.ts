@@ -1418,7 +1418,10 @@ Respond with ONLY valid JSON (no markdown, no backticks):
 
       const model = genAI.getGenerativeModel({ 
         model: 'gemini-2.0-flash',
-        generationConfig: { temperature: 0 }, // Deterministic output for consistent macros
+        generationConfig: { 
+          temperature: 0, // Deterministic output for consistent macros
+          maxOutputTokens: 65536 // Increased to handle large responses
+        },
       });
       const result = await model.generateContent(nutritionPrompt);
       const aiContent = result.response.text();
@@ -2321,7 +2324,10 @@ ${transcript}`;
     
     const model = genAI.getGenerativeModel({ 
       model: modelName,
-      generationConfig: { temperature: 0 }, // Deterministic output for consistent macros
+      generationConfig: { 
+        temperature: 0, // Deterministic output for consistent macros
+        maxOutputTokens: 65536 // Increased from default 8192 to handle large DOCX with multiple recipes
+      },
     });
     
     let result;
