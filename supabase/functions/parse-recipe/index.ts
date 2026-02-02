@@ -365,10 +365,14 @@ function validateMagicBytes(base64Content: string, expectedType: 'image' | 'pdf'
 // Extract text content from DOCX file (which is a ZIP containing XML)
 async function extractTextFromDocx(base64Content: string): Promise<string> {
   try {
+    console.log('[DOCX] Starting extraction, content length:', base64Content.length);
+    
     // Remove data URL prefix if present
     const base64Data = base64Content.includes(',') 
       ? base64Content.split(',')[1] 
       : base64Content;
+    
+    console.log('[DOCX] Base64 data length after prefix removal:', base64Data.length);
     
     // Decode base64 to binary
     const binaryString = atob(base64Data);
@@ -377,14 +381,27 @@ async function extractTextFromDocx(base64Content: string): Promise<string> {
       bytes[i] = binaryString.charCodeAt(i);
     }
     
+    console.log('[DOCX] Decoded to bytes, length:', bytes.length);
+    
     // Load as ZIP
     const zip = await JSZip.loadAsync(bytes);
+    console.log('[DOCX] ZIP loaded successfully, files:', Object.keys(zip.files).join(', '));
     
     // Get the main document content
-    const documentXml = await zip.file('word/document.xml')?.async('string');
-    if (!documentXml) {
-      throw new Error('No document.xml found in DOCX');
+    const docFile = zip.file('word/document.xml');
+    if (!docFile) {
+      console.error('[DOCX] word/document.xml not found in ZIP. Available files:', Object.keys(zip.files));
+      throw new Error('No document.xml found in DOCX - file may be corrupted or not a valid DOCX');
     }
+    
+    console.log('[DOCX] Found word/document.xml, extracting text...');
+    const documentXml = await docFile.async('string');
+    
+    if (!documentXml || documentXml.length === 0) {
+      throw new Error('document.xml is empty');
+    }
+    
+    console.log('[DOCX] XML content length:', documentXml.length);
     
     // Extract text from XML - simple regex-based extraction
     // Remove XML tags and extract text content
@@ -405,11 +422,17 @@ async function extractTextFromDocx(base64Content: string): Promise<string> {
       .replace(/\n\s*\n/g, '\n\n')
       .trim();
     
-    console.log(`Extracted ${text.length} characters from DOCX`);
+    console.log(`[DOCX] Extracted ${text.length} characters from DOCX`);
+    
+    if (text.length === 0) {
+      throw new Error('No text content extracted from DOCX - document may be empty');
+    }
+    
     return text;
   } catch (error) {
-    console.error('Error extracting text from DOCX:', error);
-    throw new Error('Failed to extract text from DOCX file');
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error('[DOCX] Error extracting text from DOCX:', errorMsg);
+    throw new Error(`Failed to extract text from DOCX file: ${errorMsg}`);
   }
 }
 
