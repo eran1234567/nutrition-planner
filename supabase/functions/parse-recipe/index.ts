@@ -84,6 +84,34 @@ function decodeHtmlEntitiesLite(input: string): string {
     .replace(/&nbsp;/g, ' ');
 }
 
+function decodeJsonStringLiteral(input: string): string {
+  if (!input) return '';
+  try {
+    const escaped = input.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    return JSON.parse(`"${escaped}"`);
+  } catch {
+    return input
+      .replace(/\\n/g, ' ')
+      .replace(/\\r/g, ' ')
+      .replace(/\\t/g, ' ')
+      .replace(/\\u003c/g, '<')
+      .replace(/\\u003e/g, '>')
+      .replace(/\\u0026/g, '&')
+      .replace(/\\\"/g, '"');
+  }
+}
+
+function extractInstagramShortcode(url: string): { type: 'p' | 'reel' | 'tv'; code: string } | null {
+  try {
+    const u = new URL(url);
+    const match = u.pathname.match(/\/(p|reel|tv)\/([^/?#]+)/i);
+    if (!match?.[1] || !match?.[2]) return null;
+    return { type: match[1].toLowerCase() as 'p' | 'reel' | 'tv', code: match[2] };
+  } catch {
+    return null;
+  }
+}
+
 function extractOgDescriptionFromHtml(html: string): string | null {
   // Look for a <meta ... property="og:description" ... content="..."> tag.
   // Instagram frequently includes this and it is far smaller than full HTML.
@@ -95,6 +123,30 @@ function extractOgDescriptionFromHtml(html: string): string | null {
     if (!content) return null;
     return decodeHtmlEntitiesLite(content);
   }
+  return null;
+}
+
+function extractInstagramCaptionFromHtml(html: string): string | null {
+  if (!html) return null;
+
+  const og = extractOgDescriptionFromHtml(html);
+  if (og) return og;
+
+  // Try to find caption text in embedded JSON (edge_media_to_caption, caption, or text fields)
+  const patterns = [
+    /"edge_media_to_caption"\s*:\s*\{[\s\S]*?"text"\s*:\s*"([\s\S]*?)"/i,
+    /"caption"\s*:\s*"([\s\S]*?)"/i,
+    /"text"\s*:\s*"([\s\S]*?)"/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match?.[1]) {
+      const decoded = decodeJsonStringLiteral(match[1]);
+      if (decoded?.trim()) return decoded.trim();
+    }
+  }
+
   return null;
 }
 
@@ -2021,16 +2073,31 @@ ${transcript}`;
               console.log(`Fetched ${rawHtml.length} characters from URL`);
 
               if (instagram) {
-                const ogDescription = extractOgDescriptionFromHtml(rawHtml);
-                if (ogDescription) {
-                  // Keep this tiny to reduce TPM usage when calling Gemini.
-                  const clipped = ogDescription.slice(0, 8000);
-                  webpageContent = `Instagram URL: ${sourceUrl}\n\nOG Description (caption/summary):\n${clipped}`;
-                  console.log(`Instagram og:description extracted (${clipped.length} chars)`);
+                let caption = extractInstagramCaptionFromHtml(rawHtml);
+
+                if (!caption) {
+                  const shortcode = extractInstagramShortcode(sourceUrl);
+                  if (shortcode) {
+                    const embedUrl = `https://www.instagram.com/${shortcode.type}/${shortcode.code}/embed/`;
+                    const embedResp = await fetchWithRetry(embedUrl, {
+                      headers: {
+                        'User-Agent': 'Mozilla/5.0 (compatible; RecipeParser/1.0)',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                      },
+                    }, 2);
+
+                    if (embedResp.ok) {
+                      const embedHtml = await embedResp.text();
+                      caption = extractInstagramCaptionFromHtml(embedHtml);
+                    }
+                  }
+                }
+
+                if (caption) {
+                  const clipped = caption.slice(0, 8000);
+                  webpageContent = `Instagram URL: ${sourceUrl}\n\nCaption/summary:\n${clipped}`;
                 } else {
-                  // Fallback: do NOT send full Instagram HTML (too large and noisy).
-                  webpageContent = `Instagram URL: ${sourceUrl}\n\n(Unable to extract og:description from HTML)`;
-                  console.warn('Instagram og:description meta tag not found');
+                  webpageContent = `Instagram URL: ${sourceUrl}\n\n(Unable to extract caption from Instagram HTML)`;
                 }
               } else {
                 // Clean HTML to reduce token usage
