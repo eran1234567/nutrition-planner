@@ -141,25 +141,7 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
       }
     }
 
-    // Persist override to DB when barcode exists or when this originated from a photo (so we remember it forever)
-    if ((product?.barcode && (basePer100g || !product.servingQuantityGrams)) || product?.fromPhoto) {
-      try {
-        const { upsertBarcodeOverride } = await import('@/integrations/supabase/overrides');
-        await upsertBarcodeOverride(product.barcode ?? null, {
-          serving_quantity_grams: product.servingQuantityGrams || (servingGramsInput ? parseFloat(servingGramsInput) : null),
-          calories: editableNutrition.calories,
-          protein_g: editableNutrition.protein,
-          carbs_g: editableNutrition.carbs,
-          fat_g: editableNutrition.fat,
-          fiber_g: editableNutrition.fiber,
-          sugar_g: editableNutrition.sugar,
-          sodium_mg: editableNutrition.sodium,
-          source: product.fromPhoto ? 'photo' : 'user',
-        });
-      } catch (err) {
-        // Failed to persist override
-      }
-    }
+    // Note: barcode overrides feature removed - nutrition is now persisted via recipe_nutrition table
 
     onConfirm(quantity, unit, editableNutrition);
     // Reset for next scan

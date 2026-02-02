@@ -115,13 +115,13 @@ const Auth = () => {
   const handleDevCreateUser = async () => {
     if (!import.meta.env.DEV) return;
     if (!email || !password) {
-      toast.error('Please enter email and password in the form first');
+      toast({ variant: 'destructive', title: 'Please enter email and password in the form first' });
       return;
     }
 
     const secret = import.meta.env.VITE_DEV_BYPASS_SECRET;
     if (!secret) {
-      toast.error('VITE_DEV_BYPASS_SECRET is not set in your local .env');
+      toast({ variant: 'destructive', title: 'VITE_DEV_BYPASS_SECRET is not set in your local .env' });
       return;
     }
 
@@ -153,32 +153,32 @@ const Auth = () => {
       let result = await attempt(primaryUrl);
       if (result.err || (result.res && result.res.status === 404)) {
         // Try local functions server as fallback
-        toast('Primary function not reachable; trying local functions server...', { duration: 3000 });
+        toast({ title: 'Primary function not reachable; trying local functions server...' });
         result = await attempt(fallbackUrl);
       }
 
       if (result.err) {
         console.error('Dev create user request failed:', result.err);
-        toast.error(String(result.err));
+        toast({ variant: 'destructive', title: String(result.err) });
         return;
       }
 
       const { res, data } = result;
       if (!res.ok) {
-        toast.error(data?.error?.message || data?.error || JSON.stringify(data));
+        toast({ variant: 'destructive', title: data?.error?.message || data?.error || JSON.stringify(data) });
         return;
       }
 
-      toast.success('Dev user created. Signing in...');
+      toast({ title: 'Dev user created. Signing in...' });
       const { error: signInError } = await signIn(email, password);
       if (signInError) {
-        toast.error(signInError.message || String(signInError));
+        toast({ variant: 'destructive', title: signInError.message || String(signInError) });
       } else {
         navigate(from, { replace: true });
       }
     } catch (err) {
       console.error('Unexpected error in handleDevCreateUser:', err);
-      toast.error(String(err));
+      toast({ variant: 'destructive', title: String(err) });
     } finally {
       setIsDevCreating(false);
     }
