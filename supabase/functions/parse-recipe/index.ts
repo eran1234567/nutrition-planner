@@ -160,104 +160,158 @@ function extractJsonFromResponse(response: string): unknown {
     throw new Error('Empty or invalid AI response');
   }
 
-  // Step 1: Remove markdown code blocks
-  let cleaned = response
-    .replace(/```json\s*/gi, '')
-    .replace(/```\s*/g, '')
-    .trim();
+  const getCandidate = (raw: string): string => {
+    // Prefer ```json fenced content if present (even if the fence is never closed)
+    const fenceMatch = raw.match(/```json\s*([\s\S]*?)(```|$)/i);
+    const fromFence = fenceMatch?.[1] ? fenceMatch[1] : raw;
+    return fromFence.replace(/```\s*/g, '').trim();
+  };
 
-  // Step 2: Find JSON boundaries
-  const jsonStart = cleaned.indexOf('{');
-  const jsonEnd = cleaned.lastIndexOf('}');
+  const normalize = (s: string): string =>
+    s
+      // Remove control chars (includes newlines/tabs) that break JSON when the model forgets to escape them
+      .replace(/[\x00-\x1F\x7F]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
 
-  if (jsonStart === -1 || jsonEnd === -1 || jsonEnd <= jsonStart) {
+  const findLastCompleteJsonEnd = (text: string): number => {
+    // Returns the last index where braces+brackets return to 0 outside of strings
+    let braces = 0;
+    let brackets = 0;
+    let inString = false;
+    let escaped = false;
+    let last = -1;
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+
+      if (inString && ch === '\\') {
+        escaped = true;
+        continue;
+      }
+
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+
+      if (!inString) {
+        if (ch === '{') braces++;
+        else if (ch === '}') braces = Math.max(0, braces - 1);
+        else if (ch === '[') brackets++;
+        else if (ch === ']') brackets = Math.max(0, brackets - 1);
+
+        if (braces === 0 && brackets === 0) {
+          last = i;
+        }
+      }
+    }
+
+    return last;
+  };
+
+  const candidateRaw = getCandidate(response);
+  const jsonStart = candidateRaw.indexOf('{');
+  if (jsonStart === -1) {
     throw new Error('No JSON object found in response');
   }
 
-  cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+  // IMPORTANT: do NOT require a closing '}' – the model often truncates.
+  let cleaned = normalize(candidateRaw.slice(jsonStart));
 
-  // Step 3: Attempt parse with error handling
+  // 1) Happy path
   try {
     return JSON.parse(cleaned);
-  } catch (initialError) {
-    console.log('[JSON REPAIR] Initial parse failed, attempting repair...');
-    
-    // Step 4: Try to fix common issues
-    let repaired = cleaned
-      .replace(/,\s*}/g, '}')  // Remove trailing commas before }
-      .replace(/,\s*]/g, ']')  // Remove trailing commas before ]
-      .replace(/[\x00-\x1F\x7F]/g, ' ')  // Replace control characters with space
-      .replace(/\n/g, ' ')  // Replace newlines with spaces inside strings
-      .replace(/\r/g, ' ')  // Replace carriage returns
-      .replace(/\t/g, ' '); // Replace tabs
+  } catch {
+    // continue
+  }
 
+  // 2) If there is a complete JSON object somewhere in the text, parse that subset.
+  const lastCompleteEnd = findLastCompleteJsonEnd(cleaned);
+  if (lastCompleteEnd !== -1) {
+    const subset = cleaned.slice(0, lastCompleteEnd + 1);
     try {
-      return JSON.parse(repaired);
-    } catch (secondError) {
-      console.log('[JSON REPAIR] Simple repair failed, attempting brace balancing...');
-      
-      // Step 5: Attempt to repair truncated JSON by adding missing closing characters
-      let braces = 0, brackets = 0;
-      let inString = false;
-      let escaped = false;
-      
-      for (let i = 0; i < repaired.length; i++) {
-        const char = repaired[i];
-        
-        if (escaped) {
-          escaped = false;
-          continue;
-        }
-        
-        if (char === '\\' && inString) {
-          escaped = true;
-          continue;
-        }
-        
-        if (char === '"' && !escaped) {
-          inString = !inString;
-          continue;
-        }
-        
-        if (!inString) {
-          if (char === '{') braces++;
-          if (char === '}') braces--;
-          if (char === '[') brackets++;
-          if (char === ']') brackets--;
-        }
-      }
-      
-      // If we're inside a string, close it first
-      if (inString) {
-        repaired += '"';
-      }
-      
-      // Close any open brackets first, then braces
-      while (brackets > 0) { 
-        repaired += ']'; 
-        brackets--; 
-      }
-      while (braces > 0) { 
-        repaired += '}'; 
-        braces--; 
-      }
-      
-      // Also fix any trailing commas that might have been left
-      repaired = repaired
-        .replace(/,\s*}/g, '}')
-        .replace(/,\s*]/g, ']')
-        .replace(/"\s*}/g, '"}')  // Close any truncated string before }
-        .replace(/"\s*]/g, '"]'); // Close any truncated string before ]
-
-      try {
-        const parsed = JSON.parse(repaired);
-        console.log('[JSON REPAIR] Brace balancing succeeded');
-        return parsed;
-      } catch (thirdError) {
-        console.error('[JSON REPAIR] All repair attempts failed');
-        throw new Error(`Failed to parse AI response as JSON: ${(thirdError as Error).message}`);
-      }
+      return JSON.parse(subset);
+    } catch {
+      // continue
     }
+  }
+
+  // 3) Repair truncated JSON
+  console.log('[JSON REPAIR] Attempting truncation repair...');
+
+  let repaired = cleaned
+    .replace(/,\s*}/g, '}')
+    .replace(/,\s*]/g, ']');
+
+  // If the string ends with a dangling backslash, drop it (invalid escape)
+  while (repaired.endsWith('\\')) {
+    repaired = repaired.slice(0, -1);
+  }
+
+  // Balance braces/brackets; also close an open string if needed
+  let braces = 0;
+  let brackets = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < repaired.length; i++) {
+    const ch = repaired[i];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (inString && ch === '\\') {
+      escaped = true;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (!inString) {
+      if (ch === '{') braces++;
+      else if (ch === '}') braces = Math.max(0, braces - 1);
+      else if (ch === '[') brackets++;
+      else if (ch === ']') brackets = Math.max(0, brackets - 1);
+    }
+  }
+
+  if (inString) {
+    repaired += '"';
+  }
+
+  while (brackets > 0) {
+    repaired += ']';
+    brackets--;
+  }
+  while (braces > 0) {
+    repaired += '}';
+    braces--;
+  }
+
+  repaired = repaired
+    .replace(/,\s*}/g, '}')
+    .replace(/,\s*]/g, ']');
+
+  try {
+    return JSON.parse(repaired);
+  } catch (e) {
+    console.error('[JSON REPAIR] Failed after all attempts', {
+      length: cleaned.length,
+      head: cleaned.slice(0, 500),
+      tail: cleaned.slice(-500),
+    });
+    throw new Error(`Failed to parse AI response as JSON: ${(e as Error).message}`);
   }
 }
 
@@ -1963,7 +2017,6 @@ Always respond with valid JSON only, no markdown code blocks or explanation.`;
       "cook_time": 30,
       "total_time": 45,
       "servings": 5,
-      "servings_source": "Exact quote or observation explaining where serving count came from (e.g., 'Chef said: makes 5 meals', 'Counted 5 containers in video', 'Meal prep context, defaulted to 5')",
       "serving_size": "Human-readable portion description (e.g., '1 bowl', '4 meatballs + 1.5 cups potatoes', '1 cup soup', '12 oz shake')",
       "difficulty": "easy|medium|hard",
       "cuisine": "American|Italian|Mexican|Asian|Mediterranean|Indian|Japanese|Thai|French|Greek|Brazilian",
@@ -2023,8 +2076,7 @@ CRITICAL RULES:
 8. Include serving_size as a human-readable portion description
 9. MINIMIZE sodium by default (< 600mg unless health filter requires lower)
 10. If no recipes found, return: { "recipes": [], "error": "Could not extract recipe information" }
-11. Include "servings_source" field with the exact quote or observation that determined the serving count
-12. INGREDIENT SECTION ASSIGNMENT - GROUP BY STEP (CRITICAL):
+11. INGREDIENT SECTION ASSIGNMENT - GROUP BY STEP (CRITICAL):
     - EVERY ingredient must be assigned to a section based on WHICH STEP IT IS FIRST MENTIONED IN
     - Read through ALL steps and for EACH step, identify which ingredients are mentioned
     - Ingredients that are FIRST used in different steps MUST be in DIFFERENT sections
