@@ -2,19 +2,23 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, X, Package, Flame, Drumstick, Droplet, Wheat, Minus, Plus, Pencil, Leaf, Cookie, Beef, Heart, FlaskConical } from 'lucide-react';
+import { Check, X, Package, Flame, Drumstick, Droplet, Wheat, Minus, Plus, Pencil, Leaf, Cookie, Beef, Heart, FlaskConical, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 
 export interface ScannedProduct {
-  barcode: string;
+  barcode?: string | null;
   name: string;
   servingSize?: string;
-  servingQuantityGrams?: number;
+  servingQuantityGrams?: number | null;
   naturalUnit?: string;
   imageUrl?: string;
+  // When true, imageUrl is an object URL that should be revoked when no longer needed
+  imageObjectUrl?: boolean;
   nutritionPer?: string;
+  fromPhoto?: boolean;
   nutrition: {
     calories?: number;
     protein?: number;
@@ -51,14 +55,17 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
     sodium: 0,
   });
   const [isEditingMacros, setIsEditingMacros] = useState(false);
-  const [showFullImage, setShowFullImage] = useState(false);
-  const [imageError, setImageError] = useState(false);
   // When product lacks serving grams but has per-100g nutrition we will treat '1 serving' as the base unit.
   // If critical macros (carbs/fiber) are missing, require the user to fill them and persist that as an override.
   const [servingGramsInput, setServingGramsInput] = useState('');
   const [basePer100g, setBasePer100g] = useState<null | typeof editableNutrition>(null);
   const [requireManualMacros, setRequireManualMacros] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
+
+  // On-demand scanning state
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [lastParsed, setLastParsed] = useState<null | { calories?: number | null; carbs?: number | null; fiber?: number | null; sodium?: number | null; servingGrams?: number | null; rawText?: string | null }>(null);
 
   // Reset state when product changes
   useEffect(() => {
@@ -88,17 +95,18 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
       setEditableNutrition({
         calories: isPer100gNoServings ? (baseValues?.calories ?? 0) : (product.nutrition.calories || 0),
         protein: isPer100gNoServings ? (baseValues?.protein ?? 0) : (product.nutrition.protein || 0),
-        carbs: isPer100gNoServings ? (baseValues?.carbs ?? 0) : (product.nutrition.carbohydrates ?? product.nutrition.carbs ?? 0),
+        carbs: isPer100gNoServings ? (baseValues?.carbs ?? 0) : ((product as any).nutrition?.carbohydrates ?? product.nutrition.carbs ?? 0),
         fat: isPer100gNoServings ? (baseValues?.fat ?? 0) : (product.nutrition.fat || 0),
         fiber: isPer100gNoServings ? (baseValues?.fiber ?? 0) : (product.nutrition.fiber || 0),
-        sugar: isPer100gNoServings ? (baseValues?.sugar ?? 0) : (product.nutrition.sugars || 0),
+        sugar: isPer100gNoServings ? (baseValues?.sugar ?? 0) : ((product as any).nutrition?.sugars ?? product.nutrition.sugar ?? 0),
         saturatedFat: isPer100gNoServings ? (baseValues?.saturatedFat ?? 0) : (product.nutrition['saturated-fat'] || 0),
         cholesterol: isPer100gNoServings ? (baseValues?.cholesterol ?? 0) : (product.nutrition.cholesterol || 0),
         sodium: isPer100gNoServings ? (baseValues?.sodium ?? 0) : (product.nutrition.sodium || 0),
       });
 
       // If critical macros are missing and there is no serving grams, require manual entry before confirming
-      if (!hasGramServing && (!product.nutrition.carbs && !product.nutrition.carbohydrates || !product.nutrition.fiber)) {
+      const carbsMissing = !(product.nutrition.carbs ?? (product as any).nutrition?.carbohydrates);
+      if (!hasGramServing && (carbsMissing || !product.nutrition.fiber)) {
         setRequireManualMacros(true);
       } else {
         setRequireManualMacros(false);
@@ -106,20 +114,21 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
 
       setServingGramsInput('');
       setIsEditingMacros(false);
-      setImageError(false);
-      setShowFullImage(false);
     }
+
+    // Revoke object URL for previous product on change/unmount to free memory
+    return () => {
+      try {
+        if (product?.imageObjectUrl && product.imageUrl) {
+          URL.revokeObjectURL(product.imageUrl);
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
   }, [product]);
 
-  // Allow ESC to close full image preview
-  useEffect(() => {
-    if (!showFullImage) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setShowFullImage(false);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [showFullImage]);
+
 
   if (!open || !product) return null;
 
@@ -132,11 +141,11 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
       }
     }
 
-    // Persist override to DB when barcode exists and we had missing servings or basePer100g (so we remember it forever)
-    if (product?.barcode && (basePer100g || !product.servingQuantityGrams)) {
+    // Persist override to DB when barcode exists or when this originated from a photo (so we remember it forever)
+    if ((product?.barcode && (basePer100g || !product.servingQuantityGrams)) || product?.fromPhoto) {
       try {
         const { upsertBarcodeOverride } = await import('@/integrations/supabase/overrides');
-        await upsertBarcodeOverride(product.barcode, {
+        await upsertBarcodeOverride(product.barcode ?? null, {
           serving_quantity_grams: product.servingQuantityGrams || (servingGramsInput ? parseFloat(servingGramsInput) : null),
           calories: editableNutrition.calories,
           protein_g: editableNutrition.protein,
@@ -145,11 +154,10 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
           fiber_g: editableNutrition.fiber,
           sugar_g: editableNutrition.sugar,
           sodium_mg: editableNutrition.sodium,
-          source: 'user',
+          source: product.fromPhoto ? 'photo' : 'user',
         });
       } catch (err) {
-        // non-blocking - warn in console
-        console.warn('[DB] Failed to persist barcode override', err);
+        // Failed to persist override
       }
     }
 
@@ -170,6 +178,59 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
     const current = parseFloat(quantity) || 0;
     if (current > 1) {
       setQuantity(String(current - 1));
+    }
+  };
+
+  // On-demand scan of the product image (light/timed OCR)
+  const scanImageText = async () => {
+    if (!product?.imageUrl) return;
+    setIsScanning(true);
+    setScanError(null);
+    setLastParsed(null);
+    try {
+      const { parseNutritionFromNutritionImage } = await import('@/lib/labelParser');
+      const parsed = await parseNutritionFromNutritionImage(product.imageUrl, 4000);
+
+      if (!parsed) {
+        setScanError(t('recipes.scanEmpty', 'No text found on the image.'));
+        toast(t('recipes.scanFailed', 'Could not extract numbers from the image.'));
+        setIsScanning(false);
+        return;
+      }
+
+      // Keep the raw parsed result for visibility and debugging
+      setLastParsed(parsed as any);
+
+      // If OCR found text but no numeric macros, surface that to the user instead of giving a false "success"
+      const hasNumber = [parsed.calories, parsed.carbs, parsed.fiber, parsed.sodium, parsed.servingGrams].some(v => v !== null && v !== undefined);
+      if (!hasNumber) {
+        setScanError(t('recipes.scanNoNumbers', 'OCR found text on the image but no numeric values.'));
+        toast(t('recipes.scanNoNumbers', 'OCR found text but no numbers. You can edit manually.'));
+        setIsScanning(false);
+        return;
+      }
+
+      // Merge parsed numeric values into the editable nutrition
+      setEditableNutrition(prev => ({
+        ...prev,
+        calories: parsed.calories ?? prev.calories,
+        carbs: parsed.carbs ?? prev.carbs,
+        fiber: parsed.fiber ?? prev.fiber,
+        sodium: parsed.sodium ?? prev.sodium,
+      }));
+
+      // Update serving grams if found
+      if (parsed.servingGrams != null) {
+        setServingGramsInput(String(parsed.servingGrams));
+      }
+
+      if (parsed.carbs != null && parsed.fiber != null) setRequireManualMacros(false);
+      toast(t('recipes.scanSuccess', 'Extracted nutrition from image'));
+    } catch (err) {
+      setScanError(t('recipes.scanFailed', 'Could not extract numbers from the image.'));
+      toast(t('recipes.scanFailed', 'Could not extract numbers from the image.'));
+    } finally {
+      setIsScanning(false);
     }
   };
 
@@ -284,44 +345,7 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
 
   return (
     <>
-      {/* Full-size image preview (avoid nested Dialog z-index issues) */}
-      {showFullImage && product?.imageUrl && !imageError
-        ? createPortal(
-            <div
-              className="fixed inset-0 z-[60] bg-black/70"
-              onClick={() => setShowFullImage(false)}
-              role="dialog"
-              aria-modal="true"
-              aria-label={t('recipes.imagePreview', 'Product image preview')}
-            >
-              <div
-                className="absolute inset-0 flex items-center justify-center p-4"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="relative w-full max-w-md rounded-2xl bg-background p-4 shadow-lg">
-                  <button
-                    type="button"
-                    onClick={() => setShowFullImage(false)}
-                    className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-muted"
-                    aria-label={t('common.close', 'Close')}
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
 
-                  <img
-                    src={product.imageUrl}
-                    alt={product.name}
-                    className="mx-auto max-h-[75vh] w-auto max-w-[90vw] rounded-xl object-contain"
-                  />
-                  <p className="mt-3 text-center text-sm text-muted-foreground">
-                    {product.name}
-                  </p>
-                </div>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
 
       <AnimatePresence>
         {open && product && (
@@ -344,23 +368,9 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   {/* Product thumbnail */}
-                  <button
-                    type="button"
-                    onClick={() => product.imageUrl && !imageError && setShowFullImage(true)}
-                    className="w-16 h-16 rounded-xl bg-muted/50 border border-border flex items-center justify-center overflow-hidden flex-shrink-0"
-                    disabled={!product.imageUrl || imageError}
-                  >
-                    {product.imageUrl && !imageError ? (
-                      <img
-                        src={product.imageUrl}
-                        alt={product.name}
-                        className="w-full h-full object-cover"
-                        onError={() => setImageError(true)}
-                      />
-                    ) : (
-                      <Package className="w-7 h-7 text-muted-foreground" />
-                    )}
-                  </button>
+                  <div className="w-16 h-16 rounded-xl bg-muted/50 border border-border flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <Package className="w-7 h-7 text-muted-foreground" />
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-muted-foreground">{t('recipes.productFound', 'Product Found')}</p>
                     <h3 className="font-semibold text-lg leading-tight line-clamp-2">{product.name}</h3>
@@ -529,6 +539,21 @@ export function ScanReviewModal({ open, product, onConfirm, onCancel }: ScanRevi
                   <p className="text-xs text-center text-muted-foreground">
                     {t('recipes.totalFor', 'Total for')} {qtyNum} {unit}
                   </p>
+                )}
+
+                {/* Show OCR result / raw text for debugging and user visibility */}
+                {lastParsed && (
+                  <div className="mt-3 rounded-lg bg-muted/40 p-3 text-sm">
+                    {!lastParsed.calories && !lastParsed.carbs && !lastParsed.fiber && !lastParsed.sodium ? (
+                      <>
+                        <p className="font-medium">{t('recipes.ocrResultTitle', 'Scanned text')}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{t('recipes.scanNoNumbersHint', 'Text was found but no numeric values could be parsed. Below is the raw OCR text.')}</p>
+                        <pre className="mt-2 text-[11px] whitespace-pre-wrap text-muted-foreground">{String(lastParsed.rawText || '').trim()}</pre>
+                      </>
+                    ) : (
+                      <p className="text-xs text-success font-medium">{t('recipes.scanFoundNumbers', '✓ Scanned and populated nutrition values')}</p>
+                    )}
+                  </div>
                 )}
               </div>
 

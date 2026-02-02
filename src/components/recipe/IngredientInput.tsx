@@ -122,15 +122,47 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
         const product = data.product;
         const nutriments = product.nutriments || {};
 
-        // Hard-coded exceptions map for known barcodes where OpenFoodFacts lacks serving grams
-        const HARDCODED_BARCODE_NUTRITION: Record<string, { servingQuantityGrams: number; nutrition: NonNullable<ScannedProduct['nutrition']> }> = {
-          // Meta Mucil Premium Blend - serving 11.7g: 11g carbs, 6g fiber, ~30 kcal, ~10 mg sodium
-          '0030772047552': { servingQuantityGrams: 11.7, nutrition: { calories: 30, protein: 0, carbs: 11, fat: 0, fiber: 6, sugar: 0, saturatedFat: 0, cholesterol: 0, sodium: 10 } },
-          '030772047552': { servingQuantityGrams: 11.7, nutrition: { calories: 30, protein: 0, carbs: 11, fat: 0, fiber: 6, sugar: 0, saturatedFat: 0, cholesterol: 0, sodium: 10 } },
-          // Common UPC variants - include shorter forms just in case
-          '30772047552': { servingQuantityGrams: 11.7, nutrition: { calories: 30, protein: 0, carbs: 11, fat: 0, fiber: 6, sugar: 0, saturatedFat: 0, cholesterol: 0, sodium: 10 } },
-          '3077204755': { servingQuantityGrams: 11.7, nutrition: { calories: 30, protein: 0, carbs: 11, fat: 0, fiber: 6, sugar: 0, saturatedFat: 0, cholesterol: 0, sodium: 10 } },
-        };
+        // Check for any stored barcode override in DB - if present, use it and skip parsing
+        try {
+          const { supabase } = await import('@/integrations/supabase/client');
+          // cast to any to avoid generated DB types mismatch for this new table
+          const sb: any = supabase as any;
+          const { data: override, error } = await sb
+            .from('barcode_nutrition_overrides')
+            .select('*')
+            .eq('barcode', barcode)
+            .maybeSingle();
+          if (override && !error) {
+            const imageUrl = product.image_front_small_url || product.image_front_url || product.image_small_url || product.image_url || null;
+            const served = Number(override.serving_quantity_grams ?? null) || null;
+            safeSetPendingProduct({
+              barcode,
+              name: product.product_name || product.generic_name || barcode,
+              servingSize: product.serving_size,
+              imageUrl,
+              servingQuantityGrams: served,
+              naturalUnit: product.serving_size ? (product.serving_size.replace(/\s*\([^)]*g?\)/gi, '').trim() || 'serving') : 'serving',
+              nutritionPer: product.nutrition_data_per,
+              nutrition: {
+                calories: Number(override.calories ?? 0),
+                protein: Number(override.protein_g ?? 0),
+                carbs: Number(override.carbs_g ?? 0),
+                fat: Number(override.fat_g ?? 0),
+                fiber: Number(override.fiber_g ?? 0),
+                sugar: Number(override.sugar_g ?? 0),
+                saturatedFat: 0,
+                cholesterol: 0,
+                sodium: Number(override.sodium_mg ?? 0),
+              }
+            } as ScannedProduct);
+
+            safeStopSpinner();
+            clearTimeout(hardTimeout);
+            return;
+          }
+        } catch (err) {
+          // Silently continue if barcode override lookup fails
+        }
 
         // Parse serving quantity - API may return string or number
         const parseNumber = (val: unknown): number | null => {
@@ -147,49 +179,6 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
           if (withoutWeight) naturalUnit = withoutWeight;
         }
 
-        // If we have a hard-coded entry for this barcode (or a normalized variant), use it and skip scaling logic
-        const normalizedBarcode = barcode.replace(/[^0-9]/g, '').replace(/^0+/, '') || barcode.replace(/[^0-9]/g, '');
-        const hardKey = HARDCODED_BARCODE_NUTRITION[barcode] ? barcode : HARDCODED_BARCODE_NUTRITION[normalizedBarcode] ? normalizedBarcode : null;
-        if (hardKey) {
-          const entry = HARDCODED_BARCODE_NUTRITION[hardKey];
-          console.log('[Barcode] Using hard-coded nutrition for barcode:', barcode, entry);
-
-          const imageUrl = product.image_front_small_url || product.image_front_url || product.image_small_url || product.image_url || null;
-
-          safeSetPendingProduct({
-            barcode,
-            name: product.product_name || product.generic_name || barcode,
-            servingSize: product.serving_size,
-            imageUrl,
-            servingQuantityGrams: entry.servingQuantityGrams,
-            naturalUnit,
-            nutritionPer: product.nutrition_data_per,
-            nutrition: entry.nutrition,
-          } as ScannedProduct);
-
-          // Skip the rest of the parsing and OCR
-          safeStopSpinner();
-          clearTimeout(hardTimeout);
-          return;
-        }
-        
-        console.log('[Barcode] Raw API response:', { 
-          serving_quantity: product.serving_quantity,
-          serving_size: product.serving_size,
-          nutriments_sample: {
-            'energy-kcal_100g': nutriments['energy-kcal_100g'],
-            'energy-kcal_serving': nutriments['energy-kcal_serving'],
-            'proteins_100g': nutriments['proteins_100g'],
-            'fat_100g': nutriments['fat_100g'],
-            'carbohydrates_100g': nutriments['carbohydrates_100g'],
-            'fiber_100g': nutriments['fiber_100g'],
-            'sugars_100g': nutriments['sugars_100g'],
-            'saturated-fat_100g': nutriments['saturated-fat_100g'],
-            'cholesterol_100g': nutriments['cholesterol_100g'],
-            'sodium_100g': nutriments['sodium_100g'],
-          }
-        });
-        
         // Extract serving quantity in grams
         let servingQuantityGrams = parseNumber(product.serving_quantity);
         
@@ -199,7 +188,6 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
           const gramsMatch = product.serving_size.match(/(\d+(?:[.,]\d+)?)\s*g(?:\)|$|\s)/i);
           if (gramsMatch) {
             servingQuantityGrams = parseNumber(gramsMatch[1]);
-            console.log('[Barcode] Extracted serving grams from string:', servingQuantityGrams);
           }
         }
         
@@ -370,7 +358,6 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
           (caloriesOff() || macroOff(fatServing, scaled.fat) || macroOff(carbsServing, scaled.carbs) || macroOff(proteinServing, scaled.protein));
 
         if ((hasServingCalories || hasAnyServingMacro) && !shouldPreferScaled) {
-          console.log('[Barcode] Using per-serving data (passed sanity check)');
           calories = servingDirect.calories ?? scaled?.calories;
           protein = servingDirect.protein ?? scaled?.protein;
           carbs = servingDirect.carbs ?? scaled?.carbs;
@@ -381,11 +368,6 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
           cholesterol = servingDirect.cholesterol ?? scaled?.cholesterol;
           sodium = servingDirect.sodium ?? scaled?.sodium;
         } else if (scaled) {
-          console.log('[Barcode] Using scaled-from-100g values (serving looked inconsistent)', {
-            servingQuantityGrams,
-            servingDirect,
-            scaled,
-          });
           calories = scaled.calories;
           protein = scaled.protein;
           carbs = scaled.carbs;
@@ -396,8 +378,7 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
           cholesterol = scaled.cholesterol;
           sodium = scaled.sodium;
         } else {
-          // No serving quantity available - use 100g values as-is with warning
-          console.warn('[Barcode] No serving grams available - using 100g values (may be inaccurate)');
+          // No serving quantity available - use 100g values as-is
           calories = cal100g ?? undefined;
           protein = prot100g ?? undefined;
           carbs = carb100g ?? undefined;
@@ -412,7 +393,6 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
         // Sanity-check: if scaled values are insanely large, prefer per-serving values when available
         const isCrazy = (v: number | undefined) => v !== undefined && (v > 1000 || v < 0);
         if ((isCrazy(calories) || isCrazy(carbs) || isCrazy(fiber)) && (hasServingCalories || hasAnyServingMacro)) {
-          console.warn('[Barcode] Sanity check triggered: scaled values look unrealistic, preferring per-serving fields when available');
           calories = servingDirect.calories ?? calories;
           protein = servingDirect.protein ?? protein;
           carbs = servingDirect.carbs ?? carbs;
@@ -423,13 +403,6 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
           cholesterol = servingDirect.cholesterol ?? cholesterol;
           sodium = servingDirect.sodium ?? sodium;
         }
-
-        console.log('[Barcode] Final nutrition:', {
-          calories, protein, carbs, fat, fiber, sugar, saturatedFat, cholesterol, sodium,
-          hasServingCalories, servingQuantityGrams, shouldPreferScaled,
-        });
-        
-        // Natural unit is already computed earlier (kept above for hard-coded lookup)
         
         // Get product image (prefer front image, fallback to others)
         const imageUrl = product.image_front_small_url 
@@ -467,8 +440,6 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
     } catch (error) {
       // If hard timeout already handled UI, don't double-toast.
       if (didHardTimeout) return;
-
-      console.error('Barcode lookup error:', error);
 
       const isAbort = error instanceof Error && error.name === 'AbortError';
 
@@ -522,11 +493,149 @@ export function IngredientInput({ ingredients, onChange }: IngredientInputProps)
     const file = e.target.files?.[0];
     if (!file) return;
 
-    toast.info(
-      t('recipes.photoIngredientHint', 'Photo ingredient detection coming soon! For now, please type or scan barcode.')
-    );
+    // Helper: downscale file to a small JPEG blob (<= maxDim) to avoid memory pressure on mobile
+    const downscaleFile = async (file: File, maxDim = 800): Promise<Blob | null> => {
+      try {
+        // Prefer createImageBitmap for performance
+        try {
+          // @ts-ignore
+          const bitmap: ImageBitmap = await createImageBitmap(file);
+          const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+          const w = Math.max(1, Math.round(bitmap.width * scale));
+          const h = Math.max(1, Math.round(bitmap.height * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            bitmap.close && bitmap.close();
+            return null;
+          }
+          ctx.drawImage(bitmap, 0, 0, w, h);
+          bitmap.close && bitmap.close();
+          const smallBlob: Blob | null = await new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.7));
+          return smallBlob;
+        } catch (err) {
+          // Fallback: load via Image element and draw
+          const objUrl = URL.createObjectURL(file);
+          try {
+            const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+              const i = new Image();
+              i.crossOrigin = 'anonymous';
+              i.onload = () => resolve(i);
+              i.onerror = (ev) => reject(ev);
+              i.src = objUrl;
+            });
+            const scale = Math.min(1, maxDim / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height));
+            const w = Math.max(1, Math.round((img.naturalWidth || img.width) * scale));
+            const h = Math.max(1, Math.round((img.naturalHeight || img.height) * scale));
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              URL.revokeObjectURL(objUrl);
+              return null;
+            }
+            ctx.drawImage(img, 0, 0, w, h);
+            const smallBlob: Blob | null = await new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.7));
+            URL.revokeObjectURL(objUrl);
+            return smallBlob;
+          } catch (err2) {
+            try { URL.revokeObjectURL(objUrl); } catch (e) {}
+            return null;
+          }
+        }
+      } catch (err) {
+        return null;
+      }
+    };
 
+    // Reset input early to avoid holding the file reference in the input
     if (e.target) e.target.value = '';
+
+    toast.info(t('recipes.photoProcessing', 'Processing photo...'));
+
+    try {
+      const smallBlob = await downscaleFile(file, 800);
+      const productName = file.name || `Photo_${Date.now()}`;
+      const nutritionValues = {
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+        fiber: 0,
+        sugar: 0,
+        saturatedFat: 0,
+        cholesterol: 0,
+        sodium: 0,
+      };
+
+      let imageUrl: string | undefined = undefined;
+      let imageObjectUrl = false;
+      if (smallBlob) {
+        imageUrl = URL.createObjectURL(smallBlob);
+        imageObjectUrl = true;
+      }
+
+      const pending: ScannedProduct = {
+        barcode: null,
+        name: productName,
+        servingSize: undefined,
+        servingQuantityGrams: null,
+        naturalUnit: 'serving',
+        imageUrl: imageUrl,
+        imageObjectUrl: imageObjectUrl,
+        nutritionPer: undefined,
+        fromPhoto: true,
+        nutrition: nutritionValues,
+      };
+
+      setPendingProduct(pending);
+
+      // Auto-trigger smart product recognition
+      if (imageUrl) {
+        try {
+          const { identifyProductAndGetNutrition } = await import('@/lib/productRecognition');
+          const recognized = await identifyProductAndGetNutrition(imageUrl, 15000);
+          const applyRecognized = (data: {
+            productName?: string;
+            calories?: number | null;
+            carbs?: number | null;
+            fiber?: number | null;
+            sodium?: number | null;
+            servingGrams?: number | null;
+          }) => {
+            setPendingProduct(prev => prev ? {
+              ...prev,
+              name: data.productName || prev.name,
+              nutrition: {
+                ...prev.nutrition,
+                calories: data.calories ?? prev.nutrition.calories,
+                carbs: data.carbs ?? prev.nutrition.carbs,
+                fiber: data.fiber ?? prev.nutrition.fiber,
+                sodium: data.sodium ?? prev.nutrition.sodium,
+              },
+              servingQuantityGrams: data.servingGrams ?? prev.servingQuantityGrams ?? null,
+            } : null);
+          };
+
+          if (recognized) {
+            applyRecognized(recognized);
+
+            if (recognized.source === 'database') {
+              toast.success(t('recipes.productFoundDatabase', 'Product found! Nutrition data loaded.'));
+            } else if (recognized.source === 'gemini') {
+              toast.info(t('recipes.productIdentified', 'Product identified with Gemini. Please verify.'));
+            }
+          }
+        } catch (err) {
+          toast.error(t('recipes.photoProcessFailed', 'Could not process photo. Try again.'));
+        }
+      }
+    } catch (err) {
+      toast.error(t('recipes.photoProcessFailed', 'Could not process photo. Try again.'));
+    }
   };
 
   return (

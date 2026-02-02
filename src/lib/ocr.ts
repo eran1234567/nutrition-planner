@@ -44,8 +44,7 @@ export async function extractServingFromNutritionImage(imageUrl: string, timeout
 
     // Run OCR with a timeout
     const p = worker.recognize(imageUrl).then((res: any) => res.data.text as string);
-    const textAny = await promiseTimeout(p, timeoutMs);
-    const text = typeof textAny === 'string' ? textAny : String(textAny ?? '');
+    const text = await promiseTimeout(p, timeoutMs);
     const grams = parseServingFromText(text || '');
 
     await worker.terminate();
