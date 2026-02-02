@@ -22,6 +22,10 @@ interface NutritionTotals {
   sodium: number;
 }
 
+/**
+ * Calculate nutrition totals from ingredients
+ * Net Carbs = carbs - fiber (minimum 0) - aligned with ingredient_nutrition table columns
+ */
 function calculateTotals(ingredients: IngredientItem[]): NutritionTotals {
   return ingredients.reduce(
     (acc, ing) => {
@@ -30,9 +34,11 @@ function calculateTotals(ingredients: IngredientItem[]): NutritionTotals {
       // Get quantity multiplier (default to 1)
       const qty = parseFloat(ing.quantity) || 1;
       
+      // Use carbs and fiber from nutrition object (maps to carbs_g and fiber_g in DB)
       const carbs = (ing.nutrition.carbs || 0) * qty;
       const fiber = (ing.nutrition.fiber || 0) * qty;
-      // Net Carbs = Total Carbs - Fiber (minimum 0)
+      
+      // Net Carbs = Total Carbs - Fiber (minimum 0) - key keto calculation
       const netCarbs = Math.max(0, carbs - fiber);
       
       return {
