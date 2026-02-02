@@ -150,6 +150,117 @@ function extractInstagramCaptionFromHtml(html: string): string | null {
   return null;
 }
 
+// ═══════════════════════════════════════════════════════════════
+// ROBUST JSON EXTRACTION FROM AI RESPONSES
+// Handles markdown code blocks, truncated responses, and mixed text
+// ═══════════════════════════════════════════════════════════════
+
+function extractJsonFromResponse(response: string): unknown {
+  if (!response || typeof response !== 'string') {
+    throw new Error('Empty or invalid AI response');
+  }
+
+  // Step 1: Remove markdown code blocks
+  let cleaned = response
+    .replace(/```json\s*/gi, '')
+    .replace(/```\s*/g, '')
+    .trim();
+
+  // Step 2: Find JSON boundaries
+  const jsonStart = cleaned.indexOf('{');
+  const jsonEnd = cleaned.lastIndexOf('}');
+
+  if (jsonStart === -1 || jsonEnd === -1 || jsonEnd <= jsonStart) {
+    throw new Error('No JSON object found in response');
+  }
+
+  cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+
+  // Step 3: Attempt parse with error handling
+  try {
+    return JSON.parse(cleaned);
+  } catch (initialError) {
+    console.log('[JSON REPAIR] Initial parse failed, attempting repair...');
+    
+    // Step 4: Try to fix common issues
+    let repaired = cleaned
+      .replace(/,\s*}/g, '}')  // Remove trailing commas before }
+      .replace(/,\s*]/g, ']')  // Remove trailing commas before ]
+      .replace(/[\x00-\x1F\x7F]/g, ' ')  // Replace control characters with space
+      .replace(/\n/g, ' ')  // Replace newlines with spaces inside strings
+      .replace(/\r/g, ' ')  // Replace carriage returns
+      .replace(/\t/g, ' '); // Replace tabs
+
+    try {
+      return JSON.parse(repaired);
+    } catch (secondError) {
+      console.log('[JSON REPAIR] Simple repair failed, attempting brace balancing...');
+      
+      // Step 5: Attempt to repair truncated JSON by adding missing closing characters
+      let braces = 0, brackets = 0;
+      let inString = false;
+      let escaped = false;
+      
+      for (let i = 0; i < repaired.length; i++) {
+        const char = repaired[i];
+        
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        
+        if (char === '\\' && inString) {
+          escaped = true;
+          continue;
+        }
+        
+        if (char === '"' && !escaped) {
+          inString = !inString;
+          continue;
+        }
+        
+        if (!inString) {
+          if (char === '{') braces++;
+          if (char === '}') braces--;
+          if (char === '[') brackets++;
+          if (char === ']') brackets--;
+        }
+      }
+      
+      // If we're inside a string, close it first
+      if (inString) {
+        repaired += '"';
+      }
+      
+      // Close any open brackets first, then braces
+      while (brackets > 0) { 
+        repaired += ']'; 
+        brackets--; 
+      }
+      while (braces > 0) { 
+        repaired += '}'; 
+        braces--; 
+      }
+      
+      // Also fix any trailing commas that might have been left
+      repaired = repaired
+        .replace(/,\s*}/g, '}')
+        .replace(/,\s*]/g, ']')
+        .replace(/"\s*}/g, '"}')  // Close any truncated string before }
+        .replace(/"\s*]/g, '"]'); // Close any truncated string before ]
+
+      try {
+        const parsed = JSON.parse(repaired);
+        console.log('[JSON REPAIR] Brace balancing succeeded');
+        return parsed;
+      } catch (thirdError) {
+        console.error('[JSON REPAIR] All repair attempts failed');
+        throw new Error(`Failed to parse AI response as JSON: ${(thirdError as Error).message}`);
+      }
+    }
+  }
+}
+
 // Magic bytes for file type validation
 const MAGIC_BYTES = {
   jpeg: [[0xFF, 0xD8, 0xFF]],
@@ -2162,19 +2273,18 @@ ${transcript}`;
 
     console.log('AI response preview:', aiContent.substring(0, 300));
 
-    // Parse the JSON response
-    let parsedRecipes;
+    // Parse the JSON response with robust extraction
+    let parsedRecipes: { recipes: unknown[] };
     try {
-      let cleanContent = aiContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      parsedRecipes = JSON.parse(cleanContent);
+      const extracted = extractJsonFromResponse(aiContent) as { recipes?: unknown[] };
+      if (!extracted || !Array.isArray(extracted.recipes)) {
+        console.error('Invalid AI response structure:', JSON.stringify(extracted).substring(0, 200));
+        throw new Error('Invalid AI response: missing recipes array');
+      }
+      parsedRecipes = extracted as { recipes: unknown[] };
     } catch (parseError) {
       console.error('Failed to parse AI response:', parseError);
       throw new Error('Failed to parse AI response as JSON');
-    }
-
-    if (!parsedRecipes || !Array.isArray(parsedRecipes.recipes)) {
-      console.error('Invalid AI response structure:', JSON.stringify(parsedRecipes).substring(0, 200));
-      throw new Error('Invalid AI response: missing recipes array');
     }
 
     // For seedGlobal mode, we don't need an upload record
@@ -2503,7 +2613,7 @@ ${transcript}`;
     });
 
     const results = await Promise.all(recipePromises);
-    const createdRecipes = results.filter(r => r !== null) as { id: string; title: string; description: string | null }[];
+    const createdRecipes = results.filter((r): r is { id: string; title: string; description: string | null } => r !== null);
 
     console.log(`Successfully saved ${createdRecipes.length} recipes in ${Date.now() - aiStartTime}ms total`);
 
