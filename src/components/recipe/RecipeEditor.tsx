@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Reorder } from 'framer-motion';
 import type { Recipe } from '@/types';
-
+import { generateServingLabel } from '@/lib/servingLabel';
 interface RecipeEditorProps {
   recipe: Recipe;
   title: string;
@@ -615,11 +615,6 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
             newNutrition.carbs_g = Math.max(newNutrition.carbs_g, prevC);
             newNutrition.fat_g = Math.max(newNutrition.fat_g, prevF);
           }
-
-          // Deterministic recalc does not return serving_size; only apply if AI provided it.
-          const newServingSize = (rawServingSize || '')
-            .replace(/^\s*1\s*serving\s*=\s*/i, '')
-            .trim();
           
           // Update nutrition
           if (recipe.nutrition?.id) {
@@ -636,7 +631,25 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
               });
           }
           
-          // Update serving_size on the recipe if changed
+          // Regenerate serving_size using Neutron's hero ingredient logic
+          const ingredientsForLabel = activeIngredients
+            .filter(i => i.name.trim())
+            .map(ing => ({
+              name: ing.name.trim(),
+              quantity: ing.quantity ? parseFloat(ing.quantity) : null,
+              unit: ing.unit.trim() || null,
+            }));
+          
+          const generatedLabel = generateServingLabel({
+            servings: recipe.servings || 1,
+            ingredients: ingredientsForLabel,
+          });
+          
+          // Extract just the portion description (remove "1 serving = " prefix for storage)
+          const newServingSize = generatedLabel
+            .replace(/^\s*1\s*serving\s*=\s*/i, '')
+            .trim();
+          
           if (newServingSize) {
             await supabase
               .from('recipes')
