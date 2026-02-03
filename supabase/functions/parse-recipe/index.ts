@@ -408,7 +408,7 @@ async function extractTextFromDocx(base64Content: string): Promise<string> {
     let text = documentXml
       // Extract text from <w:t> tags (Word text elements)
       .replace(/<w:t[^>]*>([^<]*)<\/w:t>/g, '$1')
-      // Handle paragraph breaks
+      // Handle paragraph breaks - preserve them for better structure
       .replace(/<\/w:p>/g, '\n')
       // Remove remaining XML tags
       .replace(/<[^>]+>/g, '')
@@ -418,7 +418,9 @@ async function extractTextFromDocx(base64Content: string): Promise<string> {
       .replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"')
       .replace(/&apos;/g, "'")
-      // Clean up whitespace
+      // Normalize bullet points and list markers to standard format
+      .replace(/[\u2022\u2023\u25E6\u2043\u2013\u2014\u2010-\u2015◦•]/g, '-') // Convert various bullet types to dash
+      // Clean up whitespace but preserve intentional line breaks
       .replace(/\n\s*\n/g, '\n\n')
       .trim();
     
@@ -2151,7 +2153,11 @@ CRITICAL RULES:
       const extractedText = await extractTextFromDocx(content);
       console.log(`Extracted text preview: ${extractedText.substring(0, 500)}...`);
       
-      promptText = `${systemPrompt}\n\nExtract ALL recipes from the following document content.\n\n${jsonFormat}\n\nDocument content:\n${extractedText}`;
+      promptText = `${systemPrompt}\n\nExtract ALL recipes from the following Word document content. 
+NOTE: This is extracted text from a DOCX file, so ingredients may appear as bullet lists with dashes (-) 
+and sections may have headers in ALL CAPS or bold formatting (lost in extraction). 
+Look for sections like "Ingredients:", "INGREDIENTS", "Ingredients list" followed by items starting with dashes.
+Extract EVERY ingredient you find - do NOT skip any ingredients even if formatting is unclear.\n\n${jsonFormat}\n\nDocument content:\n${extractedText}`;
     } else if (isPdf && content) {
       // For PDFs, extract base64 and send to Gemini
       modelName = 'gemini-2.0-flash';
