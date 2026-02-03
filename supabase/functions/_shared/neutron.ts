@@ -231,6 +231,19 @@ export const USDA_REFERENCES: Record<string, IngredientMacros> = {
   'chicken': { calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, cholesterol: 85, sodium: 74 },
   'salmon': { calories: 208, protein: 20, carbs: 0, fat: 13, fiber: 0, cholesterol: 55, sodium: 59 },
   
+  // Ground beef variants (per 100g) - must match SPECIFIC ratios first
+  'ground beef 90/10': { calories: 176, protein: 20, carbs: 0, fat: 10, fiber: 0, cholesterol: 70, sodium: 66 },
+  'ground beef 90 10': { calories: 176, protein: 20, carbs: 0, fat: 10, fiber: 0, cholesterol: 70, sodium: 66 },
+  '90/10 ground beef': { calories: 176, protein: 20, carbs: 0, fat: 10, fiber: 0, cholesterol: 70, sodium: 66 },
+  '90/10 beef': { calories: 176, protein: 20, carbs: 0, fat: 10, fiber: 0, cholesterol: 70, sodium: 66 },
+  'lean ground beef': { calories: 176, protein: 20, carbs: 0, fat: 10, fiber: 0, cholesterol: 70, sodium: 66 },
+  'extra lean ground beef': { calories: 176, protein: 20, carbs: 0, fat: 10, fiber: 0, cholesterol: 70, sodium: 66 },
+  'ground beef 80/20': { calories: 254, protein: 17, carbs: 0, fat: 20, fiber: 0, cholesterol: 80, sodium: 75 },
+  'ground beef 80 20': { calories: 254, protein: 17, carbs: 0, fat: 20, fiber: 0, cholesterol: 80, sodium: 75 },
+  '80/20 ground beef': { calories: 254, protein: 17, carbs: 0, fat: 20, fiber: 0, cholesterol: 80, sodium: 75 },
+  '80/20 beef': { calories: 254, protein: 17, carbs: 0, fat: 20, fiber: 0, cholesterol: 80, sodium: 75 },
+  'ground beef': { calories: 254, protein: 17, carbs: 0, fat: 20, fiber: 0, cholesterol: 80, sodium: 75 }, // Default to 80/20
+  
   // Dairy
   'cheddar': { calories: 115, protein: 7, carbs: 0.5, fat: 9, fiber: 0, cholesterol: 28, sodium: 180 },
   'cheese': { calories: 115, protein: 7, carbs: 0.5, fat: 9, fiber: 0, cholesterol: 28, sodium: 180 },
@@ -659,22 +672,41 @@ export function calculateIngredientMacros(
     };
   }
   
-  // Priority 3: USDA fallback
+  // Priority 3: USDA fallback - use longest match to prioritize specific variants
   const lowerText = ingredientText.toLowerCase();
-  for (const [key, macros] of Object.entries(USDA_REFERENCES)) {
-    if (lowerText.includes(key.replace(/_/g, ' ')) || lowerText.includes(key)) {
-      return {
-        calories: macros.calories * quantity,
-        protein: macros.protein * quantity,
-        carbs: macros.carbs * quantity,
-        fat: macros.fat * quantity,
-        fiber: macros.fiber * quantity,
-        sugar: (macros.sugar ?? 0) * quantity,
-        sodium: (macros.sodium ?? 0) * quantity,
-        saturated_fat: (macros.saturated_fat ?? 0) * quantity,
-        cholesterol: (macros.cholesterol ?? 0) * quantity,
-      };
+  let bestKey: string | null = null;
+  let bestScore = 0;
+  
+  for (const key of Object.keys(USDA_REFERENCES)) {
+    const normalizedKey = key.replace(/_/g, ' ');
+    if (lowerText.includes(normalizedKey) || lowerText.includes(key)) {
+      // Score by key length to prefer more specific matches (e.g., "ground beef 90/10" over "ground beef")
+      const score = normalizedKey.length;
+      if (score > bestScore) {
+        bestScore = score;
+        bestKey = key;
+      }
     }
+  }
+  
+  if (bestKey) {
+    const macros = USDA_REFERENCES[bestKey];
+    // Apply weight multiplier for USDA references (assume 100g serving for meats)
+    const usdaMultiplier = inputUnit && WEIGHT_TO_GRAMS[inputUnit.toLowerCase()] 
+      ? (quantity * WEIGHT_TO_GRAMS[inputUnit.toLowerCase()]) / 100
+      : quantity;
+    
+    return {
+      calories: macros.calories * usdaMultiplier,
+      protein: macros.protein * usdaMultiplier,
+      carbs: macros.carbs * usdaMultiplier,
+      fat: macros.fat * usdaMultiplier,
+      fiber: macros.fiber * usdaMultiplier,
+      sugar: (macros.sugar ?? 0) * usdaMultiplier,
+      sodium: (macros.sodium ?? 0) * usdaMultiplier,
+      saturated_fat: (macros.saturated_fat ?? 0) * usdaMultiplier,
+      cholesterol: (macros.cholesterol ?? 0) * usdaMultiplier,
+    };
   }
   
   // Priority 4: Return null - let AI estimate
