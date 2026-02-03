@@ -2015,7 +2015,10 @@ For recipes with distinct parts (e.g., main dish + marinade + sauce + dressing):
 EXTERNAL CONTENT INGESTION (URLs, images, documents)
 ═══════════════════════════════════════════════════════════════
 If extracting from external content:
-- Extract ingredients, cooking method, servings, and nutrition if available
+- Extract ingredients ONLY from dedicated ingredient lists, NOT from cooking instructions
+- ⚠️ DEDUPLICATION IS CRITICAL: Each ingredient should appear EXACTLY ONCE in the final array
+  - If the same ingredient is mentioned multiple times, consolidate into ONE entry
+  - If quantities vary, use the quantity from the INGREDIENTS SECTION
 - Apply SMART ESTIMATION for any vague or missing measurements
 - Group ingredients by section if recipe has multiple parts
 - Reconstruct missing macros based on ingredients if unavoidable
@@ -2188,16 +2191,42 @@ CRITICAL RULES:
       
       promptText = `${systemPrompt}\n\nExtract ALL recipes from the following Word document content.
 
-CRITICAL - INGREDIENTS EXTRACTION FROM DOCX:
-This is text extracted from a DOCX file. Ingredients will appear in these formats:
-1. After an "Ingredients:" or "=== INGREDIENTS SECTION ===" header, followed by items starting with "- "
-2. Any line starting with "- " followed by an ingredient name and quantity should be treated as an ingredient
+═══════════════════════════════════════════════════════════════
+CRITICAL - DOCUMENT STRUCTURE PARSING (DOCX/PDF/TEXT)
+═══════════════════════════════════════════════════════════════
+Documents often have TWO DISTINCT SECTIONS:
+1. **INGREDIENTS LIST** - A dedicated section listing all ingredients with quantities
+2. **INSTRUCTIONS/STEPS** - Cooking directions that may RE-MENTION ingredients
+
+⚠️ ONLY EXTRACT INGREDIENTS FROM THE INGREDIENTS LIST SECTION! ⚠️
+- The Ingredients section usually appears under headers like "Ingredients:", "=== INGREDIENTS SECTION ===" 
+- It contains items like: "- 1 can crushed tomatoes", "- 3 lbs ground beef"
+- These are the ONLY source for ingredients
+
+⚠️ DO NOT EXTRACT INGREDIENTS FROM INSTRUCTIONS! ⚠️
+- Instructions often re-mention ingredients when describing their use
+- Example: "Add 1 can of crushed tomatoes to the pot" - This is an INSTRUCTION, not an ingredient
+- Example: "Add salt, pepper, paprika to the beef" - This REFERS to ingredients, don't add new ones
+- Sections like "Making the Sauce:", "Preparing the Meat:", "Assembly:" are INSTRUCTIONS, not ingredient lists
+
+═══════════════════════════════════════════════════════════════
+DEDUPLICATION RULES (CRITICAL)
+═══════════════════════════════════════════════════════════════
+- Each unique ingredient should appear EXACTLY ONCE in the final ingredients array
+- If the same ingredient appears multiple times in the source with different quantities, 
+  COMBINE them into one entry with the TOTAL quantity
+- Example: If document shows "1 tsp salt" in ingredients AND step mentions "add salt", 
+  output should have ONLY ONE "salt" entry with quantity 1 tsp
+
+INGREDIENTS EXTRACTION PATTERNS:
+1. After an "Ingredients:" or "=== INGREDIENTS SECTION ===" header
+2. Lines starting with "- " followed by quantity and ingredient name
 3. Look for patterns like:
    - 1 can of crushed tomatoes
-   - 2 tablespoons of tomato paste
-   - 3 onions
-4. DO NOT skip any items that look like ingredients just because formatting is unclear
-5. Extract EVERY single item starting with "-" that appears in the ingredients section
+   - 2 tablespoons of tomato paste  
+   - 3 yellow onions
+   - Teaspoon Salt, Teaspoon pepper (parse as separate items)
+4. Normalize units: "tablespoon" → "tbsp", "teaspoon" → "tsp"
 
 ${jsonFormat}
 
