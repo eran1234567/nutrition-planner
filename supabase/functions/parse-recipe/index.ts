@@ -12,6 +12,7 @@ import {
   parseIngredientQuantity,
   extractExplicitMacros,
   calculateNetCarbs,
+  validateAndCorrectNutrition as sharedValidateNutrition,
   USDA_REFERENCES,
   type DbIngredientNutrition,
   type IngredientMacros,
@@ -2484,17 +2485,9 @@ ${transcript}`;
 
     console.log(`Found ${parsedRecipes.recipes.length} recipes to save`);
 
-    // If the incoming content contains verified barcode nutrition, run deterministic validation
-    // during initial recipe creation as well (not just nutritionOnly mode). This prevents cases
-    // where AI extracts calories/protein/fat/carbs but drops fiber, causing Net Carbs to equal
-    // Total Carbs on the recipe detail page.
-    const contentForNutritionValidation = typeof content === 'string' ? content : '';
-    const shouldValidateNutritionFromBarcode =
-      /verified barcode data/i.test(contentForNutritionValidation);
-
-    const nutritionCacheForValidation = shouldValidateNutritionFromBarcode
-      ? await loadIngredientNutritionCache(supabase)
-      : [];
+    // ALWAYS validate nutrition using structured ingredients from the parsed recipe
+    // This ensures deterministic calculations are used when ingredients match the database
+    const nutritionCache = await loadIngredientNutritionCache(supabase);
 
     // Save all recipes in parallel for speed
     const recipePromises = parsedRecipes.recipes.map(async (recipe: any) => {
@@ -2519,8 +2512,8 @@ ${transcript}`;
       const sanitizedServings = (typeof recipe.servings === 'number' && recipe.servings >= 1 && recipe.servings <= 100)
         ? Math.round(recipe.servings) : 5; // Default to 5 for meal prep (Mon-Fri)
 
-      // Normalize + optionally validate nutrition at creation-time.
-      // NOTE: validateAndCorrectNutrition expects numeric fields; AI sometimes returns null/undefined.
+      // Normalize + validate nutrition using structured ingredients from AI output
+      // This ensures we use deterministic calculations when ingredients match the database
       let nutritionForInsert: NutritionData | null = null;
       if (recipe?.nutrition && typeof recipe.nutrition === 'object') {
         const n = recipe.nutrition;
@@ -2536,21 +2529,62 @@ ${transcript}`;
           cholesterol_mg: typeof n.cholesterol_mg === 'number' ? n.cholesterol_mg : 0,
         };
 
-        if (shouldValidateNutritionFromBarcode) {
-          const validated = validateAndCorrectNutrition(
-            contentForNutritionValidation,
+        // Build structured ingredient array for validation
+        // Format: "quantity unit name" to match the format expected by calculateIngredientMacros
+        const structuredIngredients: Array<{ name: string }> = [];
+        if (Array.isArray(recipe.ingredients)) {
+          for (const ing of recipe.ingredients) {
+            if (ing && typeof ing.name === 'string') {
+              // Build a full ingredient string for matching: "4 large eggs", "2 slices bread"
+              const qty = typeof ing.quantity === 'number' ? ing.quantity : '';
+              const unit = typeof ing.unit === 'string' ? ing.unit : '';
+              const fullName = [qty, unit, ing.name].filter(Boolean).join(' ').trim();
+              structuredIngredients.push({ name: fullName });
+            }
+          }
+        }
+
+        // ALWAYS validate using structured ingredients if we have them
+        if (structuredIngredients.length > 0 && nutritionCache.length > 0) {
+          const validated = sharedValidateNutrition(
             normalizedNutrition,
-            nutritionCacheForValidation,
+            structuredIngredients,
+            nutritionCache,
             sanitizedServings
           );
-
-          if (validated.wasCorrect === false) {
+          
+          // Check if validation changed anything by comparing key macros
+          const valCal = validated.calories ?? 0;
+          const valProt = validated.protein_g ?? 0;
+          const valFat = validated.fat_g ?? 0;
+          const valCarbs = validated.carbs_g ?? 0;
+          
+          const wasChanged = 
+            Math.abs(valCal - normalizedNutrition.calories) > 1 ||
+            Math.abs(valProt - normalizedNutrition.protein_g) > 1 ||
+            Math.abs(valFat - normalizedNutrition.fat_g) > 1 ||
+            Math.abs(valCarbs - normalizedNutrition.carbs_g) > 1;
+          
+          if (wasChanged) {
             console.log(
-              `[MACROS] Creation-time nutrition patched for "${sanitizedTitle}": ${validated.reason ?? 'n/a'}`
+              `[MACROS] Nutrition validated for "${sanitizedTitle}": ` +
+              `AI(cal=${normalizedNutrition.calories}, fat=${normalizedNutrition.fat_g}g) → ` +
+              `DB(cal=${valCal}, fat=${valFat}g) using ${structuredIngredients.length} ingredients`
             );
           }
 
-          nutritionForInsert = validated.nutrition;
+          // Convert RawNutritionData to NutritionData by ensuring all values are numbers
+          nutritionForInsert = {
+            calories: valCal,
+            protein_g: valProt,
+            carbs_g: valCarbs,
+            fat_g: valFat,
+            fiber_g: validated.fiber_g ?? 0,
+            sugar_g: validated.sugar_g ?? 0,
+            sodium_mg: validated.sodium_mg ?? 0,
+            saturated_fat_g: validated.saturated_fat_g ?? 0,
+            cholesterol_mg: validated.cholesterol_mg ?? 0,
+          };
         } else {
           nutritionForInsert = normalizedNutrition;
         }
