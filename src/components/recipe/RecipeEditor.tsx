@@ -45,6 +45,10 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   
+  // Track servings with base value for scaling calculations
+  const [editServings, setEditServings] = useState(recipe.servings || 1);
+  const baseServings = recipe.servings || 1;
+  
   const [ingredients, setIngredients] = useState<EditableIngredient[]>(
     (recipe.ingredients || []).map((ing, idx) => ({
       id: ing.id,
@@ -62,6 +66,30 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
       instruction: step.instruction,
     }))
   );
+  
+  /**
+   * Handle servings change: Scale all ingredient quantities proportionally.
+   * Nutrition per serving and serving_size label remain LOCKED.
+   */
+  const handleServingsChange = (newServingsStr: string) => {
+    const newServings = parseInt(newServingsStr, 10);
+    if (isNaN(newServings) || newServings < 1) return;
+    
+    // Calculate scaling factor: newServings / currentServings
+    const scaleFactor = newServings / editServings;
+    
+    // Scale all ingredient quantities proportionally
+    setIngredients(prev => prev.map(ing => {
+      if (!ing.quantity || ing.isDeleted) return ing;
+      const currentQty = parseFloat(ing.quantity);
+      if (isNaN(currentQty)) return ing;
+      // Apply scaling and round to 2 decimal places
+      const newQty = Math.round(currentQty * scaleFactor * 100) / 100;
+      return { ...ing, quantity: newQty.toString() };
+    }));
+    
+    setEditServings(newServings);
+  };
 
   const handleImageUpload = async (file: File) => {
     if (!file) return;
@@ -247,9 +275,8 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
       return null; // No ingredients to calculate
     }
     
-    // Build content string for the AI
-    const servings = recipe.servings || 1;
-    let content = `Recipe: ${recipe.title}\nServings: ${servings}\n\nIngredients:\n`;
+    // Build content string for the AI - use editServings (current value)
+    let content = `Recipe: ${recipe.title}\nServings: ${editServings}\n\nIngredients:\n`;
     activeIngredients.forEach(ing => {
       const qty = ing.quantity ? `${ing.quantity} ` : '';
       const unit = ing.unit ? `${ing.unit} ` : '';
@@ -330,8 +357,9 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
     serving_size?: string;
   } | null> => {
     try {
+      // Pass the new servings count to the backend so it calculates per-serving correctly
       const { data: json, error } = await supabase.functions.invoke('recalculate-nutrition', {
-        body: { recipeId: recipe.id },
+        body: { recipeId: recipe.id, servings: editServings },
       });
 
       if (error) {
@@ -505,12 +533,17 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
         }
       }
 
+      // Detect if only servings changed (proportional scaling)
+      const servingsChanged = editServings !== baseServings;
+      const servingsScaleFactor = editServings / baseServings;
+      
       // Detect if ingredients or steps actually changed (not just title/description/image)
       const prevIngredients = (recipe.ingredients || []).filter((i: any) => (i?.name || '').trim());
       const prevSteps = (recipe.steps || []).filter((s: any) => (s?.instruction || '').trim());
       
       // Check if any ingredient was added, removed, or modified
-      const ingredientsChanged = (() => {
+      // For quantity changes: if servings changed, check if quantity change matches the scaling factor
+      const ingredientsContentChanged = (() => {
         const filteredActive = activeIngredients.filter(i => i.name.trim());
         if (prevIngredients.length !== filteredActive.length) {
           console.log('[RecipeEditor] Ingredient count changed:', prevIngredients.length, '→', filteredActive.length);
@@ -534,10 +567,20 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
           // Handle null/undefined quantities safely
           const prevQty = prev.quantity != null ? Number(prev.quantity) : 0;
           const nextQty = ing.quantity ? Number.parseFloat(ing.quantity) : 0;
-          if (Math.abs((prevQty || 0) - (nextQty || 0)) > 1e-6) {
+          
+          // If servings changed, check if the quantity change is due to scaling
+          if (servingsChanged && prevQty > 0) {
+            const expectedScaledQty = Math.round(prevQty * servingsScaleFactor * 100) / 100;
+            const isScalingChange = Math.abs(nextQty - expectedScaledQty) < 0.01;
+            if (!isScalingChange && Math.abs((prevQty || 0) - (nextQty || 0)) > 1e-6) {
+              console.log('[RecipeEditor] Ingredient quantity changed beyond scaling:', prev.name, prevQty, '→', nextQty, '(expected:', expectedScaledQty, ')');
+              return true;
+            }
+          } else if (Math.abs((prevQty || 0) - (nextQty || 0)) > 1e-6) {
             console.log('[RecipeEditor] Ingredient quantity changed:', prev.name, prevQty, '→', nextQty);
             return true;
           }
+          
           if ((prev.unit || '').trim().toLowerCase() !== ing.unit.trim().toLowerCase()) {
             console.log('[RecipeEditor] Ingredient unit changed:', prev.name, prev.unit, '→', ing.unit);
             return true;
@@ -559,11 +602,11 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
         }
         return false;
       })();
-      console.log('[RecipeEditor] Change detection:', { ingredientsChanged, stepsChanged });
+      console.log('[RecipeEditor] Change detection:', { ingredientsContentChanged, stepsChanged, servingsChanged });
       
-      // Only recalculate nutrition if ingredients or steps changed
-      if (ingredientsChanged || stepsChanged) {
-        console.log('[RecipeEditor] Ingredients/steps changed - recalculating nutrition (deterministic first)');
+      // Only recalculate nutrition if ingredient CONTENT or steps changed (not just scaling from servings)
+      if (ingredientsContentChanged || stepsChanged) {
+        console.log('[RecipeEditor] Ingredients/steps content changed - recalculating nutrition (deterministic first)');
         const deterministicResult = await calculateNutritionViaDeterministicRecalc();
         const aiResult = deterministicResult ?? await calculateNutritionViaAI(activeIngredients, activeSteps);
         
@@ -641,7 +684,7 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
             }));
           
           const generatedLabel = generateServingLabel({
-            servings: recipe.servings || 1,
+            servings: editServings, // Use current servings value
             ingredients: ingredientsForLabel,
           });
           
@@ -658,11 +701,11 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
           }
         }
       } else {
-        console.log('[RecipeEditor] No ingredient/step changes - skipping nutrition recalculation');
+        console.log('[RecipeEditor] No ingredient/step content changes - skipping nutrition recalculation');
       }
 
-      // Update recipe title, description, and image_url if changed
-      const recipeUpdates: Record<string, string | null> = {};
+      // Update recipe title, description, image_url, and servings if changed
+      const recipeUpdates: Record<string, string | number | null> = {};
       
       if (title.trim() && title.trim() !== recipe.title) {
         recipeUpdates.title = title.trim();
@@ -674,6 +717,12 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
       
       if (imageUrl !== recipe.image_url) {
         recipeUpdates.image_url = imageUrl || null;
+      }
+      
+      // Always update servings if changed
+      if (servingsChanged) {
+        recipeUpdates.servings = editServings;
+        console.log('[RecipeEditor] Servings updated:', baseServings, '→', editServings);
       }
       
       if (Object.keys(recipeUpdates).length > 0) {
@@ -801,6 +850,23 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
               )}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Servings Field */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3">{t('recipes.servings', 'Servings')}</h3>
+        <div className="flex items-center gap-3">
+          <Input
+            type="number"
+            min="1"
+            value={editServings}
+            onChange={(e) => handleServingsChange(e.target.value)}
+            className="w-24 h-9"
+          />
+          <span className="text-sm text-muted-foreground">
+            {t('recipes.servingsNote', 'Changing servings will scale all ingredient quantities proportionally')}
+          </span>
         </div>
       </div>
 
