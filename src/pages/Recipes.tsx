@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Plus, Loader2, Trash2, Pencil, Search, Clock, UtensilsCrossed, ChefHat, Sparkles, AlertTriangle, HeartPulse, BookOpen, Upload, X } from 'lucide-react';
+import { Loader2, Trash2, Pencil, Search, Clock, UtensilsCrossed, ChefHat, Sparkles, AlertTriangle, HeartPulse, BookOpen, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { BottomNav } from '@/components/layout/BottomNav';
@@ -13,7 +13,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useRecipeImport } from '@/hooks/useRecipeImport';
 import { YouTubeImportProgress } from '@/components/recipe/YouTubeImportProgress';
-import { RecipeImportDrawer } from '@/components/recipe/RecipeImportDrawer';
 import { syncNeutronMode } from '@/stores/neutronStore';
 import { meetsHealthConsideration, calculateNetCarbs, isKetoBadgeEligible, getNeutronBadges } from '@/lib/neutron';
 import {
@@ -209,7 +208,7 @@ export default function Recipes() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [showAddDrawer, setShowAddDrawer] = useState(false);
+  
   const [userRecipes, setUserRecipes] = useState<UserRecipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -223,7 +222,6 @@ export default function Recipes() {
   const [recipeToRename, setRecipeToRename] = useState<UserRecipe | null>(null);
   const [newRecipeName, setNewRecipeName] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
-  const [fabOpen, setFabOpen] = useState(false);
   
   // Image backfill state
   const [isBackfillingImages, setIsBackfillingImages] = useState(false);
@@ -597,6 +595,17 @@ export default function Recipes() {
       <div className="page-container">
         <PageHeader
           title={t('recipes.myRecipes')}
+          rightAction={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/my-recipes')}
+              className="gap-2"
+            >
+              <Settings className="w-4 h-4" />
+              {t('recipes.manageRecipes', 'Manage Recipes')}
+            </Button>
+          }
         />
 
         {/* Search */}
@@ -785,7 +794,7 @@ export default function Recipes() {
             <h3 className="font-semibold text-lg mb-1">{t('recipes.noRecipes')}</h3>
             <p className="text-muted-foreground text-sm mb-6">{t('recipes.noRecipesDesc')}</p>
             <Button onClick={() => navigate('/my-recipes')}>
-              <Plus className="w-4 h-4 mr-2" />
+              <Settings className="w-4 h-4 mr-2" />
               {t('recipes.addRecipe')}
             </Button>
           </div>
@@ -841,98 +850,6 @@ export default function Recipes() {
         )}
       </div>
 
-      {/* Floating Speed Dial Menu - only show when user has recipes */}
-      {userRecipes.length > 0 && (
-        <div className="fixed bottom-24 right-4 z-20 flex flex-col-reverse items-center gap-3">
-          {/* Main FAB button */}
-          <motion.button
-            className="w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors"
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setFabOpen(!fabOpen)}
-          >
-            <motion.div
-              animate={{ rotate: fabOpen ? 45 : 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Plus className="w-6 h-6" />
-            </motion.div>
-          </motion.button>
-
-          {/* Speed dial actions */}
-          <AnimatePresence>
-            {fabOpen && (
-              <>
-                {/* Backdrop to close menu */}
-                <motion.div
-                  className="fixed inset-0 z-[-1]"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  onClick={() => setFabOpen(false)}
-                />
-
-                {/* Delete All */}
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.3, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.3, y: 20 }}
-                  transition={{ duration: 0.15, delay: 0 }}
-                  onClick={() => { setDeleteAllDialogOpen(true); setFabOpen(false); }}
-                  className="group flex items-center gap-3"
-                >
-                  <span className="px-3 py-1.5 rounded-full bg-card text-destructive text-sm font-medium shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                    {t('recipes.deleteAll', 'Delete All')}
-                  </span>
-                  <div className="w-11 h-11 rounded-full bg-card shadow-md flex items-center justify-center text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors">
-                    <Trash2 className="w-5 h-5" />
-                  </div>
-                </motion.button>
-
-                {/* Manage Sources */}
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.3, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.3, y: 20 }}
-                  transition={{ duration: 0.15, delay: 0.05 }}
-                  onClick={() => { navigate('/my-recipes'); setFabOpen(false); }}
-                  className="group flex items-center gap-3"
-                >
-                  <span className="px-3 py-1.5 rounded-full bg-card text-foreground text-sm font-medium shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                    {t('recipes.manageSources', 'Manage Sources')}
-                  </span>
-                  <div className="w-11 h-11 rounded-full bg-card shadow-md flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors">
-                    <Upload className="w-5 h-5" />
-                  </div>
-                </motion.button>
-
-                {/* Add Recipe */}
-                <motion.button
-                  initial={{ opacity: 0, scale: 0.3, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.3, y: 20 }}
-                  transition={{ duration: 0.15, delay: 0.1 }}
-                  onClick={() => { setShowAddDrawer(true); setFabOpen(false); }}
-                  className="group flex items-center gap-3"
-                >
-                  <span className="px-3 py-1.5 rounded-full bg-card text-foreground text-sm font-medium shadow-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                    {t('recipes.addRecipe', 'Add Recipe')}
-                  </span>
-                  <div className="w-11 h-11 rounded-full bg-card shadow-md flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors">
-                    <Plus className="w-5 h-5" />
-                  </div>
-                </motion.button>
-              </>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
-
-      {/* Add Recipe Drawer - Unified Component */}
-      <RecipeImportDrawer
-        open={showAddDrawer}
-        onOpenChange={setShowAddDrawer}
-        onImportComplete={fetchUserRecipes}
-      />
 
       <BottomNav />
 

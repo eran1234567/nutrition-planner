@@ -30,6 +30,16 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useRecipeImport, isYouTubeChannelOrPlaylist } from '@/hooks/useRecipeImport';
 import { RecipeCreatorDrawer } from '@/components/recipe/RecipeCreatorDrawer';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 
 interface UploadedItem {
@@ -59,6 +69,11 @@ const MyRecipes = () => {
   // Delete progress tracking
   const [deletingUploadId, setDeletingUploadId] = useState<string | null>(null);
   const [deleteProgress, setDeleteProgress] = useState({ current: 0, total: 0 });
+  
+  // Delete all sources state
+  const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [deleteAllProgress, setDeleteAllProgress] = useState({ current: 0, total: 0 });
   
   // Unified recipe import hook
   const { 
@@ -501,6 +516,50 @@ const MyRecipes = () => {
     }
   };
 
+  // Handle delete all sources
+  const handleDeleteAllSources = async () => {
+    if (uploads.length === 0) return;
+    
+    setIsDeletingAll(true);
+    setDeleteAllProgress({ current: 0, total: uploads.length });
+    
+    try {
+      for (let i = 0; i < uploads.length; i++) {
+        const upload = uploads[i];
+        
+        // Get all recipes linked to this upload
+        const { data: links } = await supabase
+          .from('upload_recipe_links')
+          .select('recipe_id')
+          .eq('upload_id', upload.id);
+
+        const recipeIds = links?.map(link => link.recipe_id) || [];
+
+        // Delete recipes one by one
+        for (const recipeId of recipeIds) {
+          await supabase.functions.invoke('delete-recipe', {
+            body: { recipeId },
+          });
+        }
+
+        // Delete the upload
+        await supabase.from('uploads').delete().eq('id', upload.id);
+        
+        setDeleteAllProgress({ current: i + 1, total: uploads.length });
+      }
+      
+      setUploads([]);
+      toast.success(t('myRecipes.allRemoved', 'All sources removed'));
+      setDeleteAllDialogOpen(false);
+    } catch (error) {
+      if (import.meta.env.DEV) console.error('Delete all error:', error);
+      toast.error(t('myRecipes.deleteAllError', 'Failed to delete all sources'));
+    } finally {
+      setIsDeletingAll(false);
+      setDeleteAllProgress({ current: 0, total: 0 });
+    }
+  };
+
   const handleRetryParsing = async (upload: UploadedItem) => {
     await triggerParsing(upload.id, undefined, upload.url);
   };
@@ -868,6 +927,21 @@ const MyRecipes = () => {
                 </motion.div>
               ))}
             </div>
+            
+            {/* Delete All Sources Button */}
+            {uploads.length > 0 && (
+              <div className="pt-2">
+                <Button
+                  variant="outline"
+                  className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
+                  onClick={() => setDeleteAllDialogOpen(true)}
+                  disabled={isDeletingAll || deletingUploadId !== null}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  {t('myRecipes.deleteAllSources', 'Delete All Sources')}
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
@@ -907,6 +981,52 @@ const MyRecipes = () => {
           loadUploads();
         }}
       />
+
+      {/* Delete All Sources Dialog */}
+      <AlertDialog open={deleteAllDialogOpen} onOpenChange={setDeleteAllDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('myRecipes.deleteAllTitle', 'Delete All Sources')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('myRecipes.deleteAllConfirm', 'Are you sure you want to delete all {{count}} sources and their associated recipes? This action cannot be undone.', { count: uploads.length })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          {isDeletingAll && deleteAllProgress.total > 0 && (
+            <div className="space-y-2 py-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">
+                  {t('myRecipes.deletingProgress', 'Deleting source {{current}} of {{total}}...', {
+                    current: deleteAllProgress.current,
+                    total: deleteAllProgress.total
+                  })}
+                </span>
+                <span className="font-medium">
+                  {Math.round((deleteAllProgress.current / deleteAllProgress.total) * 100)}%
+                </span>
+              </div>
+              <Progress 
+                value={(deleteAllProgress.current / deleteAllProgress.total) * 100} 
+                className="h-2 [&>div]:bg-destructive" 
+              />
+            </div>
+          )}
+          
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingAll}>{t('common.cancel', 'Cancel')}</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeleteAllSources();
+              }} 
+              disabled={isDeletingAll}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingAll ? t('common.deleting', 'Deleting...') : t('myRecipes.deleteAllSources', 'Delete All Sources')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <BottomNav />
     </div>
