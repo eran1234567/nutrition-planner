@@ -424,8 +424,25 @@ export function findIngredientInCache(
   return bestMatch;
 }
 
+// Weight conversion to grams
+const WEIGHT_TO_GRAMS: Record<string, number> = {
+  'lb': 453.6,
+  'lbs': 453.6,
+  'pound': 453.6,
+  'pounds': 453.6,
+  'oz': 28.35,
+  'ounce': 28.35,
+  'ounces': 28.35,
+  'kg': 1000,
+  'kilogram': 1000,
+  'kilograms': 1000,
+  'g': 1,
+  'gram': 1,
+  'grams': 1,
+};
+
 /**
- * Parse ingredient quantity from text
+ * Parse ingredient quantity and unit from text
  */
 export function parseIngredientQuantity(text: string): number {
   const trimmed = text.trim();
@@ -440,6 +457,44 @@ export function parseIngredientQuantity(text: string): number {
 
   const numMatch = trimmed.match(/^(\d+\.?\d*)/);
   return numMatch ? Number.parseFloat(numMatch[1]) : 1;
+}
+
+/**
+ * Parse unit from ingredient text
+ */
+export function parseIngredientUnit(text: string): string | null {
+  const lowerText = text.toLowerCase();
+  // Match pattern: "4 lbs ...", "3 oz ...", "500 g ..."
+  const unitMatch = lowerText.match(/^\d+\.?\d*\s*(lb|lbs|pound|pounds|oz|ounce|ounces|kg|kilogram|kilograms|g|gram|grams)\b/i);
+  return unitMatch ? unitMatch[1].toLowerCase() : null;
+}
+
+/**
+ * Calculate the effective multiplier for weight-based ingredients
+ * when the database reference uses a different unit (e.g., "100g")
+ */
+export function calculateWeightMultiplier(
+  quantity: number,
+  inputUnit: string | null,
+  servingDescription: string
+): number {
+  // If no weight unit detected, use quantity as-is (for count-based items like "3 eggs")
+  if (!inputUnit || !WEIGHT_TO_GRAMS[inputUnit]) {
+    return quantity;
+  }
+  
+  // Parse the reference serving description for grams (e.g., "100g", "1 cup (240g)")
+  const refGramsMatch = servingDescription.match(/(\d+\.?\d*)\s*g(?:ram)?s?\b/i);
+  if (!refGramsMatch) {
+    // If reference isn't gram-based, fall back to simple quantity
+    return quantity;
+  }
+  
+  const refGrams = parseFloat(refGramsMatch[1]);
+  const inputGrams = quantity * WEIGHT_TO_GRAMS[inputUnit];
+  
+  // Return how many "servings" of the reference this represents
+  return inputGrams / refGrams;
 }
 
 /**
@@ -497,7 +552,7 @@ export function extractExplicitMacros(text: string): Partial<IngredientMacros> |
 /**
  * Calculate macros for a single ingredient using priority hierarchy:
  * 1. Explicit user-provided values in text
- * 2. Database reference table lookup
+ * 2. Database reference table lookup (with weight unit conversion)
  * 3. USDA fallback constants
  * 4. Return null (let AI estimate)
  */
@@ -506,6 +561,7 @@ export function calculateIngredientMacros(
   cache: DbIngredientNutrition[]
 ): IngredientMacros | null {
   const quantity = parseIngredientQuantity(ingredientText);
+  const inputUnit = parseIngredientUnit(ingredientText);
   
   // Priority 1: Explicit macros in text
   const explicit = extractExplicitMacros(ingredientText);
@@ -521,19 +577,22 @@ export function calculateIngredientMacros(
     };
   }
   
-  // Priority 2: Database lookup
+  // Priority 2: Database lookup with weight conversion
   const dbMatch = findIngredientInCache(ingredientText, cache);
   if (dbMatch) {
+    // Calculate effective multiplier considering unit conversion
+    const multiplier = calculateWeightMultiplier(quantity, inputUnit, dbMatch.serving_description);
+    
     return {
-      calories: dbMatch.calories * quantity,
-      protein: dbMatch.protein_g * quantity,
-      carbs: dbMatch.carbs_g * quantity,
-      fat: dbMatch.fat_g * quantity,
-      fiber: dbMatch.fiber_g * quantity,
-      sugar: dbMatch.sugar_g * quantity,
-      sodium: dbMatch.sodium_mg * quantity,
-      saturated_fat: dbMatch.saturated_fat_g * quantity,
-      cholesterol: dbMatch.cholesterol_mg * quantity,
+      calories: dbMatch.calories * multiplier,
+      protein: dbMatch.protein_g * multiplier,
+      carbs: dbMatch.carbs_g * multiplier,
+      fat: dbMatch.fat_g * multiplier,
+      fiber: dbMatch.fiber_g * multiplier,
+      sugar: dbMatch.sugar_g * multiplier,
+      sodium: dbMatch.sodium_mg * multiplier,
+      saturated_fat: dbMatch.saturated_fat_g * multiplier,
+      cholesterol: dbMatch.cholesterol_mg * multiplier,
     };
   }
   
