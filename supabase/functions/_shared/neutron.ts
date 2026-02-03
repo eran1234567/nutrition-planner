@@ -106,11 +106,19 @@ export interface PhysicsConstraint {
   maxProteinPerTbsp: number;
   maxFatPerTbsp: number;
   maxCarbsPerTbsp: number;
+  // Sodium constraints for concentrates (powders are HIGH sodium)
+  minSodiumPerTbsp: number;  // Floor for concentrates
+  maxSodiumPerTbsp: number;  // Ceiling
 }
 
 /**
  * Physics constraints table for ingredient state validation
  * Used to prevent physically impossible macro calculations
+ * 
+ * CONCENTRATION AWARENESS:
+ * - Powders/pastes are CONCENTRATES: small mass changes = small macro changes but LARGE micro changes (sodium)
+ * - Bouillon powder: ~1100mg sodium per tsp, ~3300mg per tbsp
+ * - Salt: ~6000mg sodium per tbsp
  */
 export const PHYSICS_CONSTRAINTS: Record<IngredientState, PhysicsConstraint> = {
   powder: {
@@ -121,6 +129,8 @@ export const PHYSICS_CONSTRAINTS: Record<IngredientState, PhysicsConstraint> = {
     maxProteinPerTbsp: 4,      // Max 4g protein per tbsp of powder
     maxFatPerTbsp: 2,
     maxCarbsPerTbsp: 10,
+    minSodiumPerTbsp: 100,     // Even mild seasonings have some sodium
+    maxSodiumPerTbsp: 6000,    // Pure salt ceiling
   },
   paste: {
     state: 'paste',
@@ -130,6 +140,8 @@ export const PHYSICS_CONSTRAINTS: Record<IngredientState, PhysicsConstraint> = {
     maxProteinPerTbsp: 2,      // Max 2g protein per tbsp of paste
     maxFatPerTbsp: 4,
     maxCarbsPerTbsp: 12,
+    minSodiumPerTbsp: 50,
+    maxSodiumPerTbsp: 2000,
   },
   lipid: {
     state: 'lipid',
@@ -139,6 +151,8 @@ export const PHYSICS_CONSTRAINTS: Record<IngredientState, PhysicsConstraint> = {
     maxProteinPerTbsp: 0.5,    // Oils/butter have minimal protein
     maxFatPerTbsp: 14,         // Max 14g fat per tbsp
     maxCarbsPerTbsp: 0.5,
+    minSodiumPerTbsp: 0,
+    maxSodiumPerTbsp: 100,     // Oils have almost no sodium
   },
   liquid: {
     state: 'liquid',
@@ -148,6 +162,8 @@ export const PHYSICS_CONSTRAINTS: Record<IngredientState, PhysicsConstraint> = {
     maxProteinPerTbsp: 1,      // Max 1g protein per tbsp of liquid
     maxFatPerTbsp: 1,
     maxCarbsPerTbsp: 4,
+    minSodiumPerTbsp: 0,
+    maxSodiumPerTbsp: 500,
   },
   solid: {
     state: 'solid',
@@ -157,6 +173,8 @@ export const PHYSICS_CONSTRAINTS: Record<IngredientState, PhysicsConstraint> = {
     maxProteinPerTbsp: 8,      // Variable for ground meats
     maxFatPerTbsp: 10,
     maxCarbsPerTbsp: 5,
+    minSodiumPerTbsp: 0,
+    maxSodiumPerTbsp: 500,
   },
   flour: {
     state: 'flour',
@@ -166,6 +184,8 @@ export const PHYSICS_CONSTRAINTS: Record<IngredientState, PhysicsConstraint> = {
     maxProteinPerTbsp: 1,      // Max 1g protein per tbsp of flour
     maxFatPerTbsp: 0.5,
     maxCarbsPerTbsp: 6,
+    minSodiumPerTbsp: 0,
+    maxSodiumPerTbsp: 100,
   },
   cheese: {
     state: 'cheese',
@@ -175,6 +195,8 @@ export const PHYSICS_CONSTRAINTS: Record<IngredientState, PhysicsConstraint> = {
     maxProteinPerTbsp: 2,      // Max 2g protein per tbsp grated cheese
     maxFatPerTbsp: 3,
     maxCarbsPerTbsp: 0.5,
+    minSodiumPerTbsp: 20,
+    maxSodiumPerTbsp: 200,
   },
 };
 
@@ -182,16 +204,20 @@ export const PHYSICS_CONSTRAINTS: Record<IngredientState, PhysicsConstraint> = {
  * Keyword patterns to detect ingredient physical state
  */
 export const STATE_DETECTION_PATTERNS: Record<IngredientState, string[]> = {
-  powder: ['powder', 'spice', 'seasoning', 'paprika', 'cumin', 'chili powder', 'curry powder', 
-           'garlic powder', 'onion powder', 'cinnamon', 'nutmeg', 'turmeric', 'dried', 'dehydrated'],
+  // IMPORTANT: More specific patterns must come before general ones
+  // "bouillon" and "soup powder" must match powder, not solid (even if "chicken" is in name)
+  powder: ['powder', 'bouillon', 'soup powder', 'stock powder', 'soup base', 'spice', 'seasoning', 
+           'paprika', 'cumin', 'chili powder', 'curry powder', 'garlic powder', 'onion powder', 
+           'cinnamon', 'nutmeg', 'turmeric', 'dried', 'dehydrated', 'ground cumin', 'ground coriander'],
   paste: ['paste', 'tomato paste', 'miso', 'tahini', 'harissa', 'gochujang', 'curry paste',
           'anchovy paste', 'almond butter', 'peanut butter', 'nut butter', 'hummus'],
   lipid: ['oil', 'butter', 'ghee', 'lard', 'shortening', 'coconut oil', 'olive oil', 
           'vegetable oil', 'avocado oil', 'sesame oil', 'margarine', 'fat', 'drippings'],
   liquid: ['broth', 'stock', 'water', 'milk', 'cream', 'juice', 'wine', 'vinegar', 'sauce',
            'soy sauce', 'fish sauce', 'worcestershire', 'hot sauce', 'liquid', 'maple syrup'],
-  solid: ['ground', 'minced', 'beef', 'pork', 'chicken', 'turkey', 'lamb', 'meat', 'fish',
-          'salmon', 'tuna', 'shrimp', 'bacon', 'sausage', 'steak', 'fillet', 'thigh', 'breast'],
+  solid: ['ground beef', 'ground pork', 'ground turkey', 'ground chicken', 'ground lamb', 'minced', 
+          'beef', 'pork', 'chicken breast', 'chicken thigh', 'turkey', 'lamb', 'meat', 'fish',
+          'salmon', 'tuna', 'shrimp', 'bacon', 'sausage', 'steak', 'fillet'],
   flour: ['flour', 'starch', 'cornstarch', 'arrowroot', 'tapioca', 'almond flour', 
           'coconut flour', 'oat flour', 'breadcrumbs', 'panko'],
   cheese: ['cheese', 'parmesan', 'cheddar', 'mozzarella', 'feta', 'gouda', 'brie', 
@@ -200,12 +226,14 @@ export const STATE_DETECTION_PATTERNS: Record<IngredientState, string[]> = {
 
 /**
  * Detect the physical state of an ingredient based on its name
+ * Priority: powder > paste > lipid > flour > cheese > liquid > solid
+ * Powder comes FIRST because "chicken bouillon powder" should be powder, not solid
  */
 export function detectIngredientState(ingredientName: string): IngredientState | null {
   const lowerName = ingredientName.toLowerCase();
   
-  // Check patterns in priority order (most specific first)
-  const stateOrder: IngredientState[] = ['lipid', 'paste', 'powder', 'flour', 'cheese', 'liquid', 'solid'];
+  // Check patterns in priority order (powder FIRST to avoid "chicken" matching solid)
+  const stateOrder: IngredientState[] = ['powder', 'paste', 'lipid', 'flour', 'cheese', 'liquid', 'solid'];
   
   for (const state of stateOrder) {
     const patterns = STATE_DETECTION_PATTERNS[state];
@@ -256,7 +284,11 @@ export interface PhysicsValidationResult {
 
 /**
  * Validate and correct macros based on physical mass constraints
- * This prevents impossible values like "20g protein from 1 tbsp powder"
+ * This prevents impossible values like "70g protein from 2 tbsp powder"
+ * 
+ * CONCENTRATION AWARENESS:
+ * - Powders are concentrates: small mass = low macros but HIGH sodium
+ * - Example: 2 tbsp chicken bouillon powder weighs ~20g, max 8g protein, but ~3300mg sodium per tbsp
  */
 export function validateMacrosAgainstPhysics(
   ingredientName: string,
@@ -289,20 +321,27 @@ export function validateMacrosAgainstPhysics(
   const maxProtein = constraint.maxProteinPerTbsp * tbspEquivalent;
   const maxFat = constraint.maxFatPerTbsp * tbspEquivalent;
   const maxCarbs = constraint.maxCarbsPerTbsp * tbspEquivalent;
+  const maxSodium = constraint.maxSodiumPerTbsp * tbspEquivalent;
+  const minSodium = constraint.minSodiumPerTbsp * tbspEquivalent;
   
   const correctedMacros = { ...macros };
   let isValid = true;
   
-  // Check and correct protein
+  // Log for debugging
+  console.log(`[Physics] ${ingredientName}: state=${state}, qty=${quantity} ${unit}, tbsp_equiv=${tbspEquivalent.toFixed(2)}, mass=${massGrams.toFixed(1)}g`);
+  console.log(`[Physics] Max limits: protein=${maxProtein.toFixed(1)}g, fat=${maxFat.toFixed(1)}g, carbs=${maxCarbs.toFixed(1)}g, sodium=${minSodium.toFixed(0)}-${maxSodium.toFixed(0)}mg`);
+  console.log(`[Physics] Input macros: protein=${macros.protein.toFixed(1)}g, fat=${macros.fat.toFixed(1)}g, carbs=${macros.carbs.toFixed(1)}g, sodium=${(macros.sodium ?? 0).toFixed(0)}mg`);
+  
+  // Check and correct protein (skip for solids - meats have variable protein)
   if (macros.protein > maxProtein && state !== 'solid') {
     violations.push(
-      `Protein ${macros.protein.toFixed(1)}g exceeds physics limit ${maxProtein.toFixed(1)}g for ${state} (${tbspEquivalent.toFixed(1)} tbsp)`
+      `Protein ${macros.protein.toFixed(1)}g exceeds physics limit ${maxProtein.toFixed(1)}g for ${state} (${tbspEquivalent.toFixed(1)} tbsp ≈ ${massGrams.toFixed(0)}g)`
     );
     correctedMacros.protein = maxProtein;
     isValid = false;
   }
   
-  // Check and correct fat
+  // Check and correct fat (skip for solids)
   if (macros.fat > maxFat && state !== 'solid') {
     violations.push(
       `Fat ${macros.fat.toFixed(1)}g exceeds physics limit ${maxFat.toFixed(1)}g for ${state}`
@@ -311,7 +350,7 @@ export function validateMacrosAgainstPhysics(
     isValid = false;
   }
   
-  // Check and correct carbs
+  // Check and correct carbs (skip for solids and flour)
   if (macros.carbs > maxCarbs && state !== 'solid' && state !== 'flour') {
     violations.push(
       `Carbs ${macros.carbs.toFixed(1)}g exceeds physics limit ${maxCarbs.toFixed(1)}g for ${state}`
@@ -320,12 +359,26 @@ export function validateMacrosAgainstPhysics(
     isValid = false;
   }
   
+  // Check sodium bounds for concentrates (powders especially)
+  // Powders like bouillon have VERY HIGH sodium - if AI underestimated, flag it
+  if (state === 'powder' && macros.sodium !== undefined) {
+    if (macros.sodium > maxSodium) {
+      violations.push(
+        `Sodium ${macros.sodium.toFixed(0)}mg exceeds max ${maxSodium.toFixed(0)}mg for ${state}`
+      );
+      correctedMacros.sodium = maxSodium;
+      isValid = false;
+    }
+  }
+  
   // Recalculate calories if any macro was corrected
   if (!isValid) {
     correctedMacros.calories = 
       (correctedMacros.protein * CALORIES_PER_GRAM.protein) +
       (correctedMacros.carbs * CALORIES_PER_GRAM.carbs) +
       (correctedMacros.fat * CALORIES_PER_GRAM.fat);
+    
+    console.log(`[Physics] CORRECTED: protein=${correctedMacros.protein.toFixed(1)}g, fat=${correctedMacros.fat.toFixed(1)}g, sodium=${(correctedMacros.sodium ?? 0).toFixed(0)}mg`);
   }
   
   return {
@@ -878,7 +931,7 @@ export function extractExplicitMacros(text: string): Partial<IngredientMacros> |
  * 3. USDA fallback constants
  * 4. Return null (let AI estimate)
  * 
- * Optionally applies physics validation to prevent impossible macro values.
+ * Applies physics validation by default to prevent impossible macro values.
  */
 export function calculateIngredientMacros(
   ingredientText: string,
@@ -887,7 +940,8 @@ export function calculateIngredientMacros(
 ): IngredientMacros | null {
   const quantity = parseIngredientQuantity(ingredientText);
   const inputUnit = parseIngredientUnit(ingredientText);
-  const applyPhysics = options?.applyPhysicsValidation ?? false;
+  // PHYSICS VALIDATION ENABLED BY DEFAULT - prevents impossible macros like 70g protein from 2 tbsp powder
+  const applyPhysics = options?.applyPhysicsValidation ?? true;
   
   let rawMacros: IngredientMacros | null = null;
   
