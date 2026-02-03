@@ -70,6 +70,10 @@ const MyRecipes = () => {
   const [deletingUploadId, setDeletingUploadId] = useState<string | null>(null);
   const [deleteProgress, setDeleteProgress] = useState({ current: 0, total: 0 });
   
+  // Single source delete confirmation state
+  const [deleteSourceDialogOpen, setDeleteSourceDialogOpen] = useState(false);
+  const [sourceToDelete, setSourceToDelete] = useState<UploadedItem | null>(null);
+  
   // Delete all sources state
   const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
@@ -918,7 +922,10 @@ const MyRecipes = () => {
                       variant="ghost"
                       size="icon"
                       className="text-muted-foreground hover:text-destructive"
-                      onClick={() => handleRemoveUpload(upload.id)}
+                      onClick={() => {
+                        setSourceToDelete(upload);
+                        setDeleteSourceDialogOpen(true);
+                      }}
                       disabled={deletingUploadId !== null}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -1023,6 +1030,61 @@ const MyRecipes = () => {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {isDeletingAll ? t('common.deleting', 'Deleting...') : t('myRecipes.deleteAllSources', 'Delete All Sources')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Single Source Dialog */}
+      <AlertDialog open={deleteSourceDialogOpen} onOpenChange={(open) => {
+        if (!deletingUploadId) {
+          setDeleteSourceDialogOpen(open);
+          if (!open) setSourceToDelete(null);
+        }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('myRecipes.deleteSourceTitle', 'Delete Source')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('myRecipes.deleteSourceConfirm', 'Are you sure you want to delete "{{name}}" and its associated recipes? This action cannot be undone.', { name: sourceToDelete?.name || '' })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          {deletingUploadId === sourceToDelete?.id && deleteProgress.total > 0 && (
+            <div className="space-y-2 py-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">
+                  {t('myRecipes.deletingRecipes', 'Deleting recipe {{current}} of {{total}}...', {
+                    current: deleteProgress.current,
+                    total: deleteProgress.total
+                  })}
+                </span>
+                <span className="font-medium">
+                  {Math.round((deleteProgress.current / deleteProgress.total) * 100)}%
+                </span>
+              </div>
+              <Progress 
+                value={(deleteProgress.current / deleteProgress.total) * 100} 
+                className="h-2 [&>div]:bg-destructive" 
+              />
+            </div>
+          )}
+          
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingUploadId !== null}>{t('common.cancel', 'Cancel')}</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={async (e) => {
+                e.preventDefault();
+                if (sourceToDelete) {
+                  await handleRemoveUpload(sourceToDelete.id);
+                  setDeleteSourceDialogOpen(false);
+                  setSourceToDelete(null);
+                }
+              }} 
+              disabled={deletingUploadId !== null}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingUploadId === sourceToDelete?.id ? t('common.deleting', 'Deleting...') : t('myRecipes.deleteSource', 'Delete Source')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
