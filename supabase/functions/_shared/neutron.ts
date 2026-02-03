@@ -187,31 +187,74 @@ export const KETO_SWAP_DICTIONARY: KetoSwapEntry[] = [
 
 // USDA reference values for common ingredients (fallback if DB is empty)
 export const USDA_REFERENCES: Record<string, IngredientMacros> = {
+  // Eggs
   'egg': { calories: 72, protein: 6.3, carbs: 0.4, fat: 4.8, fiber: 0, cholesterol: 186, sodium: 71 },
+  'eggs': { calories: 72, protein: 6.3, carbs: 0.4, fat: 4.8, fiber: 0, cholesterol: 186, sodium: 71 },
   'egg_yolk': { calories: 55, protein: 2.7, carbs: 0.6, fat: 4.5, fiber: 0, cholesterol: 184, sodium: 8 },
   'egg_white': { calories: 17, protein: 3.6, carbs: 0.2, fat: 0, fiber: 0, cholesterol: 0, sodium: 55 },
-  'avocado_half': { calories: 160, protein: 2, carbs: 8.5, fat: 14.7, fiber: 7, cholesterol: 0, sodium: 7 },
+  
+  // Avocado - must match plain "avocado" for deterministic lookups
+  'avocado': { calories: 160, protein: 2, carbs: 8.5, fat: 14.7, fiber: 6.7, cholesterol: 0, sodium: 7 },
+  'avocados': { calories: 160, protein: 2, carbs: 8.5, fat: 14.7, fiber: 6.7, cholesterol: 0, sodium: 7 },
+  'avocado_half': { calories: 160, protein: 2, carbs: 8.5, fat: 14.7, fiber: 6.7, cholesterol: 0, sodium: 7 },
   'avocado_full': { calories: 322, protein: 4, carbs: 17, fat: 29, fiber: 13, cholesterol: 0, sodium: 14 },
-  'olive_oil_tbsp': { calories: 119, protein: 0, carbs: 0, fat: 13.5, fiber: 0, cholesterol: 0, sodium: 0 },
-  'butter_tbsp': { calories: 102, protein: 0.1, carbs: 0, fat: 11.5, fiber: 0, cholesterol: 31, sodium: 91 },
-  // Keto bread is frequently written as "keto bread" / "keto bread slices" (no "slice" word).
-  // Add multiple keys so our simple substring matcher can still recognize it deterministically.
+  
+  // Bread - generic bread for when specific type isn't mentioned
+  'bread': { calories: 79, protein: 2.7, carbs: 15, fat: 1, fiber: 0.6, cholesterol: 0, sodium: 150 },
+  'toast': { calories: 79, protein: 2.7, carbs: 15, fat: 1, fiber: 0.6, cholesterol: 0, sodium: 150 },
+  'bread slice': { calories: 79, protein: 2.7, carbs: 15, fat: 1, fiber: 0.6, cholesterol: 0, sodium: 150 },
+  'slices bread': { calories: 79, protein: 2.7, carbs: 15, fat: 1, fiber: 0.6, cholesterol: 0, sodium: 150 },
+  'slice of bread': { calories: 79, protein: 2.7, carbs: 15, fat: 1, fiber: 0.6, cholesterol: 0, sodium: 150 },
+  'white bread': { calories: 79, protein: 2.7, carbs: 15, fat: 1, fiber: 0.6, cholesterol: 0, sodium: 150 },
+  'whole wheat bread': { calories: 81, protein: 4, carbs: 14, fat: 1.1, fiber: 1.9, cholesterol: 0, sodium: 146 },
+  
+  // Keto bread variations
   'keto_bread_slice': { calories: 60, protein: 6, carbs: 13, fat: 2.5, fiber: 12, cholesterol: 0, sodium: 150 },
   'keto bread': { calories: 60, protein: 6, carbs: 13, fat: 2.5, fiber: 12, cholesterol: 0, sodium: 150 },
   'keto bread slices': { calories: 60, protein: 6, carbs: 13, fat: 2.5, fiber: 12, cholesterol: 0, sodium: 150 },
+  
+  // Fats and oils
+  'olive_oil_tbsp': { calories: 119, protein: 0, carbs: 0, fat: 13.5, fiber: 0, cholesterol: 0, sodium: 0 },
+  'olive oil': { calories: 119, protein: 0, carbs: 0, fat: 13.5, fiber: 0, cholesterol: 0, sodium: 0 },
+  'butter_tbsp': { calories: 102, protein: 0.1, carbs: 0, fat: 11.5, fiber: 0, cholesterol: 31, sodium: 91 },
+  'butter': { calories: 102, protein: 0.1, carbs: 0, fat: 11.5, fiber: 0, cholesterol: 31, sodium: 91 },
+  
+  // Proteins
   'bacon_slice': { calories: 43, protein: 3, carbs: 0.1, fat: 3.3, fiber: 0, cholesterol: 9, sodium: 137 },
+  'bacon': { calories: 43, protein: 3, carbs: 0.1, fat: 3.3, fiber: 0, cholesterol: 9, sodium: 137 },
   'chicken_breast': { calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, cholesterol: 85, sodium: 74 },
+  'chicken breast': { calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, cholesterol: 85, sodium: 74 },
+  'chicken': { calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0, cholesterol: 85, sodium: 74 },
   'salmon': { calories: 208, protein: 20, carbs: 0, fat: 13, fiber: 0, cholesterol: 55, sodium: 59 },
+  
+  // Dairy
   'cheddar': { calories: 115, protein: 7, carbs: 0.5, fat: 9, fiber: 0, cholesterol: 28, sodium: 180 },
+  'cheese': { calories: 115, protein: 7, carbs: 0.5, fat: 9, fiber: 0, cholesterol: 28, sodium: 180 },
   'cream_cheese': { calories: 99, protein: 2.1, carbs: 1.2, fat: 9.9, fiber: 0, cholesterol: 29, sodium: 89 },
+  'cream cheese': { calories: 99, protein: 2.1, carbs: 1.2, fat: 9.9, fiber: 0, cholesterol: 29, sodium: 89 },
   'heavy_cream': { calories: 51, protein: 0.4, carbs: 0.4, fat: 5.4, fiber: 0, cholesterol: 20, sodium: 6 },
+  'heavy cream': { calories: 51, protein: 0.4, carbs: 0.4, fat: 5.4, fiber: 0, cholesterol: 20, sodium: 6 },
+  'milk': { calories: 42, protein: 3.4, carbs: 5, fat: 1, fiber: 0, cholesterol: 5, sodium: 44 },
+  
   // Keto alternatives
   'cauliflower_rice': { calories: 25, protein: 2, carbs: 5, fat: 0.3, fiber: 2, cholesterol: 0, sodium: 30 },
+  'cauliflower rice': { calories: 25, protein: 2, carbs: 5, fat: 0.3, fiber: 2, cholesterol: 0, sodium: 30 },
   'zucchini_noodles': { calories: 20, protein: 1.5, carbs: 4, fat: 0.4, fiber: 1.2, cholesterol: 0, sodium: 10 },
+  'zucchini noodles': { calories: 20, protein: 1.5, carbs: 4, fat: 0.4, fiber: 1.2, cholesterol: 0, sodium: 10 },
+  'zoodles': { calories: 20, protein: 1.5, carbs: 4, fat: 0.4, fiber: 1.2, cholesterol: 0, sodium: 10 },
   'lettuce_wrap': { calories: 5, protein: 0.5, carbs: 1, fat: 0.1, fiber: 0.5, cholesterol: 0, sodium: 5 },
+  'lettuce wrap': { calories: 5, protein: 0.5, carbs: 1, fat: 0.1, fiber: 0.5, cholesterol: 0, sodium: 5 },
   'almond_flour': { calories: 160, protein: 6, carbs: 6, fat: 14, fiber: 3, cholesterol: 0, sodium: 0 },
+  'almond flour': { calories: 160, protein: 6, carbs: 6, fat: 14, fiber: 3, cholesterol: 0, sodium: 0 },
   'pork_rinds': { calories: 80, protein: 9, carbs: 0, fat: 5, fiber: 0, cholesterol: 20, sodium: 270 },
+  'pork rinds': { calories: 80, protein: 9, carbs: 0, fat: 5, fiber: 0, cholesterol: 20, sodium: 270 },
   'allulose': { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, cholesterol: 0, sodium: 0 },
+  
+  // Common vegetables
+  'tomato': { calories: 22, protein: 1.1, carbs: 4.8, fat: 0.2, fiber: 1.5, cholesterol: 0, sodium: 5 },
+  'onion': { calories: 44, protein: 1.2, carbs: 10, fat: 0.1, fiber: 1.4, cholesterol: 0, sodium: 4 },
+  'garlic': { calories: 4, protein: 0.2, carbs: 1, fat: 0, fiber: 0.1, cholesterol: 0, sodium: 1 },
+  'spinach': { calories: 7, protein: 0.9, carbs: 1.1, fat: 0.1, fiber: 0.7, cholesterol: 0, sodium: 24 },
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
