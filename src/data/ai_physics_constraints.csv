@@ -1,0 +1,8 @@
+Keyword,State,Density_g_per_tbsp,Mass_Limit,Primary_Macro,Physics_Guardrail
+Powder,Dehydrated,10.0,Low,Sodium/Carb,Max 4g protein per tbsp
+Paste,Concentrated,16.0,Medium,Carb/Sugar,Max 2g protein per tbsp
+Oil/Butter,Lipid,14.0,Medium,Fat,Max 14g fat per tbsp
+Liquid/Broth,Aqueous,15.0,Low,Water,Max 1g protein per tbsp
+Ground/Minced,Solid (Raw),15.0,High,Protein/Fat,Variable
+Flour/Starch,Dry Fine,8.0,Medium,Carb,Max 1g protein per tbsp
+Cheese (Grated),Semi-Solid,6.0,Medium,Fat/Protein,Max 2g protein per tbsp

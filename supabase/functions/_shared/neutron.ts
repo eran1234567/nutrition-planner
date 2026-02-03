@@ -93,6 +93,252 @@ export const HEALTH_THRESHOLDS = {
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
+// PHYSICS CONSTRAINTS - Mass-based validation for nutrition calculations
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type IngredientState = 'powder' | 'paste' | 'lipid' | 'liquid' | 'solid' | 'flour' | 'cheese';
+
+export interface PhysicsConstraint {
+  state: IngredientState;
+  densityGPerTbsp: number;
+  massLimit: 'Low' | 'Medium' | 'High';
+  primaryMacro: string;
+  maxProteinPerTbsp: number;
+  maxFatPerTbsp: number;
+  maxCarbsPerTbsp: number;
+}
+
+/**
+ * Physics constraints table for ingredient state validation
+ * Used to prevent physically impossible macro calculations
+ */
+export const PHYSICS_CONSTRAINTS: Record<IngredientState, PhysicsConstraint> = {
+  powder: {
+    state: 'powder',
+    densityGPerTbsp: 10.0,
+    massLimit: 'Low',
+    primaryMacro: 'Sodium/Carb',
+    maxProteinPerTbsp: 4,      // Max 4g protein per tbsp of powder
+    maxFatPerTbsp: 2,
+    maxCarbsPerTbsp: 10,
+  },
+  paste: {
+    state: 'paste',
+    densityGPerTbsp: 16.0,
+    massLimit: 'Medium',
+    primaryMacro: 'Carb/Sugar',
+    maxProteinPerTbsp: 2,      // Max 2g protein per tbsp of paste
+    maxFatPerTbsp: 4,
+    maxCarbsPerTbsp: 12,
+  },
+  lipid: {
+    state: 'lipid',
+    densityGPerTbsp: 14.0,
+    massLimit: 'Medium',
+    primaryMacro: 'Fat',
+    maxProteinPerTbsp: 0.5,    // Oils/butter have minimal protein
+    maxFatPerTbsp: 14,         // Max 14g fat per tbsp
+    maxCarbsPerTbsp: 0.5,
+  },
+  liquid: {
+    state: 'liquid',
+    densityGPerTbsp: 15.0,
+    massLimit: 'Low',
+    primaryMacro: 'Water',
+    maxProteinPerTbsp: 1,      // Max 1g protein per tbsp of liquid
+    maxFatPerTbsp: 1,
+    maxCarbsPerTbsp: 4,
+  },
+  solid: {
+    state: 'solid',
+    densityGPerTbsp: 15.0,
+    massLimit: 'High',
+    primaryMacro: 'Protein/Fat',
+    maxProteinPerTbsp: 8,      // Variable for ground meats
+    maxFatPerTbsp: 10,
+    maxCarbsPerTbsp: 5,
+  },
+  flour: {
+    state: 'flour',
+    densityGPerTbsp: 8.0,
+    massLimit: 'Medium',
+    primaryMacro: 'Carb',
+    maxProteinPerTbsp: 1,      // Max 1g protein per tbsp of flour
+    maxFatPerTbsp: 0.5,
+    maxCarbsPerTbsp: 6,
+  },
+  cheese: {
+    state: 'cheese',
+    densityGPerTbsp: 6.0,
+    massLimit: 'Medium',
+    primaryMacro: 'Fat/Protein',
+    maxProteinPerTbsp: 2,      // Max 2g protein per tbsp grated cheese
+    maxFatPerTbsp: 3,
+    maxCarbsPerTbsp: 0.5,
+  },
+};
+
+/**
+ * Keyword patterns to detect ingredient physical state
+ */
+export const STATE_DETECTION_PATTERNS: Record<IngredientState, string[]> = {
+  powder: ['powder', 'spice', 'seasoning', 'paprika', 'cumin', 'chili powder', 'curry powder', 
+           'garlic powder', 'onion powder', 'cinnamon', 'nutmeg', 'turmeric', 'dried', 'dehydrated'],
+  paste: ['paste', 'tomato paste', 'miso', 'tahini', 'harissa', 'gochujang', 'curry paste',
+          'anchovy paste', 'almond butter', 'peanut butter', 'nut butter', 'hummus'],
+  lipid: ['oil', 'butter', 'ghee', 'lard', 'shortening', 'coconut oil', 'olive oil', 
+          'vegetable oil', 'avocado oil', 'sesame oil', 'margarine', 'fat', 'drippings'],
+  liquid: ['broth', 'stock', 'water', 'milk', 'cream', 'juice', 'wine', 'vinegar', 'sauce',
+           'soy sauce', 'fish sauce', 'worcestershire', 'hot sauce', 'liquid', 'maple syrup'],
+  solid: ['ground', 'minced', 'beef', 'pork', 'chicken', 'turkey', 'lamb', 'meat', 'fish',
+          'salmon', 'tuna', 'shrimp', 'bacon', 'sausage', 'steak', 'fillet', 'thigh', 'breast'],
+  flour: ['flour', 'starch', 'cornstarch', 'arrowroot', 'tapioca', 'almond flour', 
+          'coconut flour', 'oat flour', 'breadcrumbs', 'panko'],
+  cheese: ['cheese', 'parmesan', 'cheddar', 'mozzarella', 'feta', 'gouda', 'brie', 
+           'grated cheese', 'shredded cheese', 'ricotta', 'cottage cheese'],
+};
+
+/**
+ * Detect the physical state of an ingredient based on its name
+ */
+export function detectIngredientState(ingredientName: string): IngredientState | null {
+  const lowerName = ingredientName.toLowerCase();
+  
+  // Check patterns in priority order (most specific first)
+  const stateOrder: IngredientState[] = ['lipid', 'paste', 'powder', 'flour', 'cheese', 'liquid', 'solid'];
+  
+  for (const state of stateOrder) {
+    const patterns = STATE_DETECTION_PATTERNS[state];
+    for (const pattern of patterns) {
+      if (lowerName.includes(pattern)) {
+        return state;
+      }
+    }
+  }
+  
+  return null; // Unknown state - no physics validation applied
+}
+
+/**
+ * Convert volume units to grams based on ingredient state density
+ */
+export function volumeToMass(quantity: number, unit: string, state: IngredientState): number {
+  const constraint = PHYSICS_CONSTRAINTS[state];
+  const lowerUnit = unit.toLowerCase();
+  
+  // Convert to tablespoons first
+  let tbspEquivalent = 0;
+  if (lowerUnit === 'tbsp' || lowerUnit === 'tablespoon' || lowerUnit === 'tablespoons') {
+    tbspEquivalent = quantity;
+  } else if (lowerUnit === 'tsp' || lowerUnit === 'teaspoon' || lowerUnit === 'teaspoons') {
+    tbspEquivalent = quantity / 3;
+  } else if (lowerUnit === 'cup' || lowerUnit === 'cups') {
+    tbspEquivalent = quantity * 16;
+  } else if (lowerUnit === 'oz' || lowerUnit === 'ounce' || lowerUnit === 'ounces') {
+    // 1 oz ≈ 28.35g, convert via density
+    return quantity * 28.35;
+  } else {
+    // For non-volume units, return quantity as-is
+    return quantity * constraint.densityGPerTbsp;
+  }
+  
+  return tbspEquivalent * constraint.densityGPerTbsp;
+}
+
+export interface PhysicsValidationResult {
+  isValid: boolean;
+  originalMacros: IngredientMacros;
+  correctedMacros: IngredientMacros;
+  violations: string[];
+  state: IngredientState | null;
+  massGrams: number;
+}
+
+/**
+ * Validate and correct macros based on physical mass constraints
+ * This prevents impossible values like "20g protein from 1 tbsp powder"
+ */
+export function validateMacrosAgainstPhysics(
+  ingredientName: string,
+  quantity: number,
+  unit: string,
+  macros: IngredientMacros
+): PhysicsValidationResult {
+  const state = detectIngredientState(ingredientName);
+  const violations: string[] = [];
+  
+  // If we can't detect state, skip physics validation
+  if (!state) {
+    return {
+      isValid: true,
+      originalMacros: macros,
+      correctedMacros: macros,
+      violations: [],
+      state: null,
+      massGrams: 0,
+    };
+  }
+  
+  const constraint = PHYSICS_CONSTRAINTS[state];
+  const massGrams = volumeToMass(quantity, unit, state);
+  
+  // Calculate how many "tablespoons" this represents for limit checking
+  const tbspEquivalent = massGrams / constraint.densityGPerTbsp;
+  
+  // Calculate maximum possible macros based on physical constraints
+  const maxProtein = constraint.maxProteinPerTbsp * tbspEquivalent;
+  const maxFat = constraint.maxFatPerTbsp * tbspEquivalent;
+  const maxCarbs = constraint.maxCarbsPerTbsp * tbspEquivalent;
+  
+  const correctedMacros = { ...macros };
+  let isValid = true;
+  
+  // Check and correct protein
+  if (macros.protein > maxProtein && state !== 'solid') {
+    violations.push(
+      `Protein ${macros.protein.toFixed(1)}g exceeds physics limit ${maxProtein.toFixed(1)}g for ${state} (${tbspEquivalent.toFixed(1)} tbsp)`
+    );
+    correctedMacros.protein = maxProtein;
+    isValid = false;
+  }
+  
+  // Check and correct fat
+  if (macros.fat > maxFat && state !== 'solid') {
+    violations.push(
+      `Fat ${macros.fat.toFixed(1)}g exceeds physics limit ${maxFat.toFixed(1)}g for ${state}`
+    );
+    correctedMacros.fat = maxFat;
+    isValid = false;
+  }
+  
+  // Check and correct carbs
+  if (macros.carbs > maxCarbs && state !== 'solid' && state !== 'flour') {
+    violations.push(
+      `Carbs ${macros.carbs.toFixed(1)}g exceeds physics limit ${maxCarbs.toFixed(1)}g for ${state}`
+    );
+    correctedMacros.carbs = maxCarbs;
+    isValid = false;
+  }
+  
+  // Recalculate calories if any macro was corrected
+  if (!isValid) {
+    correctedMacros.calories = 
+      (correctedMacros.protein * CALORIES_PER_GRAM.protein) +
+      (correctedMacros.carbs * CALORIES_PER_GRAM.carbs) +
+      (correctedMacros.fat * CALORIES_PER_GRAM.fat);
+  }
+  
+  return {
+    isValid,
+    originalMacros: macros,
+    correctedMacros,
+    violations,
+    state,
+    massGrams,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // KETO SMART SWAP DICTIONARY
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -631,18 +877,24 @@ export function extractExplicitMacros(text: string): Partial<IngredientMacros> |
  * 2. Database reference table lookup (with weight unit conversion)
  * 3. USDA fallback constants
  * 4. Return null (let AI estimate)
+ * 
+ * Optionally applies physics validation to prevent impossible macro values.
  */
 export function calculateIngredientMacros(
   ingredientText: string,
-  cache: DbIngredientNutrition[]
+  cache: DbIngredientNutrition[],
+  options?: { applyPhysicsValidation?: boolean }
 ): IngredientMacros | null {
   const quantity = parseIngredientQuantity(ingredientText);
   const inputUnit = parseIngredientUnit(ingredientText);
+  const applyPhysics = options?.applyPhysicsValidation ?? false;
+  
+  let rawMacros: IngredientMacros | null = null;
   
   // Priority 1: Explicit macros in text
   const explicit = extractExplicitMacros(ingredientText);
   if (explicit && explicit.calories !== undefined) {
-    return {
+    rawMacros = {
       calories: (explicit.calories ?? 0) * quantity,
       protein: (explicit.protein ?? 0) * quantity,
       carbs: (explicit.carbs ?? 0) * quantity,
@@ -654,63 +906,108 @@ export function calculateIngredientMacros(
   }
   
   // Priority 2: Database lookup with weight conversion
-  const dbMatch = findIngredientInCache(ingredientText, cache);
-  if (dbMatch) {
-    // Calculate effective multiplier considering unit conversion
-    const multiplier = calculateWeightMultiplier(quantity, inputUnit, dbMatch.serving_description);
-    
-    return {
-      calories: dbMatch.calories * multiplier,
-      protein: dbMatch.protein_g * multiplier,
-      carbs: dbMatch.carbs_g * multiplier,
-      fat: dbMatch.fat_g * multiplier,
-      fiber: dbMatch.fiber_g * multiplier,
-      sugar: dbMatch.sugar_g * multiplier,
-      sodium: dbMatch.sodium_mg * multiplier,
-      saturated_fat: dbMatch.saturated_fat_g * multiplier,
-      cholesterol: dbMatch.cholesterol_mg * multiplier,
-    };
-  }
-  
-  // Priority 3: USDA fallback - use longest match to prioritize specific variants
-  const lowerText = ingredientText.toLowerCase();
-  let bestKey: string | null = null;
-  let bestScore = 0;
-  
-  for (const key of Object.keys(USDA_REFERENCES)) {
-    const normalizedKey = key.replace(/_/g, ' ');
-    if (lowerText.includes(normalizedKey) || lowerText.includes(key)) {
-      // Score by key length to prefer more specific matches (e.g., "ground beef 90/10" over "ground beef")
-      const score = normalizedKey.length;
-      if (score > bestScore) {
-        bestScore = score;
-        bestKey = key;
-      }
+  if (!rawMacros) {
+    const dbMatch = findIngredientInCache(ingredientText, cache);
+    if (dbMatch) {
+      // Calculate effective multiplier considering unit conversion
+      const multiplier = calculateWeightMultiplier(quantity, inputUnit, dbMatch.serving_description);
+      
+      rawMacros = {
+        calories: dbMatch.calories * multiplier,
+        protein: dbMatch.protein_g * multiplier,
+        carbs: dbMatch.carbs_g * multiplier,
+        fat: dbMatch.fat_g * multiplier,
+        fiber: dbMatch.fiber_g * multiplier,
+        sugar: dbMatch.sugar_g * multiplier,
+        sodium: dbMatch.sodium_mg * multiplier,
+        saturated_fat: dbMatch.saturated_fat_g * multiplier,
+        cholesterol: dbMatch.cholesterol_mg * multiplier,
+      };
     }
   }
   
-  if (bestKey) {
-    const macros = USDA_REFERENCES[bestKey];
-    // Apply weight multiplier for USDA references (assume 100g serving for meats)
-    const usdaMultiplier = inputUnit && WEIGHT_TO_GRAMS[inputUnit.toLowerCase()] 
-      ? (quantity * WEIGHT_TO_GRAMS[inputUnit.toLowerCase()]) / 100
-      : quantity;
+  // Priority 3: USDA fallback - use longest match to prioritize specific variants
+  if (!rawMacros) {
+    const lowerText = ingredientText.toLowerCase();
+    let bestKey: string | null = null;
+    let bestScore = 0;
     
-    return {
-      calories: macros.calories * usdaMultiplier,
-      protein: macros.protein * usdaMultiplier,
-      carbs: macros.carbs * usdaMultiplier,
-      fat: macros.fat * usdaMultiplier,
-      fiber: macros.fiber * usdaMultiplier,
-      sugar: (macros.sugar ?? 0) * usdaMultiplier,
-      sodium: (macros.sodium ?? 0) * usdaMultiplier,
-      saturated_fat: (macros.saturated_fat ?? 0) * usdaMultiplier,
-      cholesterol: (macros.cholesterol ?? 0) * usdaMultiplier,
-    };
+    for (const key of Object.keys(USDA_REFERENCES)) {
+      const normalizedKey = key.replace(/_/g, ' ');
+      if (lowerText.includes(normalizedKey) || lowerText.includes(key)) {
+        // Score by key length to prefer more specific matches (e.g., "ground beef 90/10" over "ground beef")
+        const score = normalizedKey.length;
+        if (score > bestScore) {
+          bestScore = score;
+          bestKey = key;
+        }
+      }
+    }
+    
+    if (bestKey) {
+      const macros = USDA_REFERENCES[bestKey];
+      // Apply weight multiplier for USDA references (assume 100g serving for meats)
+      const usdaMultiplier = inputUnit && WEIGHT_TO_GRAMS[inputUnit.toLowerCase()] 
+        ? (quantity * WEIGHT_TO_GRAMS[inputUnit.toLowerCase()]) / 100
+        : quantity;
+      
+      rawMacros = {
+        calories: macros.calories * usdaMultiplier,
+        protein: macros.protein * usdaMultiplier,
+        carbs: macros.carbs * usdaMultiplier,
+        fat: macros.fat * usdaMultiplier,
+        fiber: macros.fiber * usdaMultiplier,
+        sugar: (macros.sugar ?? 0) * usdaMultiplier,
+        sodium: (macros.sodium ?? 0) * usdaMultiplier,
+        saturated_fat: (macros.saturated_fat ?? 0) * usdaMultiplier,
+        cholesterol: (macros.cholesterol ?? 0) * usdaMultiplier,
+      };
+    }
   }
   
   // Priority 4: Return null - let AI estimate
-  return null;
+  if (!rawMacros) {
+    return null;
+  }
+  
+  // Apply physics validation if enabled
+  if (applyPhysics && inputUnit) {
+    const validation = validateMacrosAgainstPhysics(ingredientText, quantity, inputUnit, rawMacros);
+    if (!validation.isValid) {
+      console.log(`[Physics] Corrected ${ingredientText}:`, validation.violations);
+      return validation.correctedMacros;
+    }
+  }
+  
+  return rawMacros;
+}
+
+/**
+ * Calculate macros with full physics validation details
+ * Use this when you need to report violations to the user
+ */
+export function calculateIngredientMacrosWithValidation(
+  ingredientText: string,
+  cache: DbIngredientNutrition[]
+): { macros: IngredientMacros | null; validation: PhysicsValidationResult | null } {
+  const rawMacros = calculateIngredientMacros(ingredientText, cache, { applyPhysicsValidation: false });
+  
+  if (!rawMacros) {
+    return { macros: null, validation: null };
+  }
+  
+  const quantity = parseIngredientQuantity(ingredientText);
+  const inputUnit = parseIngredientUnit(ingredientText);
+  
+  if (inputUnit) {
+    const validation = validateMacrosAgainstPhysics(ingredientText, quantity, inputUnit, rawMacros);
+    return { 
+      macros: validation.correctedMacros, 
+      validation 
+    };
+  }
+  
+  return { macros: rawMacros, validation: null };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
