@@ -2581,6 +2581,8 @@ ${transcript}`;
         : recipe.ingredients;
 
       if (Array.isArray(sourceIngredients) && sourceIngredients.length > 0) {
+        // NOTE: recipe_ingredients table only has: id, recipe_id, name, quantity, unit, normalized_name, aisle, order_index, section
+        // Do NOT include nutrition columns (calories, protein_g, etc.) - they don't exist in this table!
         const validIngredients = sourceIngredients
           .filter((ing: any) => ing && typeof ing.name === 'string' && ing.name.trim())
           .slice(0, 100)
@@ -2591,18 +2593,17 @@ ${transcript}`;
             unit: typeof ing.unit === 'string' ? ing.unit.trim().substring(0, 50) : null,
             order_index: idx,
             section: typeof ing.section === 'string' ? ing.section.trim().substring(0, 50) : 'Main',
-            calories: ing.nutrition?.calories ?? null,
-            protein_g: ing.nutrition?.protein_g ?? null,
-            carbs_g: ing.nutrition?.carbs_g ?? null,
-            fat_g: ing.nutrition?.fat_g ?? null,
-            fiber_g: ing.nutrition?.fiber_g ?? null,
-            sugar_g: ing.nutrition?.sugar_g ?? null,
-            sodium_mg: ing.nutrition?.sodium_mg ?? null,
-            source_type: ing.source === 'scan' ? 'scan' : 'ai',
+            normalized_name: typeof ing.normalized_name === 'string' ? ing.normalized_name.trim().substring(0, 200) : null,
+            aisle: typeof ing.aisle === 'string' ? ing.aisle.trim().substring(0, 50) : null,
           }));
         
         if (validIngredients.length > 0) {
-          relatedPromises.push(supabase.from('recipe_ingredients').insert(validIngredients));
+          const { error: ingError } = await supabase.from('recipe_ingredients').insert(validIngredients);
+          if (ingError) {
+            console.error(`Error inserting ingredients for "${sanitizedTitle}":`, ingError);
+          } else {
+            console.log(`Inserted ${validIngredients.length} ingredients for "${sanitizedTitle}"`);
+          }
         }
       }
 
