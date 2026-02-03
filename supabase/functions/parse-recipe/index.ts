@@ -2184,11 +2184,23 @@ CRITICAL RULES:
       const extractedText = await extractTextFromDocx(content);
       console.log(`Extracted text preview: ${extractedText.substring(0, 500)}...`);
       
-      promptText = `${systemPrompt}\n\nExtract ALL recipes from the following Word document content. 
-NOTE: This is extracted text from a DOCX file, so ingredients may appear as bullet lists with dashes (-) 
-and sections may have headers in ALL CAPS or bold formatting (lost in extraction). 
-Look for sections like "Ingredients:", "INGREDIENTS", "Ingredients list" followed by items starting with dashes.
-Extract EVERY ingredient you find - do NOT skip any ingredients even if formatting is unclear.\n\n${jsonFormat}\n\nDocument content:\n${extractedText}`;
+      promptText = `${systemPrompt}\n\nExtract ALL recipes from the following Word document content.
+
+CRITICAL - INGREDIENTS EXTRACTION FROM DOCX:
+This is text extracted from a DOCX file. Ingredients will appear in these formats:
+1. After an "Ingredients:" or "=== INGREDIENTS SECTION ===" header, followed by items starting with "- "
+2. Any line starting with "- " followed by an ingredient name and quantity should be treated as an ingredient
+3. Look for patterns like:
+   - 1 can of crushed tomatoes
+   - 2 tablespoons of tomato paste
+   - 3 onions
+4. DO NOT skip any items that look like ingredients just because formatting is unclear
+5. Extract EVERY single item starting with "-" that appears in the ingredients section
+
+${jsonFormat}
+
+Document content:
+${extractedText}`;
     } else if (isPdf && content) {
       // For PDFs, extract base64 and send to Gemini
       modelName = 'gemini-2.0-flash';
