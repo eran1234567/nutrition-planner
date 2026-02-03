@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { groupAndOrderIngredients } from '@/lib/neutron/ingredientGrouping';
+import { formatQuantityWithFractions } from '@/lib/formatQuantity';
+
 interface Ingredient {
   name: string;
   quantity: number | null;
@@ -24,33 +26,6 @@ interface CookingModeProps {
   steps: Step[];
   servingMultiplier?: number;
   onClose: () => void;
-}
-
-// Helper to format quantities with fractions
-function formatQuantity(quantity: number): string {
-  if (quantity === 0) return '';
-  
-  const whole = Math.floor(quantity);
-  const decimal = quantity - whole;
-  
-  const fractions: Record<string, string> = {
-    '0.25': '¼',
-    '0.33': '⅓',
-    '0.5': '½',
-    '0.67': '⅔',
-    '0.75': '¾',
-    '0.125': '⅛',
-    '0.375': '⅜',
-    '0.625': '⅝',
-    '0.875': '⅞',
-  };
-  
-  const decimalStr = decimal.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
-  const fraction = fractions[decimalStr] || (decimal > 0 ? ` ${decimal.toFixed(1)}` : '');
-  
-  if (whole === 0 && fraction) return fraction.trim();
-  if (fraction) return `${whole}${fraction}`;
-  return whole.toString();
 }
 
 // Extract video ID from YouTube URL
@@ -229,7 +204,7 @@ export function CookingMode({
                       <li key={idx} className="flex items-center gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                         <span>
-                          {ing.quantity && `${formatQuantity(ing.quantity * servingMultiplier)} `}
+                          {ing.quantity && `${formatQuantityWithFractions(ing.quantity * servingMultiplier)} `}
                           {ing.unit && `${ing.unit} `}
                           {ing.name}
                         </span>
@@ -297,7 +272,7 @@ export function CookingMode({
                           <div className="flex flex-wrap gap-2">
                             {sectionIngredients.map((ing, i) => (
                               <span key={i} className="text-xs px-2 py-1 bg-background rounded-full border">
-                                {ing.quantity && `${formatQuantity(ing.quantity * servingMultiplier)} `}
+                                {ing.quantity && `${formatQuantityWithFractions(ing.quantity * servingMultiplier)} `}
                                 {ing.unit && `${ing.unit} `}
                                 {ing.name}
                               </span>
