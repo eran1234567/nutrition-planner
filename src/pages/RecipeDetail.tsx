@@ -47,6 +47,7 @@ import {
   type RawNutritionData 
 } from '@/lib/neutron';
 import { generateServingLabel, isGenericServingSize } from '@/lib/servingLabel';
+import { formatQuantityWithFractions, formatIngredientDisplay } from '@/lib/formatQuantity';
 
 // Diet badge config with colors and icons
 const DIET_BADGES: Record<string, { label: string; icon: React.ReactNode; bgClass: string; textClass: string }> = {
@@ -314,36 +315,9 @@ export default function RecipeDetail() {
     return CUISINE_BADGES[recipe.cuisine.toLowerCase()] || null;
   }, [recipe?.cuisine]);
 
-  // Format quantity for display (remove trailing zeros)
-  const formatQuantity = (qty: number | null) => {
-    if (qty === null) return '';
-    const formatted = parseFloat(qty.toFixed(2));
-    return formatted.toString();
-  };
-
-  // Format ingredient display with quantity and unit
-  // Handles compound units like "6 oz fillets" -> "4 fillets (6 oz each)"
-  const formatIngredient = (qty: number | null, unit: string | null, name: string) => {
-    if (qty === null && !unit) return name;
-    
-    const formattedQty = formatQuantity(qty);
-    const unitStr = unit || '';
-    
-    // Check for compound units like "6 oz fillets" or "12 oz can"
-    const compoundUnitMatch = unitStr.match(/^(\d+\s*(?:oz|g|lb|ml|fl oz))\s+(.+)$/i);
-    
-    if (compoundUnitMatch && qty !== null) {
-      const [, size, baseUnit] = compoundUnitMatch;
-      return `${formattedQty} ${baseUnit} (${size} each)`;
-    }
-    
-    // Standard format: "2 cups milk"
-    const parts: string[] = [];
-    if (formattedQty) parts.push(formattedQty);
-    if (unitStr) parts.push(unitStr);
-    
-    return parts.length > 0 ? `${parts.join(' ')} ${name}` : name;
-  };
+  // Use shared formatters from Neutron lib
+  const formatIngredient = (qty: number | null, unit: string | null, name: string) => 
+    formatIngredientDisplay(qty, unit, name);
 
   const handleAddToPlan = () => {
     setShowAddToPlanModal(true);
@@ -1069,7 +1043,7 @@ export default function RecipeDetail() {
                                   <div className="flex flex-wrap gap-2">
                                     {sectionIngredients.map((ing, i) => (
                                       <span key={i} className="text-xs px-2 py-1 bg-background rounded-full border">
-                                        {ing.quantity && `${formatQuantity(ing.quantity)} `}
+                                        {ing.quantity && `${formatQuantityWithFractions(ing.quantity)} `}
                                         {ing.unit && `${ing.unit} `}
                                         {ing.name}
                                       </span>
