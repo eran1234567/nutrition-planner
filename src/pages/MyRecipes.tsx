@@ -681,8 +681,8 @@ const MyRecipes = () => {
             <span className="text-sm font-medium text-foreground">
               {t('myRecipes.link', 'Link')}
             </span>
-            <span className="text-xs text-muted-foreground mt-0.5">
-              {t('myRecipes.linkHint', 'YouTube, URLs')}
+            <span className="text-xs text-muted-foreground mt-0.5 text-center">
+              {t('myRecipes.linkHint', 'YouTube, IG, URLs')}
             </span>
           </motion.button>
         </div>
