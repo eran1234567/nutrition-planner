@@ -173,41 +173,30 @@ export default function CreateRecipe() {
       const fullContent = buildRecipeContent();
       const isImage = !!imagePreview && !recipeText.trim();
 
-      // Call parse-recipe edge function
-      const { data: session } = await supabase.auth.getSession();
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-recipe`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.session?.access_token}`,
-          },
-          body: JSON.stringify({
-            uploadId: upload.id,
-            content: isImage ? imagePreview : fullContent,
-            isImage,
-            structured_ingredients: inputMode === 'detailed' 
-              ? ingredients.map(ing => ({
+      // Call backend parser
+      const { data: result, error: fnError } = await supabase.functions.invoke('parse-recipe', {
+        body: {
+          uploadId: upload.id,
+          content: isImage ? imagePreview : fullContent,
+          isImage,
+          structured_ingredients:
+            inputMode === 'detailed'
+              ? ingredients.map((ing) => ({
                   name: ing.name,
                   quantity: ing.quantity,
                   unit: ing.unit,
                   nutrition: ing.nutrition,
-                  source: 'manual_entry'
+                  source: 'manual_entry',
                 }))
               : undefined,
-          }),
-        }
-      );
+        },
+      });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to parse recipe');
+      if (fnError) {
+        throw new Error(fnError.message || 'Failed to parse recipe');
       }
 
-      const result = await response.json();
-
-      if (!result.success || !result.recipes?.length) {
+      if (!result?.success || !result?.recipes?.length) {
         throw new Error(result.error || 'Could not create recipe');
       }
 
