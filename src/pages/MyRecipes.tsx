@@ -628,8 +628,8 @@ const MyRecipes = () => {
 
       {/* Content */}
       <div className="px-4 py-6 space-y-6">
-        {/* Upload Options - now includes Create */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* Upload Options - now includes Create and Add Link */}
+        <div className="grid grid-cols-4 gap-3">
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={() => setShowCreator(true)}
@@ -671,11 +671,25 @@ const MyRecipes = () => {
               {t('myRecipes.cameraHint', 'Snap a recipe')}
             </span>
           </motion.button>
+
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowLinkInput(true)}
+            className="flex flex-col items-center justify-center p-4 rounded-2xl border-2 border-dashed border-border bg-card hover:border-primary hover:bg-primary/5 transition-all"
+          >
+            <Link2 className="w-7 h-7 text-primary mb-2" />
+            <span className="text-sm font-medium text-foreground">
+              {t('myRecipes.link', 'Link')}
+            </span>
+            <span className="text-xs text-muted-foreground mt-0.5">
+              {t('myRecipes.linkHint', 'YouTube, URLs')}
+            </span>
+          </motion.button>
         </div>
 
-        {/* Add Link Button */}
+        {/* Link Input (expanded when clicked) */}
         <AnimatePresence mode="wait">
-          {showLinkInput ? (
+          {showLinkInput && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
@@ -713,20 +727,6 @@ const MyRecipes = () => {
               <p className="text-xs text-muted-foreground">
                 {t('myRecipes.linkHelp', 'Paste a YouTube video, recipe blog, or any URL with recipes')}
               </p>
-            </motion.div>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => setShowLinkInput(true)}
-              >
-                <Link2 className="w-4 h-4 mr-2" />
-                {t('myRecipes.addLink', 'Add Link (YouTube, Instagram, websites)')}
-              </Button>
             </motion.div>
           )}
         </AnimatePresence>
