@@ -259,6 +259,17 @@ export const USDA_REFERENCES: Record<string, IngredientMacros> = {
   'onion': { calories: 44, protein: 1.2, carbs: 10, fat: 0.1, fiber: 1.4, cholesterol: 0, sodium: 4 },
   'garlic': { calories: 4, protein: 0.2, carbs: 1, fat: 0, fiber: 0.1, cholesterol: 0, sodium: 1 },
   'spinach': { calories: 7, protein: 0.9, carbs: 1.1, fat: 0.1, fiber: 0.7, cholesterol: 0, sodium: 24 },
+  
+  // Pasta and grains (per 1 cup cooked or standard serving)
+  'pasta': { calories: 221, protein: 8, carbs: 43, fat: 1.3, fiber: 2.5, cholesterol: 0, sodium: 1 },
+  'spaghetti': { calories: 221, protein: 8, carbs: 43, fat: 1.3, fiber: 2.5, cholesterol: 0, sodium: 1 },
+  'penne': { calories: 221, protein: 8, carbs: 43, fat: 1.3, fiber: 2.5, cholesterol: 0, sodium: 1 },
+  'fettuccine': { calories: 221, protein: 8, carbs: 43, fat: 1.3, fiber: 2.5, cholesterol: 0, sodium: 1 },
+  'macaroni': { calories: 221, protein: 8, carbs: 43, fat: 1.3, fiber: 2.5, cholesterol: 0, sodium: 1 },
+  'noodles': { calories: 221, protein: 8, carbs: 43, fat: 1.3, fiber: 2.5, cholesterol: 0, sodium: 1 },
+  'rice': { calories: 205, protein: 4.3, carbs: 45, fat: 0.4, fiber: 0.6, cholesterol: 0, sodium: 1 },
+  'white rice': { calories: 205, protein: 4.3, carbs: 45, fat: 0.4, fiber: 0.6, cholesterol: 0, sodium: 1 },
+  'brown rice': { calories: 216, protein: 5, carbs: 45, fat: 1.8, fiber: 3.5, cholesterol: 0, sodium: 10 },
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -441,6 +452,17 @@ const WEIGHT_TO_GRAMS: Record<string, number> = {
   'grams': 1,
 };
 
+// Volume units that map to "cups" for serving calculations
+const VOLUME_UNITS = ['cup', 'cups', 'c'];
+
+// Ambiguous units that should default to standard servings (e.g., "1 package pasta" = ~8 cups cooked)
+const PACKAGE_UNITS: Record<string, number> = {
+  'package': 8,      // 1 package = ~8 cups cooked (1 lb dry)
+  'pkg': 8,
+  'box': 8,
+  'bag': 8,
+};
+
 /**
  * Parse ingredient quantity and unit from text
  */
@@ -460,26 +482,67 @@ export function parseIngredientQuantity(text: string): number {
 }
 
 /**
- * Parse unit from ingredient text
+ * Parse unit from ingredient text (weight, volume, or package units)
  */
 export function parseIngredientUnit(text: string): string | null {
   const lowerText = text.toLowerCase();
-  // Match pattern: "4 lbs ...", "3 oz ...", "500 g ..."
-  const unitMatch = lowerText.match(/^\d+\.?\d*\s*(lb|lbs|pound|pounds|oz|ounce|ounces|kg|kilogram|kilograms|g|gram|grams)\b/i);
-  return unitMatch ? unitMatch[1].toLowerCase() : null;
+  // Match weight units: "4 lbs ...", "3 oz ...", "500 g ..."
+  const weightMatch = lowerText.match(/^\d+\.?\d*\s*(lb|lbs|pound|pounds|oz|ounce|ounces|kg|kilogram|kilograms|g|gram|grams)\b/i);
+  if (weightMatch) return weightMatch[1].toLowerCase();
+  
+  // Match volume units: "2 cups ...", "1.5 cup ..."
+  const volumeMatch = lowerText.match(/^\d+\.?\d*\s*(cups?|c)\b/i);
+  if (volumeMatch) return volumeMatch[1].toLowerCase();
+  
+  // Match package units: "1 package ...", "1 box ..."
+  const packageMatch = lowerText.match(/^\d+\.?\d*\s*(package|pkg|box|bag)\b/i);
+  if (packageMatch) return packageMatch[1].toLowerCase();
+  
+  return null;
 }
 
 /**
- * Calculate the effective multiplier for weight-based ingredients
- * when the database reference uses a different unit (e.g., "100g")
+ * Calculate the effective multiplier for weight, volume, or package-based ingredients
+ * when the database reference uses a different unit (e.g., "100g" or "1 cup")
  */
 export function calculateWeightMultiplier(
   quantity: number,
   inputUnit: string | null,
   servingDescription: string
 ): number {
-  // If no weight unit detected, use quantity as-is (for count-based items like "3 eggs")
-  if (!inputUnit || !WEIGHT_TO_GRAMS[inputUnit]) {
+  if (!inputUnit) {
+    return quantity;
+  }
+  
+  const lowerUnit = inputUnit.toLowerCase();
+  
+  // Handle package units (1 package = 8 cups worth)
+  if (PACKAGE_UNITS[lowerUnit] !== undefined) {
+    // Check if reference is cup-based
+    const refCupMatch = servingDescription.match(/(\d+\.?\d*)\s*cup/i);
+    if (refCupMatch) {
+      const refCups = parseFloat(refCupMatch[1]);
+      const totalCups = quantity * PACKAGE_UNITS[lowerUnit];
+      return totalCups / refCups;
+    }
+    // Fallback: multiply by package servings
+    return quantity * PACKAGE_UNITS[lowerUnit];
+  }
+  
+  // Handle volume units (cups)
+  if (VOLUME_UNITS.includes(lowerUnit)) {
+    // If reference is also cup-based, calculate ratio
+    const refCupMatch = servingDescription.match(/(\d+\.?\d*)\s*cup/i);
+    if (refCupMatch) {
+      const refCups = parseFloat(refCupMatch[1]);
+      return quantity / refCups;
+    }
+    // Direct multiplier for cup-based inputs
+    return quantity;
+  }
+  
+  // Handle weight units
+  if (!WEIGHT_TO_GRAMS[lowerUnit]) {
     return quantity;
   }
   
@@ -491,7 +554,7 @@ export function calculateWeightMultiplier(
   }
   
   const refGrams = parseFloat(refGramsMatch[1]);
-  const inputGrams = quantity * WEIGHT_TO_GRAMS[inputUnit];
+  const inputGrams = quantity * WEIGHT_TO_GRAMS[lowerUnit];
   
   // Return how many "servings" of the reference this represents
   return inputGrams / refGrams;
