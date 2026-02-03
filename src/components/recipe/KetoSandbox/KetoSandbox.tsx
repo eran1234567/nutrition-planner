@@ -124,29 +124,16 @@ export function KetoSandbox({
   // Recalculate nutrition via edge function
   const recalculateNutrition = useCallback(async () => {
     try {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session?.session?.access_token) return;
-      
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/recalculate-nutrition`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.session.access_token}`,
-          },
-          body: JSON.stringify({ recipeId }),
-        }
-      );
+      const { data, error } = await supabase.functions.invoke('recalculate-nutrition', {
+        body: { recipeId },
+      });
 
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        console.error('Nutrition recalculation failed:', res.status, text);
+      if (error) {
+        console.error('Nutrition recalculation failed:', error);
         return;
       }
 
-      const json = await res.json().catch(() => null);
-      return (json?.nutrition ?? null) as any;
+      return (data?.nutrition ?? null) as any;
     } catch (error) {
       console.error('Nutrition recalculation failed:', error);
     }

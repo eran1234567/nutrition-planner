@@ -104,29 +104,14 @@ export function useYouTubeImport(): UseYouTubeImportReturn {
       isProcessingBatch.current = true;
       
       try {
-        const { data: session } = await supabase.auth.getSession();
-        if (!session?.session?.access_token) {
-          isProcessingBatch.current = false;
-          return;
-        }
+        const { error } = await supabase.functions.invoke('process-youtube-channel', {
+          body: {
+            action: 'process-batch',
+            jobId: activeJob.id,
+          },
+        });
 
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-youtube-channel`,
-          {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${session.session.access_token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              action: 'process-batch',
-              jobId: activeJob.id,
-            }),
-          }
-        );
-
-        if (!response.ok) {
-          const error = await response.json();
+        if (error) {
           console.error('Batch processing error:', error);
         }
       } catch (err) {
@@ -178,25 +163,15 @@ export function useYouTubeImport(): UseYouTubeImportReturn {
         throw new Error('Please sign in to import channels');
       }
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-youtube-channel`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            action: 'start',
-            channelUrl,
-          }),
-        }
-      );
+      const { data: result, error } = await supabase.functions.invoke('process-youtube-channel', {
+        body: {
+          action: 'start',
+          channelUrl,
+        },
+      });
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to start import');
+      if (error) {
+        throw new Error(error.message || 'Failed to start import');
       }
 
       // Status is shown inline - no toast needed
@@ -205,7 +180,7 @@ export function useYouTubeImport(): UseYouTubeImportReturn {
       const { data: job } = await supabase
         .from('youtube_import_jobs')
         .select('*')
-        .eq('id', result.jobId)
+        .eq('id', (result as any).jobId)
         .single();
 
       if (job) {

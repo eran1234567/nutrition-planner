@@ -272,33 +272,18 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
     } : null;
     
     try {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session?.session?.access_token) {
-        throw new Error('Not authenticated');
+      const { data: result, error } = await supabase.functions.invoke('parse-recipe', {
+        body: {
+          content,
+          isImage: false,
+          nutritionOnly: true,
+          originalNutrition, // Pass original nutrition for context
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to calculate nutrition');
       }
-      
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-recipe`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.session.access_token}`,
-          },
-          body: JSON.stringify({
-            content,
-            isImage: false,
-            nutritionOnly: true,
-            originalNutrition, // Pass original nutrition for context
-          }),
-        }
-      );
-      
-      if (!response.ok) {
-        throw new Error('Failed to calculate nutrition');
-      }
-      
-      const result = await response.json();
       
       if (result.nutrition) {
         return {
@@ -345,39 +330,27 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
     serving_size?: string;
   } | null> => {
     try {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session?.session?.access_token) {
-        throw new Error('Not authenticated');
-      }
-
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/recalculate-nutrition`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.session.access_token}`,
-        },
-        body: JSON.stringify({ recipeId: recipe.id }),
+      const { data: json, error } = await supabase.functions.invoke('recalculate-nutrition', {
+        body: { recipeId: recipe.id },
       });
 
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        throw new Error(`Deterministic recalculation failed: ${res.status} ${text}`);
+      if (error) {
+        throw new Error(`Deterministic recalculation failed: ${error.message}`);
       }
 
-      const json = await res.json().catch(() => null);
       if (!json?.nutrition) return null;
 
       return {
         nutrition: {
-          calories: Math.round(json.nutrition.calories || 0),
-          protein_g: Math.round(json.nutrition.protein_g || 0),
-          carbs_g: Math.round(json.nutrition.carbs_g || 0),
-          fat_g: Math.round(json.nutrition.fat_g || 0),
-          fiber_g: Math.round(json.nutrition.fiber_g || 0),
-          sugar_g: Math.round(json.nutrition.sugar_g || 0),
-          sodium_mg: Math.round(json.nutrition.sodium_mg || 0),
-          saturated_fat_g: Math.round(json.nutrition.saturated_fat_g || 0),
-          cholesterol_mg: Math.round(json.nutrition.cholesterol_mg || 0),
+          calories: Math.round(json.nutrition.calories ?? 0),
+          protein_g: Math.round(json.nutrition.protein_g ?? 0),
+          carbs_g: Math.round(json.nutrition.carbs_g ?? 0),
+          fat_g: Math.round(json.nutrition.fat_g ?? 0),
+          fiber_g: Math.round(json.nutrition.fiber_g ?? 0),
+          sugar_g: Math.round(json.nutrition.sugar_g ?? 0),
+          sodium_mg: Math.round(json.nutrition.sodium_mg ?? 0),
+          saturated_fat_g: Math.round(json.nutrition.saturated_fat_g ?? 0),
+          cholesterol_mg: Math.round(json.nutrition.cholesterol_mg ?? 0),
         },
         serving_size: undefined,
       };
