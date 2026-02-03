@@ -570,36 +570,42 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
         if (aiResult) {
           const { nutrition: rawNutrition, serving_size: rawServingSize } = aiResult;
 
-          // Determine if we should clamp (only adding, no modifications)
+          // Determine if we should clamp (ONLY when adding NEW ingredient ROWS, not modifying quantities)
           const prevById = new Map<string, any>(prevIngredients.map((i: any) => [i.id, i]));
           const activeById = new Map<string, EditableIngredient>(
             activeIngredients.filter(i => !!i.id).map(i => [i.id as string, i])
           );
 
-          const didAddOrIncrease = activeIngredients.some((ing) => {
+          // Check if ONLY new ingredient rows were added (no quantity/name changes to existing)
+          const didAddNewRows = activeIngredients.some((ing) => {
             if (!ing.name.trim()) return false;
-            if (!ing.id) return true; // new ingredient row
+            return !ing.id; // truly new ingredient row (no id yet)
+          });
+
+          // Check if any existing ingredient was modified (quantity or name changed)
+          const didModifyExisting = activeIngredients.some((ing) => {
+            if (!ing.name.trim() || !ing.id) return false;
             const prev = prevById.get(ing.id);
-            if (!prev) return true;
+            if (!prev) return false;
+            // Name changed?
+            if (prev.name.trim().toLowerCase() !== ing.name.trim().toLowerCase()) return true;
+            // Quantity changed?
             const prevQty = typeof prev.quantity === 'number' ? prev.quantity : Number(prev.quantity);
             const nextQty = Number.parseFloat(ing.quantity);
-            return Number.isFinite(prevQty) && Number.isFinite(nextQty) && nextQty > prevQty + 1e-6;
+            if (Math.abs((prevQty || 0) - (nextQty || 0)) > 1e-6) return true;
+            return false;
           });
 
-          const didRemoveOrDecrease = prevIngredients.some((prev: any) => {
-            const next = activeById.get(prev.id);
-            if (!next) return true; // removed
-            const prevName = (prev.name || '').trim().toLowerCase();
-            const nextName = (next.name || '').trim().toLowerCase();
-            if (prevName !== nextName) return true; // ingredient was effectively replaced
-            const prevQty = typeof prev.quantity === 'number' ? prev.quantity : Number(prev.quantity);
-            const nextQty = Number.parseFloat(next.quantity);
-            return Number.isFinite(prevQty) && Number.isFinite(nextQty) && nextQty < prevQty - 1e-6;
+          const didRemoveRows = prevIngredients.some((prev: any) => {
+            return !activeById.has(prev.id); // row was deleted
           });
 
-          // Only clamp nutrition when PURELY adding (no removals, no decreases, no name changes)
+          // Only clamp when PURELY adding new ingredient rows (not modifying existing quantities/names)
+          // If any existing ingredient was modified OR rows were removed, do NOT clamp
+          const shouldClamp = didAddNewRows && !didModifyExisting && !didRemoveRows && recipe.nutrition;
+          
           const newNutrition = { ...rawNutrition };
-          if (didAddOrIncrease && !didRemoveOrDecrease && recipe.nutrition) {
+          if (shouldClamp) {
             const prevCals = Math.round((recipe.nutrition.calories ?? 0) as number);
             const prevP = Math.round((recipe.nutrition.protein_g ?? 0) as number);
             const prevC = Math.round((recipe.nutrition.carbs_g ?? 0) as number);

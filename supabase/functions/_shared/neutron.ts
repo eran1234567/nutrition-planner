@@ -193,11 +193,15 @@ export const USDA_REFERENCES: Record<string, IngredientMacros> = {
   'egg_yolk': { calories: 55, protein: 2.7, carbs: 0.6, fat: 4.5, fiber: 0, cholesterol: 184, sodium: 8 },
   'egg_white': { calories: 17, protein: 3.6, carbs: 0.2, fat: 0, fiber: 0, cholesterol: 0, sodium: 55 },
   
-  // Avocado - must match plain "avocado" for deterministic lookups
-  'avocado': { calories: 160, protein: 2, carbs: 8.5, fat: 14.7, fiber: 6.7, cholesterol: 0, sodium: 7 },
-  'avocados': { calories: 160, protein: 2, carbs: 8.5, fat: 14.7, fiber: 6.7, cholesterol: 0, sodium: 7 },
-  'avocado_half': { calories: 160, protein: 2, carbs: 8.5, fat: 14.7, fiber: 6.7, cholesterol: 0, sodium: 7 },
-  'avocado_full': { calories: 322, protein: 4, carbs: 17, fat: 29, fiber: 13, cholesterol: 0, sodium: 14 },
+  // Avocado - per whole medium avocado (136g edible) for typical recipe unit matching
+  // USDA: 160 cal, 2g protein, 8.5g carbs, 14.7g fat, 6.7g fiber per 100g
+  // 136g medium: 160*1.36 = 218 cal, 2*1.36 = 2.7g protein, 8.5*1.36 = 11.6g carbs, 14.7*1.36 = 20g fat, 6.7*1.36 = 9.1g fiber
+  'avocado': { calories: 218, protein: 2.7, carbs: 11.6, fat: 20, fiber: 9.1, cholesterol: 0, sodium: 10 },
+  'avocados': { calories: 218, protein: 2.7, carbs: 11.6, fat: 20, fiber: 9.1, cholesterol: 0, sodium: 10 },
+  'medium avocado': { calories: 218, protein: 2.7, carbs: 11.6, fat: 20, fiber: 9.1, cholesterol: 0, sodium: 10 },
+  'avocado_half': { calories: 109, protein: 1.3, carbs: 5.8, fat: 10, fiber: 4.6, cholesterol: 0, sodium: 5 },
+  'half avocado': { calories: 109, protein: 1.3, carbs: 5.8, fat: 10, fiber: 4.6, cholesterol: 0, sodium: 5 },
+  'avocado_full': { calories: 218, protein: 2.7, carbs: 11.6, fat: 20, fiber: 9.1, cholesterol: 0, sodium: 10 },
   
   // Bread - generic bread for when specific type isn't mentioned
   'bread': { calories: 79, protein: 2.7, carbs: 15, fat: 1, fiber: 0.6, cholesterol: 0, sodium: 150 },
