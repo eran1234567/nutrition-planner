@@ -426,10 +426,41 @@ async function extractTextFromDocx(base64Content: string): Promise<string> {
     
     console.log(`[DOCX] Extracted ${text.length} characters from DOCX`);
     
+    // Detect and enhance ingredient sections
+    // Look for "Ingredients" section headers and make them explicit
+    text = text.replace(
+      /(?:^|\n)(ingredients|ingredents|ingridients)[\s:]*\n/gi,
+      '\n\n=== INGREDIENTS SECTION ===\n'
+    );
+    
+    // Look for instruction section headers
+    text = text.replace(
+      /(?:^|\n)(instructions?|directions?|steps?|making|preparation)[\s:]*\n/gi,
+      '\n\n=== INSTRUCTIONS SECTION ===\n'
+    );
+    
+    // Ensure bullet items are on their own lines with consistent formatting
+    // Split by newlines and process
+    const lines = text.split('\n');
+    const processedLines = lines.map(line => {
+      const trimmed = line.trim();
+      // If line starts with dash, bullet, or number-dot pattern, ensure it's properly formatted
+      if (/^[-•◦⁃]/.test(trimmed)) {
+        return '- ' + trimmed.replace(/^[-•◦⁃]\s*/, '');
+      }
+      if (/^\d+[\.\)]\s*/.test(trimmed)) {
+        return '- ' + trimmed.replace(/^\d+[\.\)]\s*/, '');
+      }
+      return trimmed;
+    });
+    
+    text = processedLines.join('\n');
+    
     if (text.length === 0) {
       throw new Error('No text content extracted from DOCX - document may be empty');
     }
     
+    console.log(`[DOCX] Processed text, final length: ${text.length}`);
     return text;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
