@@ -419,12 +419,14 @@ async function extractTextFromDocx(base64Content: string): Promise<string> {
       .replace(/&quot;/g, '"')
       .replace(/&apos;/g, "'")
       // Normalize bullet points and list markers to standard format
-      .replace(/[\u2022\u2023\u25E6\u2043\u2013\u2014\u2010-\u2015◦•]/g, '-') // Convert various bullet types to dash
+      // Include: ⁃ (U+2043), • (U+2022), ◦ (U+25E6), - (hyphens), * (asterisks), etc.
+      .replace(/[\u2022\u2023\u25E6\u2043\u2013\u2014\u2010-\u2015◦•⁃\-*]/g, '-') // Convert ALL bullet types to dash
       // Clean up whitespace but preserve intentional line breaks
       .replace(/\n\s*\n/g, '\n\n')
       .trim();
     
     console.log(`[DOCX] Extracted ${text.length} characters from DOCX`);
+    console.log(`[DOCX] Text preview (first 1000 chars):\n${text.substring(0, 1000)}`);
     
     // Detect and enhance ingredient sections
     // Look for "Ingredients" section headers and make them explicit
