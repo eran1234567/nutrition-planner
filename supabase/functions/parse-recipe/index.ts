@@ -2013,6 +2013,42 @@ For recipes with distinct parts (e.g., main dish + marinade + sauce + dressing):
 - This enables the UI to group and display ingredients under clear headings
 
 ═══════════════════════════════════════════════════════════════
+INGREDIENT QUANTITY PARSING - LITERAL VALUES ONLY (CRITICAL!)
+═══════════════════════════════════════════════════════════════
+⚠️ NEVER INFER MULTIPLIERS FROM OTHER INGREDIENTS! ⚠️
+
+Each ingredient line is a LITERAL, INDEPENDENT value. Do NOT scale or multiply
+ingredient quantities based on other ingredients in the recipe.
+
+WRONG BEHAVIOR (DO NOT DO THIS!):
+- Seeing "3 lbs ground beef" and then tripling "1 tbsp tomato paste" to "3 tbsp"
+- Inferring that "3 lbs" means "3x the recipe" and multiplying everything else
+- Scaling soup powder, paste, or seasonings based on protein weight
+
+CORRECT BEHAVIOR:
+- "3 lbs ground beef" → Extract as: quantity=3, unit="lbs", name="ground beef"
+- "1 tbsp tomato paste" → Extract as: quantity=1, unit="tbsp", name="tomato paste"
+- "2 tbsp chicken soup powder" → Extract as: quantity=2, unit="tbsp", name="chicken soup powder"
+
+Each line is parsed INDEPENDENTLY. The quantity shown IS the quantity to use.
+The protein weight (e.g., "3 lbs beef") does NOT imply a multiplier for other items.
+
+ONLY multiply ingredients when:
+1. The user EXPLICITLY asks to "double", "triple", or "scale up" the recipe
+2. The recipe text says "for X servings, multiply by Y"
+3. The source explicitly states a multiplier
+
+If the user input shows:
+  - 3 lbs ground beef
+  - 1 tbsp tomato paste
+  - 2 tbsp chicken bouillon
+
+Then your output MUST be:
+  - ground beef: 3 lbs (NOT 1 lb × 3)
+  - tomato paste: 1 tbsp (NOT 3 tbsp!)
+  - chicken bouillon: 2 tbsp (NOT 6 tbsp!)
+
+═══════════════════════════════════════════════════════════════
 EXTERNAL CONTENT INGESTION (URLs, images, documents)
 ═══════════════════════════════════════════════════════════════
 If extracting from external content:
@@ -2020,6 +2056,8 @@ If extracting from external content:
 - ⚠️ DEDUPLICATION IS CRITICAL: Each ingredient should appear EXACTLY ONCE in the final array
   - If the same ingredient is mentioned multiple times, consolidate into ONE entry
   - If quantities vary, use the quantity from the INGREDIENTS SECTION
+- ⚠️ LITERAL QUANTITIES: Use the EXACT quantity shown for each ingredient line
+  - Do NOT infer multipliers from protein weights or other ingredients
 - Apply SMART ESTIMATION for any vague or missing measurements
 - Group ingredients by section if recipe has multiple parts
 - Reconstruct missing macros based on ingredients if unavoidable
@@ -2209,6 +2247,18 @@ Documents often have TWO DISTINCT SECTIONS:
 - Example: "Add 1 can of crushed tomatoes to the pot" - This is an INSTRUCTION, not an ingredient
 - Example: "Add salt, pepper, paprika to the beef" - This REFERS to ingredients, don't add new ones
 - Sections like "Making the Sauce:", "Preparing the Meat:", "Assembly:" are INSTRUCTIONS, not ingredient lists
+
+═══════════════════════════════════════════════════════════════
+LITERAL QUANTITIES - NO MULTIPLIER INFERENCE (CRITICAL!)
+═══════════════════════════════════════════════════════════════
+⚠️ NEVER INFER MULTIPLIERS FROM PROTEIN WEIGHT OR OTHER INGREDIENTS! ⚠️
+
+Each ingredient line is LITERAL and INDEPENDENT. Extract the EXACT quantity shown.
+
+WRONG: Seeing "3 lbs beef" then tripling "1 tbsp tomato paste" to "3 tbsp"
+RIGHT: "3 lbs beef" = 3 lbs, "1 tbsp tomato paste" = 1 tbsp (NO scaling!)
+
+The protein weight does NOT imply a recipe multiplier. Parse each line as-is.
 
 ═══════════════════════════════════════════════════════════════
 DEDUPLICATION RULES (CRITICAL)
