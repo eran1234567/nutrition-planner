@@ -325,6 +325,67 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
       return fallbackNutrition ? { nutrition: fallbackNutrition } : null;
     }
   };
+
+  /**
+   * Deterministic nutrition recalculation using backend logic.
+   * This avoids AI drift and ensures simple edits (e.g. 1 → 2 avocados) reliably update fat/fiber.
+   */
+  const calculateNutritionViaDeterministicRecalc = async (): Promise<{
+    nutrition: {
+      calories: number;
+      protein_g: number;
+      carbs_g: number;
+      fat_g: number;
+      fiber_g: number;
+      sugar_g: number;
+      sodium_mg: number;
+      saturated_fat_g: number;
+      cholesterol_mg: number;
+    };
+    serving_size?: string;
+  } | null> => {
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/recalculate-nutrition`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.session.access_token}`,
+        },
+        body: JSON.stringify({ recipeId: recipe.id }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`Deterministic recalculation failed: ${res.status} ${text}`);
+      }
+
+      const json = await res.json().catch(() => null);
+      if (!json?.nutrition) return null;
+
+      return {
+        nutrition: {
+          calories: Math.round(json.nutrition.calories || 0),
+          protein_g: Math.round(json.nutrition.protein_g || 0),
+          carbs_g: Math.round(json.nutrition.carbs_g || 0),
+          fat_g: Math.round(json.nutrition.fat_g || 0),
+          fiber_g: Math.round(json.nutrition.fiber_g || 0),
+          sugar_g: Math.round(json.nutrition.sugar_g || 0),
+          sodium_mg: Math.round(json.nutrition.sodium_mg || 0),
+          saturated_fat_g: Math.round(json.nutrition.saturated_fat_g || 0),
+          cholesterol_mg: Math.round(json.nutrition.cholesterol_mg || 0),
+        },
+        serving_size: undefined,
+      };
+    } catch (error) {
+      if (import.meta.env.DEV) console.warn('[RecipeEditor] Deterministic nutrition recalculation failed:', error);
+      return null;
+    }
+  };
   
   const calculateNutritionFallback = (activeIngredients: EditableIngredient[]) => {
     // Simple estimation as a fallback
@@ -529,8 +590,9 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
       
       // Only recalculate nutrition if ingredients or steps changed
       if (ingredientsChanged || stepsChanged) {
-        console.log('[RecipeEditor] Ingredients/steps changed - recalculating nutrition via AI');
-        const aiResult = await calculateNutritionViaAI(activeIngredients, activeSteps);
+        console.log('[RecipeEditor] Ingredients/steps changed - recalculating nutrition (deterministic first)');
+        const deterministicResult = await calculateNutritionViaDeterministicRecalc();
+        const aiResult = deterministicResult ?? await calculateNutritionViaAI(activeIngredients, activeSteps);
         
         if (aiResult) {
           const { nutrition: rawNutrition, serving_size: rawServingSize } = aiResult;
@@ -575,6 +637,7 @@ export function RecipeEditor({ recipe, title, description, onTitleChange, onDesc
             newNutrition.fat_g = Math.max(newNutrition.fat_g, prevF);
           }
 
+          // Deterministic recalc does not return serving_size; only apply if AI provided it.
           const newServingSize = (rawServingSize || '')
             .replace(/^\s*1\s*serving\s*=\s*/i, '')
             .trim();
