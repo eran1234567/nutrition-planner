@@ -549,35 +549,59 @@ export type Database = {
       recipe_ingredients: {
         Row: {
           aisle: string | null
+          calories: number | null
+          carbs_g: number | null
+          fat_g: number | null
+          fiber_g: number | null
           id: string
           name: string
           normalized_name: string | null
           order_index: number | null
+          protein_g: number | null
           quantity: number | null
           recipe_id: string
           section: string | null
+          sodium_mg: number | null
+          source_type: string | null
+          sugar_g: number | null
           unit: string | null
         }
         Insert: {
           aisle?: string | null
+          calories?: number | null
+          carbs_g?: number | null
+          fat_g?: number | null
+          fiber_g?: number | null
           id?: string
           name: string
           normalized_name?: string | null
           order_index?: number | null
+          protein_g?: number | null
           quantity?: number | null
           recipe_id: string
           section?: string | null
+          sodium_mg?: number | null
+          source_type?: string | null
+          sugar_g?: number | null
           unit?: string | null
         }
         Update: {
           aisle?: string | null
+          calories?: number | null
+          carbs_g?: number | null
+          fat_g?: number | null
+          fiber_g?: number | null
           id?: string
           name?: string
           normalized_name?: string | null
           order_index?: number | null
+          protein_g?: number | null
           quantity?: number | null
           recipe_id?: string
           section?: string | null
+          sodium_mg?: number | null
+          source_type?: string | null
+          sugar_g?: number | null
           unit?: string | null
         }
         Relationships: [
