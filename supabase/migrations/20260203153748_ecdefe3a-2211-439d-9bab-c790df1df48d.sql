@@ -1,0 +1,10 @@
+-- Add nutrition columns to recipe_ingredients table
+ALTER TABLE public.recipe_ingredients 
+ADD COLUMN IF NOT EXISTS calories INTEGER,
+ADD COLUMN IF NOT EXISTS protein_g DECIMAL(10,2),
+ADD COLUMN IF NOT EXISTS carbs_g DECIMAL(10,2),
+ADD COLUMN IF NOT EXISTS fat_g DECIMAL(10,2),
+ADD COLUMN IF NOT EXISTS fiber_g DECIMAL(10,2),
+ADD COLUMN IF NOT EXISTS sugar_g DECIMAL(10,2),
+ADD COLUMN IF NOT EXISTS sodium_mg DECIMAL(10,2),
+ADD COLUMN IF NOT EXISTS source_type TEXT DEFAULT 'ai';
