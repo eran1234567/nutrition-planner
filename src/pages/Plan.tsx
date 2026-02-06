@@ -12,25 +12,114 @@ import { MacroGapIndicator } from '@/components/plan/MacroGapIndicator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMealPlanStore, type MacroGapContext } from '@/stores/mealPlanStore';
 import { useUserData } from '@/hooks/useUserData';
-import { useGlobalRecipes } from '@/hooks/useGlobalRecipes';
+import { useGlobalRecipes, type GlobalRecipe } from '@/hooks/useGlobalRecipes';
 import { useMealPlanSync } from '@/hooks/useMealPlanSync';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { format, addDays, startOfWeek } from 'date-fns';
 import { generateMealPlan, validatePlanInputs } from '@/lib/mealPlanGenerator/index';
 import type { GeneratedSlot, GeneratedDay, MealSlotId, MealSlot } from '@/types/mealPlan';
 import { MEAL_SLOT_DEFINITIONS, getDefaultPercentsForSlots } from '@/types/mealPlan';
 import { toast } from 'sonner';
-import type { GlobalRecipe } from '@/hooks/useGlobalRecipes';
+
+// Hook to fetch user's private recipes (not in global scope)
+function useUserPrivateRecipes(userId: string | undefined) {
+  return useQuery({
+    queryKey: ['user-private-recipes', userId],
+    queryFn: async (): Promise<GlobalRecipe[]> => {
+      if (!userId) return [];
+
+      const { data: recipes, error } = await supabase
+        .from('recipes')
+        .select(`
+          id,
+          title,
+          description,
+          image_url,
+          prep_time,
+          cook_time,
+          total_time,
+          servings,
+          serving_size,
+          difficulty,
+          cuisine,
+          is_kid_friendly,
+          is_meal_prep_friendly,
+          is_budget_friendly,
+          scope
+        `)
+        .eq('owner_user_id', userId)
+        .eq('is_deleted', false)
+        .neq('scope', 'global'); // Only private/household recipes
+
+      if (error || !recipes?.length) return [];
+
+      const ids = recipes.map(r => r.id);
+      const { data: nutrition } = await supabase
+        .from('recipe_nutrition')
+        .select('recipe_id, calories, protein_g, carbs_g, fat_g, fiber_g, sodium_mg')
+        .in('recipe_id', ids);
+
+      const nutritionById = new Map<string, GlobalRecipe['nutrition']>();
+      (nutrition || []).forEach((n: any) => {
+        nutritionById.set(n.recipe_id, {
+          calories: n.calories ?? null,
+          protein_g: n.protein_g ?? null,
+          carbs_g: n.carbs_g ?? null,
+          fat_g: n.fat_g ?? null,
+          fiber_g: n.fiber_g ?? null,
+          sodium_mg: n.sodium_mg ?? null,
+        });
+      });
+
+      return recipes.map((r: any) => ({
+        id: r.id,
+        title: r.title,
+        description: r.description,
+        image_url: r.image_url ?? null,
+        prep_time: r.prep_time,
+        cook_time: r.cook_time,
+        total_time: r.total_time,
+        servings: r.servings,
+        serving_size: r.serving_size,
+        difficulty: r.difficulty,
+        cuisine: r.cuisine,
+        is_kid_friendly: r.is_kid_friendly,
+        is_meal_prep_friendly: r.is_meal_prep_friendly,
+        is_budget_friendly: r.is_budget_friendly,
+        scope: r.scope,
+        nutrition: nutritionById.get(r.id) || undefined,
+        ingredients: [],
+        steps: [],
+        tags: [],
+        isUserRecipe: true,
+      }));
+    },
+    enabled: !!userId,
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+  });
+}
 
 export default function Plan() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { preferences, loading: preferencesLoading, refetch: refetchPreferences } = useUserData();
-  const { data: allRecipes = [] } = useGlobalRecipes();
+  const { data: globalRecipes = [] } = useGlobalRecipes();
+  const { data: userRecipes = [] } = useUserPrivateRecipes(user?.id);
   const { isSaving, isLoading: isSyncLoading, activePlanId, savePlan, updatePlan } = useMealPlanSync();
+
+  // Combine global and user recipes into one list for plan lookup
+  const allRecipes = useMemo(() => {
+    // Create a map to dedupe by ID (user recipes might overlap if scope was changed)
+    const recipeMap = new Map<string, GlobalRecipe>();
+    globalRecipes.forEach(r => recipeMap.set(r.id, r));
+    userRecipes.forEach(r => recipeMap.set(r.id, r));
+    return Array.from(recipeMap.values());
+  }, [globalRecipes, userRecipes]);
   
   const {
     dailyTargets,
