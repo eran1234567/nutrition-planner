@@ -1,0 +1,38 @@
+modules = ["nodejs-20", "web"]
+[agent]
+expertMode = true
+
+[nix]
+channel = "stable-25_05"
+
+[[ports]]
+localPort = 80
+externalPort = 80
+
+[deployment]
+run = ["sh", "-c", "npm run preview -- --host 0.0.0.0 --port 80"]
+deploymentTarget = "cloudrun"
+build = ["sh", "-c", "npm run build"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "System Check"
+
+[[workflows.workflow]]
+name = "System Check"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"System initialized\""
+
+[workflows.workflow.metadata]
+outputType = "console"

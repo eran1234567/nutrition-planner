@@ -6,13 +6,23 @@ import { componentTagger } from "lovable-tagger";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
-   host: "::",
-    port: 8080,
+    host: "0.0.0.0",
+    port: 80,
     allowedHosts: [
-      '.ngrok-free.dev' // This dot at the start allows ANY ngrok URL
-    ]
+      ".ngrok-free.dev",
+      "cce15e14-7918-4c21-8815-5211ebce09f5-00-2dv44llfr1ujl.kirk.replit.dev",
+    ],
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  preview: {
+    host: "0.0.0.0",
+    port: 80,
+    // Using true here ensures the final published .replit.app URL
+    // works automatically without you having to come back and edit this file.
+    allowedHosts: true,
+  },
+  plugins: [react(), mode === "development" && componentTagger()].filter(
+    Boolean,
+  ),
   resolve: {
     // IMPORTANT: order matters. The more specific alias MUST come before "@",
     // otherwise "@" will match first and Vite will load the auto-generated
