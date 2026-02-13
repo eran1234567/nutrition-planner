@@ -125,11 +125,11 @@ No text, no extra garnish or props not in the recipe. Natural lighting, overhead
         const imageData = (part as any).inlineData;
         const base64Data = imageData.data;
         const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
-        const fileName = `${titleToSlug(title)}.jpg`;
+        const storagePath = `users/global/recipes/${titleToSlug(title)}-${Date.now()}.jpg`;
         
         const { error: uploadError } = await supabase.storage
           .from("recipe-images")
-          .upload(`global/${fileName}`, binaryData, {
+          .upload(storagePath, binaryData, {
             contentType: "image/jpeg",
             upsert: true,
           });
@@ -141,7 +141,7 @@ No text, no extra garnish or props not in the recipe. Natural lighting, overhead
         
         const { data: urlData } = supabase.storage
           .from("recipe-images")
-          .getPublicUrl(`global/${fileName}`);
+          .getPublicUrl(storagePath);
         
         console.log(`Image uploaded for: ${title}`);
         return urlData.publicUrl;

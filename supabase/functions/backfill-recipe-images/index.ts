@@ -22,7 +22,6 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-    // Authenticate user
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
@@ -47,20 +46,25 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
-    const { recipeIds } = body; // Optional: specific recipe IDs to backfill
+    const { recipeIds, regenerateAll } = body;
 
-    // Find recipes missing images for this user
+    const batchSize = 50;
+    const { offset = 0 } = body;
+    
     let query = supabase
       .from('recipes')
-      .select('id, title, description')
-      .eq('owner_user_id', userId)
+      .select('id, title, description, image_url, owner_user_id, scope')
       .eq('is_deleted', false)
-      .or('image_url.is.null,image_url.eq.')
-      .order('created_at', { ascending: false })
-      .limit(10); // Process max 10 at a time
+      .order('created_at', { ascending: true })
+      .range(offset, offset + batchSize - 1);
 
     if (recipeIds && Array.isArray(recipeIds) && recipeIds.length > 0) {
       query = query.in('id', recipeIds);
+    } else if (regenerateAll) {
+      query = query.or('scope.eq.global,owner_user_id.eq.' + userId);
+    } else {
+      query = query.eq('owner_user_id', userId)
+        .or('image_url.is.null,image_url.eq.,image_url.like.data:%');
     }
 
     const { data: recipes, error: queryError } = await query;
@@ -71,18 +75,17 @@ serve(async (req) => {
 
     if (!recipes || recipes.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, message: 'No recipes missing images', count: 0 }),
+        JSON.stringify({ success: true, message: 'No recipes to process', count: 0 }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`Found ${recipes.length} recipes missing images`);
+    console.log(`Found ${recipes.length} recipes to process`);
 
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
     let successCount = 0;
     let failedCount = 0;
 
-    // Process one at a time to avoid rate limits
     for (const recipe of recipes) {
       try {
         console.log(`Generating image for: ${recipe.title}`);
@@ -108,14 +111,47 @@ No text, no extra garnish or props not in the recipe. Natural lighting, overhead
           if ((part as any).inlineData) {
             const imageData = (part as any).inlineData;
             const base64Data = imageData.data;
-            const mimeType = imageData.mimeType || 'image/png';
-            const generatedImageUrl = `data:${mimeType};base64,${base64Data}`;
+            const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
 
-            await supabase.from('recipes').update({
-              image_url: generatedImageUrl
+            const ownerId = recipe.owner_user_id || 'global';
+            const storagePath = `users/${ownerId}/recipes/${recipe.id}-${Date.now()}.jpg`;
+
+            if (recipe.image_url && !recipe.image_url.startsWith('data:') && recipe.image_url.includes('/storage/v1/object/public/recipe-images/')) {
+              const marker = '/storage/v1/object/public/recipe-images/';
+              const oldPath = recipe.image_url.split(marker)[1]?.split('?')[0];
+              if (oldPath) {
+                await supabase.storage.from('recipe-images').remove([decodeURIComponent(oldPath)]);
+              }
+            }
+
+            const { error: uploadError } = await supabase.storage
+              .from('recipe-images')
+              .upload(storagePath, binaryData, {
+                contentType: 'image/jpeg',
+                upsert: true,
+              });
+
+            if (uploadError) {
+              console.error(`Upload error for ${recipe.title}:`, uploadError);
+              failedCount++;
+              break;
+            }
+
+            const { data: urlData } = supabase.storage
+              .from('recipe-images')
+              .getPublicUrl(storagePath);
+
+            const { error: updateError } = await supabase.from('recipes').update({
+              image_url: urlData.publicUrl
             }).eq('id', recipe.id);
 
-            console.log(`Image saved for: ${recipe.title}`);
+            if (updateError) {
+              console.error(`DB update error for ${recipe.title}:`, updateError);
+              failedCount++;
+              break;
+            }
+
+            console.log(`Image uploaded to Storage for: ${recipe.title}`);
             successCount++;
             imageGenerated = true;
             break;
@@ -127,14 +163,12 @@ No text, no extra garnish or props not in the recipe. Natural lighting, overhead
           failedCount++;
         }
 
-        // Small delay between generations to avoid rate limits
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
       } catch (err) {
         console.error(`Failed to generate image for ${recipe.title}:`, err);
         failedCount++;
 
-        // Check for rate limit error
         const errMsg = err instanceof Error ? err.message : String(err);
         if (/429|quota|rate.?limit/i.test(errMsg)) {
           console.warn('Rate limit hit, stopping batch');
@@ -150,6 +184,7 @@ No text, no extra garnish or props not in the recipe. Natural lighting, overhead
         successCount,
         failedCount,
         total: recipes.length,
+        nextOffset: recipes.length === batchSize ? offset + batchSize : null,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
