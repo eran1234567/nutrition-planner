@@ -47,12 +47,11 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { recipeId, imageBase64, fileName } = await req.json();
+    const { recipeId, imageBase64 } = await req.json();
 
-    // Validate required fields
-    if (!recipeId || !imageBase64 || !fileName) {
+    if (!recipeId || !imageBase64) {
       return new Response(
-        JSON.stringify({ error: "Missing required fields: recipeId, imageBase64, fileName" }),
+        JSON.stringify({ error: "Missing required fields: recipeId, imageBase64" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -85,10 +84,11 @@ serve(async (req) => {
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
     const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
 
-    // Upload to storage
+    const storagePath = `users/${userId}/recipes/${recipeId}-${Date.now()}.jpg`;
+
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from("recipe-images")
-      .upload(`global/${fileName}`, binaryData, {
+      .upload(storagePath, binaryData, {
         contentType: "image/jpeg",
         upsert: true,
       });
@@ -97,10 +97,9 @@ serve(async (req) => {
       throw uploadError;
     }
 
-    // Get public URL
     const { data: urlData } = supabase.storage
       .from("recipe-images")
-      .getPublicUrl(`global/${fileName}`);
+      .getPublicUrl(storagePath);
 
     const publicUrl = urlData.publicUrl;
 

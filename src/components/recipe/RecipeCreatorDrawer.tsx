@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { 
@@ -30,6 +30,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { IngredientInput, IngredientItem } from './IngredientInput';
 import { calculateIngredientTotals } from '@/lib/recipeUtils';
 import { LiveNutritionHeader } from './LiveNutritionHeader';
+import { compressImage, validateImageFile, fileToBase64, uploadImageToStorage, revokePreviewUrl } from '@/lib/imageUtils';
 
 type InputMode = 'quick' | 'detailed';
 
@@ -52,7 +53,17 @@ export function RecipeCreatorDrawer({ open, onOpenChange, onSuccess }: RecipeCre
   const [title, setTitle] = useState('');
   const [recipeText, setRecipeText] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
   
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) {
+        revokePreviewUrl(previewUrlRef.current);
+      }
+    };
+  }, []);
+
   // Detailed mode fields
   const [ingredients, setIngredients] = useState<IngredientItem[]>([]);
   const [instructions, setInstructions] = useState('');
@@ -64,7 +75,12 @@ export function RecipeCreatorDrawer({ open, onOpenChange, onSuccess }: RecipeCre
   const resetForm = useCallback(() => {
     setTitle('');
     setRecipeText('');
+    if (previewUrlRef.current) {
+      revokePreviewUrl(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
     setImagePreview(null);
+    setImageFile(null);
     setIngredients([]);
     setInstructions('');
     setServings('4');
@@ -80,23 +96,36 @@ export function RecipeCreatorDrawer({ open, onOpenChange, onSuccess }: RecipeCre
     setTimeout(resetForm, 300);
   };
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error(t('recipes.imageTooLarge', 'Image must be under 10MB'));
-        return;
+    if (!file) return;
+
+    const validationError = validateImageFile(file);
+    if (validationError) {
+      toast.error(t('recipes.imageTooLarge', validationError));
+      return;
+    }
+
+    try {
+      const compressed = await compressImage(file);
+      if (previewUrlRef.current) {
+        revokePreviewUrl(previewUrlRef.current);
       }
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setImagePreview(event.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+      previewUrlRef.current = compressed.previewUrl;
+      setImagePreview(compressed.previewUrl);
+      setImageFile(compressed.file);
+    } catch {
+      toast.error(t('recipes.imageError', 'Failed to process image'));
     }
   };
 
   const removeImage = () => {
+    if (previewUrlRef.current) {
+      revokePreviewUrl(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
     setImagePreview(null);
+    setImageFile(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -158,7 +187,7 @@ export function RecipeCreatorDrawer({ open, onOpenChange, onSuccess }: RecipeCre
     }
 
     const hasContent = inputMode === 'quick' 
-      ? recipeText.trim() || imagePreview
+      ? recipeText.trim() || imageFile
       : ingredients.length > 0 || instructions.trim();
 
     if (!hasContent) {
@@ -184,13 +213,21 @@ export function RecipeCreatorDrawer({ open, onOpenChange, onSuccess }: RecipeCre
       if (uploadError) throw uploadError;
 
       const fullContent = buildRecipeContent();
-      const isImage = !!imagePreview && !recipeText.trim();
+      const isImage = !!imageFile && !recipeText.trim();
 
-      // Call parse-recipe edge function using the SDK for proper auth handling
+      let imageBase64: string | undefined;
+      if (isImage && imageFile) {
+        try {
+          imageBase64 = await fileToBase64(imageFile);
+        } catch {
+          throw new Error('Failed to process image for parsing');
+        }
+      }
+
       const { data: result, error: fnError } = await supabase.functions.invoke('parse-recipe', {
         body: {
           uploadId: upload.id,
-          content: isImage ? imagePreview : fullContent,
+          content: isImage ? imageBase64 : fullContent,
           isImage,
           structured_ingredients: inputMode === 'detailed'
             ? ingredients.map(ing => ({
@@ -244,10 +281,15 @@ export function RecipeCreatorDrawer({ open, onOpenChange, onSuccess }: RecipeCre
           })()
         : null;
 
-      // Update with user's title and image if provided
       const updates: Record<string, unknown> = { title: title.trim() };
-      if (imagePreview) {
-        updates.image_url = imagePreview;
+
+      if (imageFile) {
+        try {
+          const publicUrl = await uploadImageToStorage(supabase, imageFile, user.id, recipe.id);
+          updates.image_url = publicUrl;
+        } catch (imgErr) {
+          console.error('Image upload failed:', imgErr);
+        }
       }
       
       await Promise.all([
@@ -288,7 +330,7 @@ export function RecipeCreatorDrawer({ open, onOpenChange, onSuccess }: RecipeCre
 
   const canSave = title.trim() && (
     inputMode === 'quick' 
-      ? (recipeText.trim() || imagePreview)
+      ? (recipeText.trim() || imageFile)
       : (ingredients.length > 0 || instructions.trim())
   );
 
