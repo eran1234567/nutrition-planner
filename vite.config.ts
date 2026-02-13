@@ -7,11 +7,8 @@ import { componentTagger } from "lovable-tagger";
 export default defineConfig(({ mode }) => ({
   server: {
     host: "0.0.0.0",
-    port: 80,
-    allowedHosts: [
-      ".ngrok-free.dev",
-      "cce15e14-7918-4c21-8815-5211ebce09f5-00-2dv44llfr1ujl.kirk.replit.dev",
-    ],
+    port: 5000,
+    allowedHosts: true,
   },
   preview: {
     host: "0.0.0.0",
