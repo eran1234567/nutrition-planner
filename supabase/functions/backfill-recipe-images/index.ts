@@ -53,7 +53,7 @@ serve(async (req) => {
     
     let query = supabase
       .from('recipes')
-      .select('id, title, description, image_url, owner_user_id, scope')
+      .select('id, title, description, image_url, owner_user_id, scope, recipe_ingredients(name)')
       .eq('is_deleted', false)
       .order('created_at', { ascending: true })
       .range(offset, offset + batchSize - 1);
@@ -93,8 +93,16 @@ serve(async (req) => {
       try {
         console.log(`Generating image for: ${recipe.title}`);
 
-        const imagePrompt = `Professional food photography of a home-cooked ${recipe.title}. ${recipe.description || ''}
-Final plated dish only. Realistic home-cooked appearance. Match the actual ingredients and portions from the recipe.
+        const mainIngredients = (recipe.recipe_ingredients || [])
+          .slice(0, 5)
+          .map((ing: any) => ing.name)
+          .join(', ');
+
+        const imagePrompt = `Professional food photography of ${recipe.title}. 
+A home-cooked dish${mainIngredients ? ` made with: ${mainIngredients}` : ''}.
+${recipe.description || ''}
+Final plated dish only. Realistic home-cooked appearance. 
+${mainIngredients ? `The protein/main ingredients must accurately match the recipe - show ${mainIngredients}.` : 'Match the actual ingredients and portions from the recipe.'}
 No text, no extra garnish or props not in the recipe. Natural lighting, overhead or 45-degree angle, clean simple background, appetizing presentation.
 16:9 aspect ratio, high-quality food photography style.`;
 

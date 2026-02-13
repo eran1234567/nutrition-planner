@@ -312,6 +312,12 @@ export function RecipeCreatorDrawer({ open, onOpenChange, onSuccess }: RecipeCre
           : Promise.resolve(),
       ]);
 
+      if (!updates.image_url) {
+        supabase.functions.invoke('backfill-recipe-images', {
+          body: { recipeIds: [recipe.id] }
+        }).catch(err => console.error('Auto image generation failed:', err));
+      }
+
       toast.success(t('recipes.createSuccess', 'Recipe created!'));
       handleClose();
       

@@ -296,6 +296,12 @@ export default function CreateRecipe() {
           : Promise.resolve(),
       ]);
 
+      if (!updates.image_url) {
+        supabase.functions.invoke('backfill-recipe-images', {
+          body: { recipeIds: [recipe.id] }
+        }).catch(err => console.error('Auto image generation failed:', err));
+      }
+
       toast.success(t('recipes.createSuccess', 'Recipe created! You can edit it anytime.'));
       navigate(`/recipe/${recipe.id}`);
     } catch (error) {

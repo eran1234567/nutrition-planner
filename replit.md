@@ -4,6 +4,7 @@
 A nutrition planning application built with React + Vite + TypeScript. Uses Supabase for backend (auth, database, storage, edge functions). Users can create, import, and manage recipes with AI-powered nutrition calculation.
 
 ## Recent Changes
+- **2026-02-13**: Auto image generation — recipes now automatically get AI-generated images when created (if no user photo provided). Removed manual backfill banners. Image generation uses recipe title + top 5 ingredients for accurate food photography prompts.
 - **2026-02-13**: Optimized image storage — switched from base64-in-database to direct Supabase Storage uploads with client-side compression (max 1200px, JPEG 80% quality). Images now organized by `users/{userId}/recipes/{recipeId}.jpg` path structure.
 
 ## Project Architecture
