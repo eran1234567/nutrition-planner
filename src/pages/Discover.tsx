@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
-import { Search, Clock, Sparkles, BookOpen, ChefHat, Baby, Plus, Check, Target, UtensilsCrossed, AlertTriangle, HeartPulse, X, Flame, Wheat, Droplets, RefreshCw, LogOut, LogIn, Loader2 } from 'lucide-react';
+import { Search, Clock, Sparkles, BookOpen, ChefHat, Baby, Plus, Check, Target, UtensilsCrossed, AlertTriangle, HeartPulse, X, Flame, Wheat, Droplets, RefreshCw, LogOut, LogIn, Loader2, ImageIcon } from 'lucide-react';
+import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -217,6 +218,59 @@ export default function Discover() {
       }
     }
   }, [isPlanMode, selectedMealSlots.length, preferences, dailyTargets, setSelectedMealSlots, setDailyTargets]);
+
+  const [isBackfillingGlobal, setIsBackfillingGlobal] = useState(false);
+  const [backfillProgress, setBackfillProgress] = useState('');
+
+  const handleBackfillGlobalImages = async () => {
+    if (!isAuthenticated) {
+      toast.error(t('discover.signInForImages', 'Please sign in to generate images'));
+      return;
+    }
+    setIsBackfillingGlobal(true);
+    setBackfillProgress('Starting...');
+
+    let totalSuccess = 0;
+    let totalFailed = 0;
+    let nextOffset: number | null = 0;
+
+    try {
+      while (nextOffset !== null) {
+        setBackfillProgress(`Processing batch (offset ${nextOffset})...`);
+        const { data, error } = await supabase.functions.invoke('backfill-recipe-images', {
+          body: { globalOnly: true, offset: nextOffset }
+        });
+
+        if (error) {
+          toast.error(t('discover.backfillError', 'Failed to generate images'));
+          console.error('Backfill error:', error);
+          break;
+        }
+
+        if (data?.success) {
+          totalSuccess += data.successCount || 0;
+          totalFailed += data.failedCount || 0;
+          nextOffset = data.nextOffset ?? null;
+          setBackfillProgress(`Generated ${totalSuccess} images so far...`);
+        } else {
+          break;
+        }
+      }
+
+      if (totalSuccess > 0) {
+        toast.success(t('discover.backfillSuccess', `Generated ${totalSuccess} image(s)!`));
+        window.location.reload();
+      } else {
+        toast.info(t('discover.noMissingImages', 'No images needed generation'));
+      }
+    } catch (err) {
+      console.error('Backfill error:', err);
+      toast.error(t('discover.backfillError', 'Failed to generate images'));
+    } finally {
+      setIsBackfillingGlobal(false);
+      setBackfillProgress('');
+    }
+  };
 
   // Pending onboarding data
   const pendingOnboarding = useMemo(() => {
@@ -516,6 +570,10 @@ export default function Discover() {
   const globalRecipes = useMemo(() => {
     return infiniteData?.pages.flatMap((page) => page.recipes) ?? [];
   }, [infiniteData]);
+
+  const globalMissingImages = useMemo(() => {
+    return globalRecipes.filter(r => !r.image_url || r.image_url.startsWith('data:')).length;
+  }, [globalRecipes]);
 
   // Check if any filters are active (excluding search which works fine with pagination)
   const hasActiveFilters = useMemo(() => {
@@ -1143,6 +1201,42 @@ export default function Discover() {
               >
                 Cancel
               </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Missing Images Banner */}
+        {!isLoadingGlobal && globalMissingImages > 0 && !isBackfillingGlobal && (
+          <div className="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-center gap-3">
+            <div className="shrink-0">
+              <ImageIcon className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-sm text-amber-800 dark:text-amber-200">
+                {globalMissingImages} recipes missing photos
+              </p>
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Generate AI photos for better presentation
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBackfillGlobalImages}
+              className="shrink-0 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50"
+            >
+              <Sparkles className="w-4 h-4 mr-1" />
+              Generate
+            </Button>
+          </div>
+        )}
+
+        {isBackfillingGlobal && (
+          <div className="mb-4 p-3 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 flex items-center gap-3">
+            <Loader2 className="w-5 h-5 animate-spin text-blue-600 dark:text-blue-400 shrink-0" />
+            <div>
+              <p className="font-semibold text-sm text-blue-800 dark:text-blue-200">Generating images...</p>
+              <p className="text-xs text-blue-600 dark:text-blue-400">{backfillProgress}</p>
             </div>
           </div>
         )}
