@@ -62,6 +62,9 @@ serve(async (req) => {
       query = query.in('id', recipeIds);
     } else if (regenerateAll) {
       query = query.or('scope.eq.global,owner_user_id.eq.' + userId);
+    } else if (body.globalOnly) {
+      query = query.eq('scope', 'global')
+        .or('image_url.is.null,image_url.eq.,image_url.like.data:%');
     } else {
       query = query.eq('owner_user_id', userId)
         .or('image_url.is.null,image_url.eq.,image_url.like.data:%');
