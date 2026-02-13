@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { useRecipeImport } from '@/hooks/useRecipeImport';
 import { YouTubeImportProgress } from '@/components/recipe/YouTubeImportProgress';
 import { syncNeutronMode } from '@/stores/neutronStore';
+import { useAutoBackfillImages } from '@/hooks/useAutoBackfillImages';
 import { meetsHealthConsideration, calculateNetCarbs, isKetoBadgeEligible, getNeutronBadges } from '@/lib/neutron';
 import {
   AlertDialog,
@@ -210,6 +211,7 @@ export default function Recipes() {
   const [searchParams, setSearchParams] = useSearchParams();
   
   const [userRecipes, setUserRecipes] = useState<UserRecipe[]>([]);
+  useAutoBackfillImages(userRecipes);
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [recipeToDelete, setRecipeToDelete] = useState<UserRecipe | null>(null);

@@ -16,6 +16,7 @@ import { FilterDropdown } from '@/components/discover/FilterDropdown';
 import { MultiSelectDropdown } from '@/components/discover/MultiSelectDropdown';
 import { FilterHelpModal } from '@/components/discover/FilterHelpModal';
 import { useGlobalRecipesInfinite } from '@/hooks/useGlobalRecipesInfinite';
+import { useAutoBackfillImages } from '@/hooks/useAutoBackfillImages';
 import { useAppStore } from '@/stores/appStore';
 import { useMealPlanStore } from '@/stores/mealPlanStore';
 import { useNeutronStore, syncNeutronMode } from '@/stores/neutronStore';
@@ -512,10 +513,11 @@ export default function Discover() {
     fetchNextPage,
   } = useGlobalRecipesInfinite();
 
-  // Flatten pages into a single array
   const globalRecipes = useMemo(() => {
     return infiniteData?.pages.flatMap((page) => page.recipes) ?? [];
   }, [infiniteData]);
+
+  useAutoBackfillImages(globalRecipes);
 
   // Check if any filters are active (excluding search which works fine with pagination)
   const hasActiveFilters = useMemo(() => {
