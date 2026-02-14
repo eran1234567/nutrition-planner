@@ -17,8 +17,9 @@ externalPort = 80
 
 [deployment]
 run = ["sh", "-c", "npm run preview -- --host 0.0.0.0 --port 80"]
-deploymentTarget = "cloudrun"
-build = ["sh", "-c", "npm run build"]
+deploymentTarget = "static"
+build = ["npm", "run", "build"]
+publicDir = "dist"
 
 [workflows]
 runButton = "Project"
