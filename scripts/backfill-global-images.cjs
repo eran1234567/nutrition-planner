@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+const { createClient } = require('@supabase/supabase-js');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const NEW_SUPABASE_URL = 'https://thgtxxqrqrqdknfbwoca.supabase.co';
 const OLD_SUPABASE_URL = 'https://vollogobxbnxyymzhhjq.supabase.co';
@@ -23,23 +23,22 @@ async function getGlobalRecipesMissingImages() {
     .or('image_url.is.null,image_url.eq.')
     .order('created_at', { ascending: true });
 
-  if (error) throw new Error(`Query failed: ${error.message}`);
+  if (error) throw new Error('Query failed: ' + error.message);
   return data || [];
 }
 
 async function generateAndUploadImage(recipe) {
   const mainIngredients = (recipe.recipe_ingredients || [])
     .slice(0, 5)
-    .map((ing) => ing.name)
+    .map(function(ing) { return ing.name; })
     .join(', ');
 
-  const imagePrompt = `Professional food photography of ${recipe.title}. 
-A home-cooked dish${mainIngredients ? ` made with: ${mainIngredients}` : ''}.
-${recipe.description || ''}
-Final plated dish only. Realistic home-cooked appearance. 
-${mainIngredients ? `The protein/main ingredients must accurately match the recipe - show ${mainIngredients}.` : 'Match the actual ingredients and portions from the recipe.'}
-No text, no extra garnish or props not in the recipe. Natural lighting, overhead or 45-degree angle, clean simple background, appetizing presentation.
-16:9 aspect ratio, high-quality food photography style.`;
+  const imagePrompt = 'Professional food photography of ' + recipe.title + '. ' +
+    'A home-cooked dish' + (mainIngredients ? ' made with: ' + mainIngredients : '') + '. ' +
+    (recipe.description || '') + ' ' +
+    'Final plated dish only. Realistic home-cooked appearance. ' +
+    (mainIngredients ? 'The protein/main ingredients must accurately match the recipe - show ' + mainIngredients + '.' : 'Match the actual ingredients and portions from the recipe.') +
+    ' No text, no extra garnish or props not in the recipe. Natural lighting, overhead or 45-degree angle, clean simple background, appetizing presentation. 16:9 aspect ratio, high-quality food photography style.';
 
   const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp-image-generation' });
   const result = await model.generateContent({
@@ -53,13 +52,13 @@ No text, no extra garnish or props not in the recipe. Natural lighting, overhead
     if (part.inlineData) {
       const binaryData = Buffer.from(part.inlineData.data, 'base64');
       const ownerId = recipe.owner_user_id || 'global';
-      const storagePath = `users/${ownerId}/recipes/${recipe.id}-${Date.now()}.jpg`;
+      const storagePath = 'users/' + ownerId + '/recipes/' + recipe.id + '-' + Date.now() + '.jpg';
 
       const { error: uploadError } = await newSupabase.storage
         .from('recipe-images')
         .upload(storagePath, binaryData, { contentType: 'image/jpeg', upsert: true });
 
-      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+      if (uploadError) throw new Error('Upload failed: ' + uploadError.message);
 
       const { data: urlData } = newSupabase.storage
         .from('recipe-images')
@@ -67,19 +66,8 @@ No text, no extra garnish or props not in the recipe. Natural lighting, overhead
 
       const publicUrl = urlData.publicUrl;
 
-      const { error: newUpdateError } = await newSupabase
-        .from('recipes')
-        .update({ image_url: publicUrl })
-        .eq('id', recipe.id);
-
-      if (newUpdateError) console.warn(`  Warning: new project DB update failed: ${newUpdateError.message}`);
-
-      const { error: oldUpdateError } = await oldSupabase
-        .from('recipes')
-        .update({ image_url: publicUrl })
-        .eq('id', recipe.id);
-
-      if (oldUpdateError) console.warn(`  Warning: old project DB update failed: ${oldUpdateError.message}`);
+      await newSupabase.from('recipes').update({ image_url: publicUrl }).eq('id', recipe.id);
+      await oldSupabase.from('recipes').update({ image_url: publicUrl }).eq('id', recipe.id);
 
       return publicUrl;
     }
@@ -91,7 +79,7 @@ No text, no extra garnish or props not in the recipe. Natural lighting, overhead
 async function main() {
   console.log('Fetching global recipes missing images...');
   const recipes = await getGlobalRecipesMissingImages();
-  console.log(`Found ${recipes.length} recipes needing images.\n`);
+  console.log('Found ' + recipes.length + ' recipes needing images.\n');
 
   if (recipes.length === 0) {
     console.log('Nothing to do!');
@@ -104,27 +92,27 @@ async function main() {
   for (let i = 0; i < recipes.length; i++) {
     const recipe = recipes[i];
     try {
-      console.log(`[${i + 1}/${recipes.length}] Generating image for: ${recipe.title}`);
+      console.log('[' + (i + 1) + '/' + recipes.length + '] Generating: ' + recipe.title);
       const url = await generateAndUploadImage(recipe);
-      console.log(`  -> OK: ${url.substring(0, 80)}...`);
+      console.log('  -> OK');
       success++;
     } catch (err) {
-      console.error(`  -> FAILED: ${err.message}`);
+      console.error('  -> FAILED: ' + err.message);
       failed++;
 
       if (/429|quota|rate.?limit/i.test(err.message)) {
         console.warn('Rate limit hit, waiting 30s...');
-        await new Promise((r) => setTimeout(r, 30000));
+        await new Promise(function(r) { setTimeout(r, 30000); });
       }
     }
 
-    await new Promise((r) => setTimeout(r, 2000));
+    await new Promise(function(r) { setTimeout(r, 2000); });
   }
 
-  console.log(`\n=== DONE ===`);
-  console.log(`Success: ${success}`);
-  console.log(`Failed: ${failed}`);
-  console.log(`Total: ${recipes.length}`);
+  console.log('\n=== DONE ===');
+  console.log('Success: ' + success);
+  console.log('Failed: ' + failed);
+  console.log('Total: ' + recipes.length);
 }
 
 main().catch(console.error);

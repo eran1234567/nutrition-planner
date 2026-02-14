@@ -315,11 +315,11 @@ export function RecipeCreatorDrawer({ open, onOpenChange, onSuccess }: RecipeCre
       if (!updates.image_url) {
         const session = (await supabase.auth.getSession()).data.session;
         if (session?.access_token) {
-          fetch('https://vollogobxbnxyymzhhjq.supabase.co/functions/v1/backfill-recipe-images', {
+          fetch('https://thgtxxqrqrqdknfbwoca.supabase.co/functions/v1/backfill-recipe-images', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZvbGxvZ29ieGJueHl5bXpoaGpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyNDI4NTgsImV4cCI6MjA4MzgxODg1OH0.37hO8pCLsW38fpjzuGGByVKqgga9yVcLvLyccWsDpzo',
+              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRoZ3R4eHFycXJxZGtuZmJ3b2NhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwNTU2MjAsImV4cCI6MjA4NTYzMTYyMH0.Hq_oxpsEj1oVJcPZ0NNSSADAfFkSyufC26jRLMjJ-gA',
               'Authorization': `Bearer ${session.access_token}`,
             },
             body: JSON.stringify({ recipeIds: [recipe.id] }),

@@ -7,8 +7,8 @@ interface RecipeWithImage {
 }
 
 const BATCH_SIZE = 5;
-const SUPABASE_URL = 'https://vollogobxbnxyymzhhjq.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZvbGxvZ29ieGJueHl5bXpoaGpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyNDI4NTgsImV4cCI6MjA4MzgxODg1OH0.37hO8pCLsW38fpjzuGGByVKqgga9yVcLvLyccWsDpzo';
+const SUPABASE_URL = 'https://thgtxxqrqrqdknfbwoca.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRoZ3R4eHFycXJxZGtuZmJ3b2NhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwNTU2MjAsImV4cCI6MjA4NTYzMTYyMH0.Hq_oxpsEj1oVJcPZ0NNSSADAfFkSyufC26jRLMjJ-gA';
 
 async function invokeBackfill(recipeIds: string[]) {
   const session = (await supabase.auth.getSession()).data.session;

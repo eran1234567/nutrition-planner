@@ -7,9 +7,9 @@ import type { Database } from "./types";
 
 // These are public values (URL + anon key). We still prefer env vars,
 // but we provide a safe fallback to prevent blank-screen crashes.
-const FALLBACK_URL = "https://vollogobxbnxyymzhhjq.supabase.co";
+const FALLBACK_URL = "https://thgtxxqrqrqdknfbwoca.supabase.co";
 const FALLBACK_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZvbGxvZ29ieGJueHl5bXpoaGpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyNDI4NTgsImV4cCI6MjA4MzgxODg1OH0.37hO8pCLsW38fpjzuGGByVKqgga9yVcLvLyccWsDpzo";
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRoZ3R4eHFycXJxZGtuZmJ3b2NhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwNTU2MjAsImV4cCI6MjA4NTYzMTYyMH0.Hq_oxpsEj1oVJcPZ0NNSSADAfFkSyufC26jRLMjJ-gA";
 
 const env = import.meta.env as any;
 
