@@ -26,7 +26,7 @@ export function useAutoBackfillImages(recipes: RecipeWithImage[]) {
 
     supabase.functions
       .invoke('backfill-recipe-images', {
-        body: { recipeIds: ids },
+        body: { recipeIds: ids, globalOnly: true },
       })
       .catch((err) => console.error('Auto backfill images failed:', err));
   }, [recipes]);
