@@ -297,9 +297,18 @@ export default function CreateRecipe() {
       ]);
 
       if (!updates.image_url) {
-        supabase.functions.invoke('backfill-recipe-images', {
-          body: { recipeIds: [recipe.id] }
-        }).catch(err => console.error('Auto image generation failed:', err));
+        const session = (await supabase.auth.getSession()).data.session;
+        if (session?.access_token) {
+          fetch('https://vollogobxbnxyymzhhjq.supabase.co/functions/v1/backfill-recipe-images', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZvbGxvZ29ieGJueHl5bXpoaGpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyNDI4NTgsImV4cCI6MjA4MzgxODg1OH0.37hO8pCLsW38fpjzuGGByVKqgga9yVcLvLyccWsDpzo',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ recipeIds: [recipe.id] }),
+          }).catch(err => console.error('Auto image generation failed:', err));
+        }
       }
 
       toast.success(t('recipes.createSuccess', 'Recipe created! You can edit it anytime.'));

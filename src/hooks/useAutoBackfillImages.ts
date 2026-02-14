@@ -6,6 +6,33 @@ interface RecipeWithImage {
   image_url: string | null;
 }
 
+const BATCH_SIZE = 5;
+const SUPABASE_URL = 'https://vollogobxbnxyymzhhjq.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZvbGxvZ29ieGJueHl5bXpoaGpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyNDI4NTgsImV4cCI6MjA4MzgxODg1OH0.37hO8pCLsW38fpjzuGGByVKqgga9yVcLvLyccWsDpzo';
+
+async function invokeBackfill(recipeIds: string[]) {
+  const session = (await supabase.auth.getSession()).data.session;
+  if (!session?.access_token) {
+    return null;
+  }
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/backfill-recipe-images`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ recipeIds }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Backfill failed (${res.status}): ${text}`);
+  }
+  return res.json();
+}
+
 export function useAutoBackfillImages(recipes: RecipeWithImage[]) {
   const triggeredIds = useRef<Set<string>>(new Set());
 
@@ -20,13 +47,16 @@ export function useAutoBackfillImages(recipes: RecipeWithImage[]) {
 
     if (missing.length === 0) return;
 
-    missing.forEach((r) => triggeredIds.current.add(r.id));
+    const batch = missing.slice(0, BATCH_SIZE);
+    batch.forEach((r) => triggeredIds.current.add(r.id));
 
-    const ids = missing.map((r) => r.id);
+    const ids = batch.map((r) => r.id);
+    console.log(`Auto-backfilling images for ${ids.length} recipes (${missing.length} total missing)`);
 
-    supabase.functions
-      .invoke('backfill-recipe-images', {
-        body: { recipeIds: ids, globalOnly: true },
+    invokeBackfill(ids)
+      .then((data) => {
+        if (data) console.log('Auto backfill result:', data);
+        else console.log('Auto backfill skipped: not signed in');
       })
       .catch((err) => console.error('Auto backfill images failed:', err));
   }, [recipes]);
