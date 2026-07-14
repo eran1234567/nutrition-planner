@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from "https://esm.sh/@google/generative-ai@0.21.0"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 serve(async (req) => {
@@ -22,47 +22,50 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-    const body = await req.json();
-    const { recipeIds, regenerateAll } = body;
-
     const authHeader = req.headers.get('Authorization');
-    let userId: string | null = null;
-
-    if (authHeader?.startsWith('Bearer ')) {
-      const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-        global: { headers: { Authorization: authHeader } }
-      });
-      const { data: userData } = await supabaseAuth.auth.getUser();
-      userId = userData?.user?.id || null;
-    }
-
-    if (!userId && !body.globalOnly && !(recipeIds && Array.isArray(recipeIds) && recipeIds.length > 0)) {
+    if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
         JSON.stringify({ success: false, error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const { data: userData, error: userError } = await supabaseAuth.auth.getUser();
+    if (userError || !userData?.user) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const userId = userData.user.id;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const body = await req.json();
+    const { recipeIds, regenerateAll } = body;
 
     const batchSize = 50;
     const { offset = 0 } = body;
     
     let query = supabase
       .from('recipes')
-      .select('id, title, description, image_url, owner_user_id, scope, recipe_ingredients(name)')
+      .select('id, title, description, image_url, owner_user_id, scope')
       .eq('is_deleted', false)
       .order('created_at', { ascending: true })
       .range(offset, offset + batchSize - 1);
 
     if (recipeIds && Array.isArray(recipeIds) && recipeIds.length > 0) {
       query = query.in('id', recipeIds);
-    } else if (regenerateAll && userId) {
+    } else if (regenerateAll) {
       query = query.or('scope.eq.global,owner_user_id.eq.' + userId);
     } else if (body.globalOnly) {
       query = query.eq('scope', 'global')
         .or('image_url.is.null,image_url.eq.,image_url.like.data:%');
-    } else if (userId) {
+    } else {
       query = query.eq('owner_user_id', userId)
         .or('image_url.is.null,image_url.eq.,image_url.like.data:%');
     }
@@ -90,16 +93,8 @@ serve(async (req) => {
       try {
         console.log(`Generating image for: ${recipe.title}`);
 
-        const mainIngredients = (recipe.recipe_ingredients || [])
-          .slice(0, 5)
-          .map((ing: any) => ing.name)
-          .join(', ');
-
-        const imagePrompt = `Professional food photography of ${recipe.title}. 
-A home-cooked dish${mainIngredients ? ` made with: ${mainIngredients}` : ''}.
-${recipe.description || ''}
-Final plated dish only. Realistic home-cooked appearance. 
-${mainIngredients ? `The protein/main ingredients must accurately match the recipe - show ${mainIngredients}.` : 'Match the actual ingredients and portions from the recipe.'}
+        const imagePrompt = `Professional food photography of a home-cooked ${recipe.title}. ${recipe.description || ''}
+Final plated dish only. Realistic home-cooked appearance. Match the actual ingredients and portions from the recipe.
 No text, no extra garnish or props not in the recipe. Natural lighting, overhead or 45-degree angle, clean simple background, appetizing presentation.
 16:9 aspect ratio, high-quality food photography style.`;
 
